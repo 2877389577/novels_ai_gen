@@ -19,6 +19,24 @@ var (
 	mu           sync.Mutex
 )
 
+// Provider 根据完整应用配置初始化全局日志服务，并返回 Wire 清理函数。
+// 参数 cfg 表示应用完整配置。
+func Provider(cfg *appconfig.AppConfig) (*slog.Logger, func(), error) {
+	log, err := Init(cfg.Logger)
+	if err != nil {
+		return nil, nil, fmt.Errorf("初始化日志服务失败: %w", err)
+	}
+
+	return log, CloseWithLog, nil
+}
+
+// CloseWithLog 关闭当前日志服务，并记录关闭失败信息。
+func CloseWithLog() {
+	if err := Close(); err != nil {
+		slog.Error("关闭日志服务失败", "error", err)
+	}
+}
+
 // Init 根据配置初始化全局日志服务。
 // 参数 cfg 表示日志服务的控制台、文件、格式和等级配置。
 func Init(cfg appconfig.LoggerConfig) (*slog.Logger, error) {

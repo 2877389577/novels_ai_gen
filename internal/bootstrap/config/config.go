@@ -1,14 +1,12 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/viper"
 )
-
-// DefaultConfigFile 表示默认使用的配置文件路径。
-const DefaultConfigFile = "config/config.yaml"
 
 // AppConfig 表示应用启动所需的完整配置。
 type AppConfig struct {
@@ -18,6 +16,8 @@ type AppConfig struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	// Logger 表示日志服务相关配置。
 	Logger LoggerConfig `mapstructure:"logger"`
+	// Auth 表示登录鉴权相关配置。
+	Auth AuthConfig `mapstructure:"auth"`
 }
 
 // ServerConfig 表示 HTTP 服务监听配置。
@@ -48,6 +48,12 @@ type DatabaseConnectionConfig struct {
 	Password string `mapstructure:"password"`
 	// DBName 表示需要连接的数据库名称。
 	DBName string `mapstructure:"dbname"`
+}
+
+// AuthConfig 表示登录鉴权配置。
+type AuthConfig struct {
+	// Password 表示访问系统资源需要使用的登录密码。
+	Password string `mapstructure:"password"`
 }
 
 // LoggerConfig 表示日志服务的整体配置。
@@ -85,10 +91,10 @@ type LoggerFileConfig struct {
 var current *AppConfig
 
 // Init 读取指定配置文件并初始化应用配置。
-// 参数 configFile 表示配置文件路径；为空时使用 DefaultConfigFile。
+// 参数 configFile 表示实际配置文件路径，不能为空。
 func Init(configFile string) (*AppConfig, error) {
-	if configFile == "" {
-		configFile = DefaultConfigFile
+	if strings.TrimSpace(configFile) == "" {
+		return nil, errors.New("config file required")
 	}
 
 	loader := viper.New()
@@ -130,4 +136,11 @@ func setDefaults(loader *viper.Viper) {
 	loader.SetDefault("logger.file.dir", "logs")
 	loader.SetDefault("logger.file.filename", "app.log")
 	loader.SetDefault("logger.file.rotation", "daily")
+	loader.SetDefault("auth.password", "admin123")
+}
+
+// Load 读取指定路径的应用配置。
+// 参数 configFile 表示实际配置文件路径，不能为空。
+func Load(configFile string) (*AppConfig, error) {
+	return Init(configFile)
 }

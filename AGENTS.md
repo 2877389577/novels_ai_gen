@@ -1,3 +1,6 @@
+# Project Explanation
+This is a project for writing Chinese web novels. Use this project to write the specific content of web novels and enhance user inspiration.
+
 # Constraints
 1. Any function you create must have its purpose documented in Simplified Chinese, regardless of frontend or backend.
 2. Any function parameters, struct or class fields, etc., must have their meanings documented in Simplified Chinese, regardless of frontend or backend.

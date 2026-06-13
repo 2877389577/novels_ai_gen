@@ -1,3 +1,4 @@
+# 配置模板文件；启动服务时请通过 -f 指定实际配置文件路径。
 # HTTP 服务配置。
 server:
   # 服务监听端口。
@@ -27,6 +28,11 @@ logger:
     filename: app.log
     # 文件按时间轮转的粒度；支持 daily、hourly、monthly。
     rotation: daily
+
+# 登录鉴权配置。
+auth:
+  # 系统登录密码；只需要密码，不需要账号。
+  password: admin123
 
 # 数据库配置。
 database:

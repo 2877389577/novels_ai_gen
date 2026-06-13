@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"strconv"
@@ -29,6 +30,24 @@ var (
 	current *gorm.DB
 	mu      sync.Mutex
 )
+
+// Provider 根据完整应用配置初始化全局数据库连接，并返回 Wire 清理函数。
+// 参数 cfg 表示应用完整配置。
+func Provider(cfg *appconfig.AppConfig) (*gorm.DB, func(), error) {
+	conn, err := Init(cfg.Database)
+	if err != nil {
+		return nil, nil, fmt.Errorf("初始化数据库失败: %w", err)
+	}
+
+	return conn, CloseWithLog, nil
+}
+
+// CloseWithLog 关闭当前数据库连接，并记录关闭失败信息。
+func CloseWithLog() {
+	if err := Close(); err != nil {
+		slog.Error("关闭数据库失败", "error", err)
+	}
+}
 
 // Init 根据数据库配置初始化全局数据库连接。
 // 参数 cfg 表示应用支持的 MySQL 和 PostgreSQL 数据库连接配置。
