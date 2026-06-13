@@ -1,0 +1,58 @@
+# HTTP 服务配置。
+server:
+  # 服务监听端口。
+  port: 8080
+  # 服务监听地址；0.0.0.0 表示监听所有网卡。
+  host: 0.0.0.0
+
+# 日志服务配置。
+logger:
+  # 日志等级；支持 debug、info、warn、error，也支持 slog 数值等级。
+  level: info
+  # 日志格式；支持 text、json。
+  format: text
+  # 是否记录源码文件和行号。
+  add_source: false
+  # 控制台日志输出配置。
+  console:
+    # 是否输出日志到控制台。
+    enabled: true
+  # 文件日志输出配置。
+  file:
+    # 是否输出日志到文件。
+    enabled: false
+    # 日志文件存放目录。
+    dir: logs
+    # 日志文件基础名称，实际文件名会自动追加时间片后缀。
+    filename: app.log
+    # 文件按时间轮转的粒度；支持 daily、hourly、monthly。
+    rotation: daily
+
+# 数据库配置。
+database:
+  # MySQL 数据库连接配置。
+  mysql:
+    # MySQL 服务地址。
+    host: ""
+    # MySQL 服务端口。
+    port: 
+    # MySQL 登录用户名。
+    username: 
+    # MySQL 登录密码。
+    password: 
+    # MySQL 数据库名称。
+    dbname: 
+  
+  # PostgreSQL 数据库连接配置。
+  postgres:
+    # PostgreSQL 服务地址。
+    host: ""
+    # PostgreSQL 服务端口。
+    port: 
+    # PostgreSQL 登录用户名。
+    username: 
+    # PostgreSQL 登录密码。
+    password: 
+    # PostgreSQL 数据库名称。
+    dbname: 
+  
