@@ -20,6 +20,7 @@ import {
   deleteNovel,
   fetchChapterList,
   fetchNovelDetail,
+  fetchNovelWordCount,
   refreshImagePreview,
   updateNovel,
   uploadImage,
@@ -42,7 +43,6 @@ import {
   splitNovelTags,
 } from "./novel-utils";
 
-const fixedWordCountText = "142,500 字";
 const coverUploadMaxSizeKB = 20 * 1024;
 const chapterPageSize = 50;
 
@@ -71,12 +71,18 @@ interface NovelDetailPageProps {
 // NovelDetailState 表示小说详情页的数据加载状态。
 type NovelDetailState = "loading" | "ready" | "error";
 
+// NovelWordCountState 表示小说总字数统计的加载状态。
+type NovelWordCountState = "loading" | "ready" | "error";
+
 // NovelDetailPage 渲染小说详情页。
 // 参数 props 表示小说详情页需要的外部参数和回调。
 export function NovelDetailPage(props: NovelDetailPageProps) {
   const [state, setState] = useState<NovelDetailState>("loading");
   const [message, setMessage] = useState("");
   const [novel, setNovel] = useState<NovelItem | null>(null);
+  const [wordCountState, setWordCountState] =
+    useState<NovelWordCountState>("loading");
+  const [wordCount, setWordCount] = useState<number | null>(null);
   const [editVisible, setEditVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const onUnauthorized = props.onUnauthorized;
@@ -111,6 +117,34 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
     [onUnauthorized, props.novelId],
   );
 
+  // loadNovelWordCount 从后端聚合接口加载小说总字数。
+  // 参数 signal 表示可选的请求取消信号。
+  const loadNovelWordCount = useCallback(
+    async function loadNovelWordCount(signal?: AbortSignal) {
+      setWordCountState("loading");
+      setWordCount(null);
+
+      try {
+        const data = await fetchNovelWordCount(props.novelId, signal);
+        setWordCount(data.word_count);
+        setWordCountState("ready");
+      } catch (error) {
+        if (signal?.aborted) {
+          return;
+        }
+
+        if (error instanceof UnauthorizedError) {
+          onUnauthorized();
+          return;
+        }
+
+        setWordCount(null);
+        setWordCountState("error");
+      }
+    },
+    [onUnauthorized, props.novelId],
+  );
+
   // loadNovelDetailOnChange 在小说 ID 变化时加载详情。
   useEffect(
     function loadNovelDetailOnChange() {
@@ -124,9 +158,23 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
     [loadNovelDetail],
   );
 
+  // loadNovelWordCountOnChange 在小说 ID 变化时统计总字数。
+  useEffect(
+    function loadNovelWordCountOnChange() {
+      const controller = new AbortController();
+      void loadNovelWordCount(controller.signal);
+
+      return function cancelNovelWordCountLoad() {
+        controller.abort();
+      };
+    },
+    [loadNovelWordCount],
+  );
+
   // handleRetry 处理详情加载失败后的重试。
   function handleRetry() {
     void loadNovelDetail();
+    void loadNovelWordCount();
   }
 
   // handleOpenEditModal 打开编辑小说弹窗。
@@ -143,6 +191,18 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
   // 参数 data 表示后端返回的最新小说数据。
   function handleNovelUpdated(data: NovelItem) {
     setNovel(data);
+  }
+
+  // handleChapterDeleted 处理章节删除后对小说总字数的同步扣减。
+  // 参数 chapter 表示已经删除的章节摘要数据。
+  function handleChapterDeleted(chapter: ChapterSummaryItem) {
+    setWordCount(function subtractDeletedChapterWordCount(currentWordCount) {
+      if (currentWordCount === null) {
+        return currentWordCount;
+      }
+
+      return Math.max(0, currentWordCount - normalizeWordCount(chapter.word_count));
+    });
   }
 
   // handleOpenDeleteModal 打开删除确认弹窗。
@@ -172,6 +232,10 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
           <>
             <NovelDetailHero
               novel={novel}
+              wordCountText={formatNovelWordCountText(
+                wordCountState,
+                wordCount,
+              )}
               onBackToBookshelf={props.onBackToBookshelf}
               onDelete={handleOpenDeleteModal}
               onEdit={handleOpenEditModal}
@@ -180,6 +244,7 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
             <ChapterListPanel
               novelId={props.novelId}
               onChapterCreate={props.onChapterCreate}
+              onChapterDeleted={handleChapterDeleted}
               onChapterEdit={props.onChapterEdit}
               onUnauthorized={props.onUnauthorized}
             />
@@ -258,6 +323,8 @@ function DetailNav(props: DetailNavProps) {
 interface NovelDetailHeroProps {
   // novel 表示当前详情页展示的小说数据。
   novel: NovelItem;
+  // wordCountText 表示小说所有章节累计后的总字数展示文本。
+  wordCountText: string;
   // onBackToBookshelf 表示返回书架页时执行的回调。
   onBackToBookshelf: () => void;
   // onDelete 表示点击删除作品按钮时执行的回调。
@@ -286,7 +353,7 @@ function NovelDetailHero(props: NovelDetailHeroProps) {
           <div className="detail-author-row">
             <span>文 / {props.novel.author_name || "未署名作者"}</span>
             <span className="detail-dot" aria-hidden="true" />
-            <span>{fixedWordCountText}</span>
+            <span>{props.wordCountText}</span>
           </div>
           <p className="detail-updated">{updatedText}</p>
         </div>
@@ -485,6 +552,8 @@ interface ChapterListPanelProps {
   novelId: number;
   // onChapterCreate 表示进入章节创建页时执行的回调。
   onChapterCreate: (novelId: number) => void;
+  // onChapterDeleted 表示章节删除成功后通知父层同步派生数据的回调。
+  onChapterDeleted: (chapter: ChapterSummaryItem) => void;
   // onChapterEdit 表示进入章节编辑页时执行的回调。
   onChapterEdit: (novelId: number, chapterId: number) => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
@@ -660,6 +729,7 @@ function ChapterListPanel(props: ChapterListPanelProps) {
           (chapter) => chapter.id !== deleteTarget.id,
         );
       });
+      props.onChapterDeleted(deleteTarget);
       setTotal((currentTotal) => Math.max(0, currentTotal - 1));
       setDeleteTarget(null);
     } catch (error) {
@@ -837,10 +907,31 @@ function appendUniqueChapters(
   return mergedChapters;
 }
 
+// formatNovelWordCountText 根据加载状态格式化小说总字数展示文本。
+// 参数 state 表示总字数加载状态；参数 wordCount 表示已经统计出的总字数。
+function formatNovelWordCountText(
+  state: NovelWordCountState,
+  wordCount: number | null,
+): string {
+  if (state === "loading") {
+    return "统计中...";
+  }
+  if (state === "error") {
+    return "字数加载失败";
+  }
+  return formatChapterWordCount(wordCount ?? 0);
+}
+
 // formatChapterWordCount 格式化章节字数展示文本。
 // 参数 wordCount 表示章节正文的非空白字符数量。
 function formatChapterWordCount(wordCount: number): string {
-  return `${Math.max(0, wordCount).toLocaleString("zh-CN")} 字`;
+  return `${normalizeWordCount(wordCount).toLocaleString("zh-CN")} 字`;
+}
+
+// normalizeWordCount 标准化字数，避免异常值影响展示和累计。
+// 参数 wordCount 表示后端返回的章节字数。
+function normalizeWordCount(wordCount: number): number {
+  return Number.isFinite(wordCount) ? Math.max(0, wordCount) : 0;
 }
 
 // DetailFooter 渲染小说详情页页脚。

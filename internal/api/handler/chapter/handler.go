@@ -18,6 +18,8 @@ type Handler struct {
 
 // CreateRequest 表示 Swagger 文档中的创建章节请求参数。
 type CreateRequest struct {
+	// ChapterNumber 表示章节号，必须由客户端传入且大于 0。
+	ChapterNumber int `json:"chapter_number" binding:"required" minimum:"1" example:"1"`
 	// Title 表示章节名，不能为空。
 	Title string `json:"title" binding:"required" example:"初入长夜"`
 	// Content 表示章节正文，可以为空。
@@ -82,6 +84,22 @@ type ListData struct {
 	PageSize int `json:"page_size" example:"20"`
 }
 
+// NextChapterNumberData 表示 Swagger 文档中的下一章节号响应数据。
+type NextChapterNumberData struct {
+	// NovelID 表示小说主键 ID。
+	NovelID uint64 `json:"novel_id" example:"1"`
+	// NextChapterNumber 表示建议创建下一章时使用的章节号。
+	NextChapterNumber int `json:"next_chapter_number" example:"2"`
+}
+
+// WordCountData 表示 Swagger 文档中的小说总字数响应数据。
+type WordCountData struct {
+	// NovelID 表示小说主键 ID。
+	NovelID uint64 `json:"novel_id" example:"1"`
+	// WordCount 表示小说所有章节累计后的正文非空白字符数量。
+	WordCount int64 `json:"word_count" example:"12345"`
+}
+
 // ErrorBody 表示 Swagger 文档中的错误响应结构。
 type ErrorBody struct {
 	// Code 表示错误响应码，使用 HTTP 状态码。
@@ -110,6 +128,26 @@ type ListSuccessResponse struct {
 	Data ListData `json:"data"`
 }
 
+// NextChapterNumberSuccessResponse 表示下一章节号接口 Swagger 成功响应结构。
+type NextChapterNumberSuccessResponse struct {
+	// Code 表示业务响应码，成功固定为 0。
+	Code int `json:"code" example:"0"`
+	// Message 表示响应提示信息。
+	Message string `json:"message" example:"ok"`
+	// Data 表示下一章节号响应数据。
+	Data NextChapterNumberData `json:"data"`
+}
+
+// WordCountSuccessResponse 表示小说总字数接口 Swagger 成功响应结构。
+type WordCountSuccessResponse struct {
+	// Code 表示业务响应码，成功固定为 0。
+	Code int `json:"code" example:"0"`
+	// Message 表示响应提示信息。
+	Message string `json:"message" example:"ok"`
+	// Data 表示小说总字数响应数据。
+	Data WordCountData `json:"data"`
+}
+
 // DeleteData 表示删除章节接口响应数据。
 type DeleteData struct {
 	// Deleted 表示是否已经删除。
@@ -132,11 +170,73 @@ func NewHandler(service *bizchapter.Service) *Handler {
 	return &Handler{service: service}
 }
 
+// NextChapterNumber 处理下一章节号查询请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 查询下一章节号
+// @Description 查询指定小说下一章建议使用的章节号；没有章节时返回 1，否则返回当前最大章节号加 1。
+// @Tags chapters
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param novel_id path int true "小说 ID"
+// @Success 200 {object} NextChapterNumberSuccessResponse "查询成功"
+// @Failure 400 {object} ErrorBody "请求参数错误"
+// @Failure 401 {object} ErrorBody "未登录或登录已过期"
+// @Failure 404 {object} ErrorBody "小说不存在"
+// @Failure 500 {object} ErrorBody "服务器内部错误"
+// @Router /novels/{novel_id}/next-chapter-number [get]
+func (h *Handler) NextChapterNumber(c *gin.Context) {
+	novelID, ok := parseNovelID(c)
+	if !ok {
+		return
+	}
+
+	data, err := h.service.NextChapterNumber(c.Request.Context(), novelID)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+
+	response.OK(c, data)
+}
+
+// WordCount 处理小说总字数查询请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 查询小说总字数
+// @Description 查询指定小说所有章节 word_count 的累计值；没有章节时返回 0。
+// @Tags chapters
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param novel_id path int true "小说 ID"
+// @Success 200 {object} WordCountSuccessResponse "查询成功"
+// @Failure 400 {object} ErrorBody "请求参数错误"
+// @Failure 401 {object} ErrorBody "未登录或登录已过期"
+// @Failure 404 {object} ErrorBody "小说不存在"
+// @Failure 500 {object} ErrorBody "服务器内部错误"
+// @Router /novels/{novel_id}/word-count [get]
+func (h *Handler) WordCount(c *gin.Context) {
+	novelID, ok := parseNovelID(c)
+	if !ok {
+		return
+	}
+
+	data, err := h.service.WordCount(c.Request.Context(), novelID)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+
+	response.OK(c, data)
+}
+
 // Create 处理创建章节请求。
 // 参数 c 表示 Gin 请求上下文。
 //
 // @Summary 创建小说章节
-// @Description 在指定小说下创建章节，章节号由后端自动分配。
+// @Description 在指定小说下创建章节，章节号必须由客户端传入且同一本小说内不能重复。
 // @Tags chapters
 // @Accept json
 // @Produce json
@@ -324,7 +424,7 @@ func parseNovelID(c *gin.Context) (uint64, bool) {
 // parseChapterPath 解析路径中的小说 ID 和章节 ID。
 // 参数 c 表示 Gin 请求上下文。
 func parseChapterPath(c *gin.Context) (uint64, uint64, bool) {
-	novelID, ok := parseIDParam(c, "novel_id")
+	novelID, ok := parseNovelID(c)
 	if !ok {
 		return 0, 0, false
 	}
@@ -353,6 +453,8 @@ func writeServiceError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, bizchapter.ErrTitleRequired):
 		response.Error(c, http.StatusBadRequest, "章节名不能为空")
+	case errors.Is(err, bizchapter.ErrChapterNumberRequired):
+		response.Error(c, http.StatusBadRequest, "章节号必须大于 0")
 	case errors.Is(err, bizchapter.ErrNovelNotFound):
 		response.Error(c, http.StatusNotFound, "小说不存在")
 	case errors.Is(err, bizchapter.ErrNotFound):

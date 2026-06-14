@@ -437,7 +437,7 @@
                         "Bearer": []
                     }
                 ],
-                "description": "在指定小说下创建章节，章节号由后端自动分配。",
+                "description": "在指定小说下创建章节，章节号必须由客户端传入且同一本小说内不能重复。",
                 "consumes": [
                     "application/json"
                 ],
@@ -702,6 +702,128 @@
                     },
                     "404": {
                         "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/novels/{novel_id}/next-chapter-number": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "查询指定小说下一章建议使用的章节号；没有章节时返回 1，否则返回当前最大章节号加 1。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chapters"
+                ],
+                "summary": "查询下一章节号",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.NextChapterNumberSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说不存在",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/novels/{novel_id}/word-count": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "查询指定小说所有章节 word_count 的累计值；没有章节时返回 0。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chapters"
+                ],
+                "summary": "查询小说总字数",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.WordCountSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/chapter.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说不存在",
                         "schema": {
                             "$ref": "#/definitions/chapter.ErrorBody"
                         }
@@ -1079,6 +1201,44 @@
                 }
             }
         },
+        "chapter.NextChapterNumberData": {
+            "type": "object",
+            "properties": {
+                "next_chapter_number": {
+                    "description": "NextChapterNumber 表示建议创建下一章时使用的章节号。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "novel_id": {
+                    "description": "NovelID 表示小说主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "chapter.NextChapterNumberSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示下一章节号响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/chapter.NextChapterNumberData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
         "chapter.SuccessResponse": {
             "type": "object",
             "properties": {
@@ -1092,6 +1252,44 @@
                     "allOf": [
                         {
                             "$ref": "#/definitions/chapter.ChapterData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "chapter.WordCountData": {
+            "type": "object",
+            "properties": {
+                "novel_id": {
+                    "description": "NovelID 表示小说主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "word_count": {
+                    "description": "WordCount 表示小说所有章节累计后的正文非空白字符数量。",
+                    "type": "integer",
+                    "example": 12345
+                }
+            }
+        },
+        "chapter.WordCountSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示小说总字数响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/chapter.WordCountData"
                         }
                     ]
                 },
@@ -1118,9 +1316,16 @@
         "internal_api_handler_chapter.CreateRequest": {
             "type": "object",
             "required": [
+                "chapter_number",
                 "title"
             ],
             "properties": {
+                "chapter_number": {
+                    "description": "ChapterNumber 表示章节号，必须由客户端传入且大于 0。",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 1
+                },
                 "content": {
                     "description": "Content 表示章节正文，可以为空。",
                     "type": "string",

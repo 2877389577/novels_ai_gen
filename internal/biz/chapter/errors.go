@@ -9,6 +9,8 @@ var (
 	ErrNovelNotFound = errors.New("chapter novel not found")
 	// ErrTitleRequired 表示章节名不能为空。
 	ErrTitleRequired = errors.New("chapter title required")
+	// ErrChapterNumberRequired 表示章节号不能为空且必须大于 0。
+	ErrChapterNumberRequired = errors.New("chapter number required")
 	// ErrChapterNumberConflict 表示同一本小说下章节号发生唯一冲突。
 	ErrChapterNumberConflict = errors.New("chapter number conflict")
 )

@@ -35,6 +35,8 @@ func (Chapter) TableName() string {
 
 // CreateRequest 表示创建章节请求参数。
 type CreateRequest struct {
+	// ChapterNumber 表示章节号，必须由客户端传入且大于 0。
+	ChapterNumber int `json:"chapter_number" binding:"required" minimum:"1" example:"1"`
 	// Title 表示章节名，不能为空。
 	Title string `json:"title" binding:"required" example:"初入长夜"`
 	// Content 表示章节正文，可以为空。
@@ -105,4 +107,20 @@ type ListResponse struct {
 	Page int `json:"page" example:"1"`
 	// PageSize 表示每页数量。
 	PageSize int `json:"page_size" example:"20"`
+}
+
+// NextChapterNumberResponse 表示下一章节号查询响应数据。
+type NextChapterNumberResponse struct {
+	// NovelID 表示小说主键 ID。
+	NovelID uint64 `json:"novel_id" example:"1"`
+	// NextChapterNumber 表示建议创建下一章时使用的章节号。
+	NextChapterNumber int `json:"next_chapter_number" example:"2"`
+}
+
+// WordCountResponse 表示小说总字数响应数据。
+type WordCountResponse struct {
+	// NovelID 表示小说主键 ID。
+	NovelID uint64 `json:"novel_id" example:"1"`
+	// WordCount 表示小说所有章节累计后的正文非空白字符数量。
+	WordCount int64 `json:"word_count" example:"12345"`
 }

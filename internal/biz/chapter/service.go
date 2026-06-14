@@ -15,9 +15,15 @@ const (
 
 // Repository 表示章节数据仓储接口。
 type Repository interface {
-	// CreateWithNextNumber 创建章节并自动分配下一章节号。
+	// Create 创建章节记录。
 	// 参数 ctx 表示请求上下文；参数 item 表示需要创建的章节模型。
-	CreateWithNextNumber(ctx context.Context, item *Chapter) error
+	Create(ctx context.Context, item *Chapter) error
+	// NextChapterNumber 查询指定小说下一章建议使用的章节号。
+	// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID。
+	NextChapterNumber(ctx context.Context, novelID uint64) (int, error)
+	// WordCount 查询指定小说所有章节累计后的总字数。
+	// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID。
+	WordCount(ctx context.Context, novelID uint64) (int64, error)
 	// ListByNovelID 查询指定小说下的章节分页列表。
 	// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 offset 表示查询偏移量；参数 limit 表示查询数量。
 	ListByNovelID(ctx context.Context, novelID uint64, offset int, limit int) ([]Chapter, int64, error)
@@ -52,21 +58,61 @@ func (s *Service) Create(ctx context.Context, novelID uint64, req CreateRequest)
 	}
 
 	req = normalizeCreateRequest(req)
+	if req.ChapterNumber <= 0 {
+		return ChapterResponse{}, ErrChapterNumberRequired
+	}
 	if req.Title == "" {
 		return ChapterResponse{}, ErrTitleRequired
 	}
 
 	item := &Chapter{
-		NovelID:   novelID,
-		Title:     req.Title,
-		Content:   req.Content,
-		WordCount: countNonWhitespaceRunes(req.Content),
+		NovelID:       novelID,
+		ChapterNumber: req.ChapterNumber,
+		Title:         req.Title,
+		Content:       req.Content,
+		WordCount:     countNonWhitespaceRunes(req.Content),
 	}
-	if err := s.repo.CreateWithNextNumber(ctx, item); err != nil {
+	if err := s.repo.Create(ctx, item); err != nil {
 		return ChapterResponse{}, fmt.Errorf("创建章节失败: %w", err)
 	}
 
 	return toResponse(*item), nil
+}
+
+// NextChapterNumber 查询指定小说下一章建议使用的章节号。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID。
+func (s *Service) NextChapterNumber(ctx context.Context, novelID uint64) (NextChapterNumberResponse, error) {
+	if novelID == 0 {
+		return NextChapterNumberResponse{}, ErrNovelNotFound
+	}
+
+	nextNumber, err := s.repo.NextChapterNumber(ctx, novelID)
+	if err != nil {
+		return NextChapterNumberResponse{}, fmt.Errorf("查询下一章节号失败: %w", err)
+	}
+
+	return NextChapterNumberResponse{
+		NovelID:           novelID,
+		NextChapterNumber: nextNumber,
+	}, nil
+}
+
+// WordCount 查询指定小说所有章节累计后的总字数。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID。
+func (s *Service) WordCount(ctx context.Context, novelID uint64) (WordCountResponse, error) {
+	if novelID == 0 {
+		return WordCountResponse{}, ErrNovelNotFound
+	}
+
+	totalWordCount, err := s.repo.WordCount(ctx, novelID)
+	if err != nil {
+		return WordCountResponse{}, fmt.Errorf("查询小说总字数失败: %w", err)
+	}
+
+	return WordCountResponse{
+		NovelID:   novelID,
+		WordCount: totalWordCount,
+	}, nil
 }
 
 // List 查询指定小说下的章节分页列表。

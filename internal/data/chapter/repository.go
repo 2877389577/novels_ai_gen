@@ -24,23 +24,20 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// CreateWithNextNumber 创建章节并自动分配下一章节号。
+// Create 创建章节记录。
 // 参数 ctx 表示请求上下文；参数 item 表示需要创建的章节模型。
-func (r *Repository) CreateWithNextNumber(ctx context.Context, item *bizchapter.Chapter) error {
+func (r *Repository) Create(ctx context.Context, item *bizchapter.Chapter) error {
 	if item == nil {
 		return fmt.Errorf("章节记录不能为空")
+	}
+	if item.ChapterNumber <= 0 {
+		return bizchapter.ErrChapterNumberRequired
 	}
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := ensureNovelExists(tx, item.NovelID); err != nil {
 			return err
 		}
-
-		maxNumber, err := maxChapterNumber(tx, item.NovelID)
-		if err != nil {
-			return err
-		}
-		item.ChapterNumber = maxNumber + 1
 
 		if err := tx.Create(item).Error; err != nil {
 			if isUniqueConstraintError(err) {
@@ -50,6 +47,40 @@ func (r *Repository) CreateWithNextNumber(ctx context.Context, item *bizchapter.
 		}
 		return nil
 	})
+}
+
+// NextChapterNumber 查询指定小说下一章建议使用的章节号。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID。
+func (r *Repository) NextChapterNumber(ctx context.Context, novelID uint64) (int, error) {
+	db := r.db.WithContext(ctx)
+	if err := ensureNovelExists(db, novelID); err != nil {
+		return 0, err
+	}
+
+	maxNumber, err := maxChapterNumber(db, novelID)
+	if err != nil {
+		return 0, err
+	}
+	return maxNumber + 1, nil
+}
+
+// WordCount 查询指定小说所有章节累计后的总字数。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID。
+func (r *Repository) WordCount(ctx context.Context, novelID uint64) (int64, error) {
+	db := r.db.WithContext(ctx)
+	if err := ensureNovelExists(db, novelID); err != nil {
+		return 0, err
+	}
+
+	var totalWordCount int64
+	if err := db.
+		Model(&bizchapter.Chapter{}).
+		Select("COALESCE(SUM(word_count), 0)").
+		Where("novel_id = ?", novelID).
+		Scan(&totalWordCount).Error; err != nil {
+		return 0, fmt.Errorf("统计小说总字数失败: %w", err)
+	}
+	return totalWordCount, nil
 }
 
 // ListByNovelID 查询指定小说下的章节分页列表。

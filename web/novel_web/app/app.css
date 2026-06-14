@@ -2817,3 +2817,500 @@ input {
     animation-delay: 0s !important;
   }
 }
+
+html.chapter-editor-scrollbar-hidden,
+body.chapter-editor-scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html.chapter-editor-scrollbar-hidden::-webkit-scrollbar,
+body.chapter-editor-scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.chapter-editor-page {
+  min-height: 100vh;
+  color: var(--color-on-surface);
+  background-color: var(--color-surface);
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 38%),
+    url("data:image/svg+xml,%3Csvg width='96' height='96' viewBox='0 0 96 96' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='96' height='96' filter='url(%23n)' opacity='.026'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  animation: none;
+}
+
+.chapter-editor-nav {
+  display: flex;
+  width: min(100%, 1160px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 auto;
+  padding: 38px 56px 0;
+}
+
+.chapter-editor-back,
+.chapter-editor-save,
+.chapter-editor-error button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 9px 16px;
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.chapter-editor-back {
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 76%, transparent);
+  background: color-mix(in srgb, var(--color-paper) 68%, transparent);
+  color: var(--color-primary);
+}
+
+.chapter-editor-back:hover,
+.chapter-editor-back:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.chapter-editor-title {
+  text-align: right;
+}
+
+.chapter-editor-title p,
+.chapter-editor-kicker {
+  margin: 0 0 8px;
+  color: var(--color-secondary);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 18px;
+  letter-spacing: 0.04em;
+}
+
+.chapter-editor-title h1 {
+  margin: 0;
+  color: var(--color-on-surface);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 42px;
+  letter-spacing: 0;
+}
+
+.chapter-editor-shell {
+  width: min(100%, 1160px);
+  margin: 0 auto;
+  padding: 36px 56px 96px;
+}
+
+.chapter-editor-paper {
+  position: relative;
+  width: min(100%, 960px);
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 40%, transparent);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.66), transparent 36%),
+    color-mix(in srgb, var(--color-paper) 94%, transparent);
+  box-shadow: 0 18px 52px rgba(89, 65, 62, 0.1);
+  padding: 58px 66px 42px;
+}
+
+.chapter-editor-corner {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  pointer-events: none;
+  border-color: color-mix(in srgb, var(--color-outline-variant) 46%, transparent);
+}
+
+.chapter-editor-corner-top-left {
+  top: 18px;
+  left: 18px;
+  border-top: 1px solid;
+  border-left: 1px solid;
+}
+
+.chapter-editor-corner-top-right {
+  top: 18px;
+  right: 18px;
+  border-top: 1px solid;
+  border-right: 1px solid;
+}
+
+.chapter-editor-corner-bottom-left {
+  bottom: 18px;
+  left: 18px;
+  border-bottom: 1px solid;
+  border-left: 1px solid;
+}
+
+.chapter-editor-corner-bottom-right {
+  right: 18px;
+  bottom: 18px;
+  border-right: 1px solid;
+  border-bottom: 1px solid;
+}
+
+.chapter-editor-paper-header {
+  display: grid;
+  justify-items: center;
+  margin-bottom: 50px;
+  text-align: center;
+}
+
+.chapter-editor-kicker {
+  min-height: 22px;
+  color: var(--color-on-surface-variant);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.chapter-title-input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--color-on-surface);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 56px;
+  letter-spacing: 0;
+  outline: none;
+  padding: 8px 0 12px;
+  text-align: center;
+}
+
+.chapter-title-input::placeholder,
+.chapter-content-input::placeholder,
+.chapter-content-editor:empty::before {
+  color: color-mix(in srgb, var(--color-outline) 58%, transparent);
+}
+
+.chapter-title-input:focus-visible {
+  color: var(--color-primary);
+}
+
+.chapter-title-divider {
+  width: 96px;
+  height: 1px;
+  margin-top: 8px;
+  background: color-mix(in srgb, var(--color-primary) 24%, transparent);
+}
+
+.chapter-title-error {
+  margin: 14px 0 0;
+  color: var(--color-error);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.chapter-editor-writing-area {
+  position: relative;
+  width: min(100%, 840px);
+  margin: 0 auto;
+}
+
+.chapter-editor-binding {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -34px;
+  display: flex;
+  width: 1px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 54px 0;
+  background: color-mix(in srgb, var(--color-outline-variant) 24%, transparent);
+}
+
+.chapter-editor-binding span {
+  width: 4px;
+  height: 16px;
+  margin-left: -1.5px;
+  background: color-mix(in srgb, var(--color-outline-variant) 34%, transparent);
+}
+
+.chapter-content-input,
+.chapter-content-editor {
+  display: block;
+  width: 100%;
+  min-height: 450px;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: var(--color-on-surface-variant);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 18px;
+  line-height: 32px;
+  outline: none;
+  padding: 0;
+  resize: none;
+  text-indent: 2em;
+  text-align: justify;
+}
+
+.chapter-content-editor {
+  cursor: text;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.chapter-content-editor:empty::before {
+  display: block;
+  content: attr(data-placeholder);
+  pointer-events: none;
+  text-align: left;
+  text-indent: 0;
+}
+
+.chapter-content-editor > p,
+.chapter-content-editor > div,
+.chapter-content-paragraph {
+  min-height: 32px;
+  margin: 0 0 14px;
+  text-indent: 2em;
+}
+
+.chapter-content-editor > p:last-child,
+.chapter-content-editor > div:last-child,
+.chapter-content-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.chapter-content-editor:focus-visible {
+  outline: none;
+}
+
+.chapter-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 50px;
+  border-top: 1px solid color-mix(in srgb, var(--color-outline-variant) 24%, transparent);
+  padding-top: 24px;
+}
+
+.chapter-word-count {
+  color: var(--color-outline);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 16px;
+  letter-spacing: 0.06em;
+}
+
+.chapter-editor-save {
+  position: relative;
+  min-width: 116px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  padding: 11px 30px;
+}
+
+.chapter-editor-save::before,
+.chapter-editor-save::after {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  content: "";
+}
+
+.chapter-editor-save::before {
+  top: -1px;
+  right: -1px;
+  border-top: 1px solid var(--color-primary);
+  border-right: 1px solid var(--color-primary);
+}
+
+.chapter-editor-save::after {
+  bottom: -1px;
+  left: -1px;
+  border-bottom: 1px solid var(--color-primary);
+  border-left: 1px solid var(--color-primary);
+}
+
+.chapter-editor-save:hover:not(:disabled),
+.chapter-editor-save:focus-visible {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary-container) 34%, var(--color-surface));
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.chapter-editor-save:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.chapter-editor-error {
+  width: min(100%, 960px);
+  margin: 0 auto;
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-primary-container) 22%, var(--color-paper));
+  padding: 34px;
+}
+
+.chapter-editor-error p {
+  margin: 0 0 16px;
+  color: var(--color-error);
+  font-weight: 700;
+}
+
+.chapter-editor-error div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.chapter-editor-error button {
+  border: 1px solid var(--color-outline);
+  background: transparent;
+  color: var(--color-on-surface);
+}
+
+.chapter-editor-error button:hover,
+.chapter-editor-error button:focus-visible {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  outline: none;
+}
+
+.chapter-editor-skeleton {
+  display: grid;
+  gap: 18px;
+}
+
+.chapter-editor-skeleton span {
+  display: block;
+  height: 20px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(225, 190, 187, 0.25),
+    rgba(255, 255, 255, 0.64),
+    rgba(225, 190, 187, 0.25)
+  );
+}
+
+.chapter-editor-skeleton span:first-child {
+  width: 22%;
+  justify-self: center;
+}
+
+.chapter-editor-skeleton span:nth-child(2) {
+  width: 56%;
+  height: 46px;
+  justify-self: center;
+}
+
+.chapter-editor-skeleton span:nth-child(3) {
+  width: 100%;
+  height: 450px;
+  border-radius: 4px;
+}
+
+.chapter-editor-skeleton span:nth-child(4) {
+  width: 30%;
+  justify-self: end;
+}
+
+@media (max-width: 960px) {
+  .chapter-editor-nav,
+  .chapter-editor-shell {
+    width: min(100%, 1000px);
+    padding-inline: 32px;
+  }
+
+  .chapter-editor-paper,
+  .chapter-editor-error {
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .chapter-editor-nav {
+    align-items: stretch;
+    flex-direction: column-reverse;
+    padding: 28px 24px 0;
+  }
+
+  .chapter-editor-title {
+    text-align: left;
+  }
+
+  .chapter-editor-title h1 {
+    font-size: 30px;
+    line-height: 38px;
+  }
+
+  .chapter-editor-shell {
+    padding: 28px 24px 64px;
+  }
+
+  .chapter-editor-paper {
+    padding: 42px 24px 28px;
+  }
+
+  .chapter-title-input {
+    font-size: 32px;
+    line-height: 42px;
+  }
+
+  .chapter-editor-writing-area {
+    width: 100%;
+  }
+
+  .chapter-editor-binding {
+    display: none;
+  }
+
+  .chapter-content-input,
+  .chapter-content-editor {
+    min-height: 450px;
+    font-size: 16px;
+    line-height: 28px;
+  }
+
+  .chapter-content-editor > p,
+  .chapter-content-editor > div,
+  .chapter-content-paragraph {
+    min-height: 28px;
+  }
+
+  .chapter-editor-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .chapter-editor-save,
+  .chapter-editor-back {
+    width: 100%;
+  }
+}

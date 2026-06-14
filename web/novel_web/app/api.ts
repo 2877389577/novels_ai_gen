@@ -105,6 +105,14 @@ export interface NovelDeleteData {
   deleted: boolean;
 }
 
+// NovelWordCountData 表示小说总字数接口返回的数据。
+export interface NovelWordCountData {
+  // novel_id 表示小说主键 ID。
+  novel_id: number;
+  // word_count 表示小说所有章节累计后的总字数。
+  word_count: number;
+}
+
 // ChapterSummaryItem 表示章节列表中的章节摘要数据，不包含正文。
 export interface ChapterSummaryItem {
   // id 表示章节主键 ID。
@@ -155,6 +163,14 @@ export interface ChapterListData {
   page_size: number;
 }
 
+// NextChapterNumberData 表示后端返回的下一章节号数据。
+export interface NextChapterNumberData {
+  // novel_id 表示小说主键 ID。
+  novel_id: number;
+  // next_chapter_number 表示建议创建下一章时使用的章节号。
+  next_chapter_number: number;
+}
+
 // ChapterListParams 表示查询章节列表时使用的分页参数。
 export interface ChapterListParams {
   // page 表示当前页码，从 1 开始。
@@ -167,6 +183,8 @@ export interface ChapterListParams {
 
 // ChapterCreateParams 表示创建章节时提交给后端的参数。
 export interface ChapterCreateParams {
+  // chapter_number 表示章节号，必须由后端建议接口返回后提交。
+  chapter_number: number;
   // title 表示章节名，不能为空。
   title: string;
   // content 表示章节正文，可以为空。
@@ -338,6 +356,37 @@ export async function fetchNovelDetail(
   return payload.data;
 }
 
+// fetchNovelWordCount 查询指定小说所有章节累计后的总字数。
+// 参数 id 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNovelWordCount(
+  id: number,
+  signal?: AbortSignal,
+): Promise<NovelWordCountData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${id}/word-count`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelWordCountData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说字数加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
 // createNovel 调用后端接口创建小说并返回新小说数据。
 // 参数 params 表示创建小说时需要提交的表单数据。
 export async function createNovel(
@@ -499,6 +548,40 @@ export async function fetchChapterDetail(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "章节详情加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchNextChapterNumber 查询指定小说下一章建议使用的章节号。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNextChapterNumber(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<NextChapterNumberData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/next-chapter-number`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+  const payload = await parseApiResponse<NextChapterNumberData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "下一章节号加载失败，请稍后再试");
   }
 
   return payload.data;
