@@ -8,15 +8,18 @@ package main
 
 import (
 	auth2 "novels_ai_gen/internal/api/handler/auth"
+	chapter3 "novels_ai_gen/internal/api/handler/chapter"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
 	upload2 "novels_ai_gen/internal/api/handler/upload"
 	"novels_ai_gen/internal/api/router"
 	"novels_ai_gen/internal/biz/auth"
+	chapter2 "novels_ai_gen/internal/biz/chapter"
 	novel2 "novels_ai_gen/internal/biz/novel"
 	"novels_ai_gen/internal/biz/upload"
 	"novels_ai_gen/internal/bootstrap/config"
 	"novels_ai_gen/internal/bootstrap/db"
 	"novels_ai_gen/internal/bootstrap/logger"
+	"novels_ai_gen/internal/data/chapter"
 	"novels_ai_gen/internal/data/novel"
 	"novels_ai_gen/internal/data/objectstore"
 	"novels_ai_gen/internal/server"
@@ -49,6 +52,9 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	repository := novel.NewRepository(gormDB)
 	novelService := novel2.NewService(repository)
 	novelHandler := novel3.NewHandler(novelService)
+	chapterRepository := chapter.NewRepository(gormDB)
+	chapterService := chapter2.NewService(chapterRepository)
+	chapterHandler := chapter3.NewHandler(chapterService)
 	client, err := objectstore.NewClient(appConfig)
 	if err != nil {
 		cleanup2()
@@ -57,7 +63,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	}
 	uploadService := upload.NewService(appConfig, client)
 	uploadHandler := upload2.NewHandler(uploadService)
-	engine := router.NewRouter(handler, novelHandler, uploadHandler, service)
+	engine := router.NewRouter(handler, novelHandler, chapterHandler, uploadHandler, service)
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {

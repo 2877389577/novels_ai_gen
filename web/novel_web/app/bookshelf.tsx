@@ -4,7 +4,13 @@ import Modal from "@douyinfe/semi-ui-19/lib/es/modal";
 import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
 import Upload from "@douyinfe/semi-ui-19/lib/es/upload";
 import type { customRequestArgs } from "@douyinfe/semi-ui-19/lib/es/upload";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
 import {
   UnauthorizedError,
@@ -17,6 +23,19 @@ import {
   type NovelItem,
   type NovelListData,
 } from "./api";
+import {
+  defaultNovelStatus,
+  formatUpdatedText,
+  getCoverInitial,
+  isPrivateObjectKey,
+  normalizeNovelTags,
+  normalizeNovelStatus,
+  normalizeText,
+  novelTagSeparators,
+  novelStatusOptions,
+  splitNovelTagInputValue,
+  splitNovelTags,
+} from "./novel-utils";
 
 const bookshelfPageSize = 20;
 const coverUploadMaxSizeKB = 20 * 1024;
@@ -26,18 +45,27 @@ const coverToneClasses = [
   "book-cover-tone-ink",
   "book-cover-tone-gold",
 ];
-const emptyCreateNovelFormValues: NovelCreateParams = {
+const emptyCreateNovelFormValues: CreateNovelFormValues = {
   name: "",
+  status: defaultNovelStatus,
   author_name: "",
   description: "",
-  tags: "",
+  tags: [],
   cover_url: "",
+};
+
+// CreateNovelFormValues 表示添加小说弹窗中的表单值。
+type CreateNovelFormValues = Omit<NovelCreateParams, "tags"> & {
+  // tags 表示表单中已经拆分成标签块的小说标签列表。
+  tags: string[];
 };
 
 // BookshelfPageProps 表示书架首页需要的外部回调。
 interface BookshelfPageProps {
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
+  // onNovelSelect 表示用户选择某本小说后进入详情页的回调。
+  onNovelSelect: (novelId: number) => void;
 }
 
 // BookshelfState 表示书架首页的数据加载状态。
@@ -144,6 +172,7 @@ export function BookshelfPage(props: BookshelfPageProps) {
           <NovelGrid
             novels={novels}
             onCreateClick={handleOpenCreateModal}
+            onNovelSelect={props.onNovelSelect}
             onUnauthorized={onUnauthorized}
           />
         ) : null}
@@ -215,6 +244,8 @@ interface NovelGridProps {
   novels: NovelItem[];
   // onCreateClick 表示点击创建小说入口时执行的回调。
   onCreateClick: () => void;
+  // onNovelSelect 表示用户选择某本小说后进入详情页的回调。
+  onNovelSelect: (novelId: number) => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
@@ -234,7 +265,12 @@ function NovelGrid(props: NovelGridProps) {
   return (
     <div className="book-grid">
       {props.novels.map((novel, index) =>
-        renderNovelCard(novel, index, props.onUnauthorized),
+        renderNovelCard(
+          novel,
+          index,
+          props.onNovelSelect,
+          props.onUnauthorized,
+        ),
       )}
       <CreateBookButton onClick={props.onCreateClick} />
     </div>
@@ -247,6 +283,8 @@ interface NovelCardProps {
   novel: NovelItem;
   // index 表示当前小说在列表中的位置。
   index: number;
+  // onSelect 表示用户选择当前小说时执行的回调。
+  onSelect: (novelId: number) => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
@@ -256,9 +294,32 @@ interface NovelCardProps {
 function NovelCard(props: NovelCardProps) {
   const tags = splitNovelTags(props.novel.tags);
   const updatedText = formatUpdatedText(props.novel.updated_at);
+  const status = normalizeNovelStatus(props.novel.status);
+
+  // handleSelect 处理小说卡片点击。
+  function handleSelect() {
+    props.onSelect(props.novel.id);
+  }
+
+  // handleKeyDown 处理小说卡片键盘选择。
+  // 参数 event 表示 React 键盘事件。
+  function handleKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    handleSelect();
+  }
 
   return (
-    <article className="book-card">
+    <article
+      className="book-card"
+      role="button"
+      tabIndex={0}
+      onClick={handleSelect}
+      onKeyDown={handleKeyDown}
+    >
       <BookCover
         novel={props.novel}
         index={props.index}
@@ -269,7 +330,9 @@ function NovelCard(props: NovelCardProps) {
         <h2>{props.novel.name}</h2>
         <p>{props.novel.author_name || "未署名作者"}</p>
         <div className="book-status-row">
-          <span className="book-status">草稿</span>
+          <span className={`book-status ${getBookStatusClassName(status)}`}>
+            {status}
+          </span>
           <span>{updatedText}</span>
         </div>
         {tags.length > 0 ? <TagList tags={tags} /> : null}
@@ -436,12 +499,12 @@ function CreateNovelModal(props: CreateNovelModalProps) {
     null,
   );
   const [uploadResetKey, setUploadResetKey] = useState(0);
-  const formApiRef = useRef<FormApi<NovelCreateParams> | null>(null);
+  const formApiRef = useRef<FormApi<CreateNovelFormValues> | null>(null);
 
   // handleGetFormApi 保存 Semi 表单 API，供弹窗确认按钮触发表单校验。
   // 参数 formApi 表示 Semi Form 暴露的表单操作对象。
   const handleGetFormApi = useCallback(function handleGetFormApi(
-    formApi: FormApi<NovelCreateParams>,
+    formApi: FormApi<CreateNovelFormValues>,
   ) {
     formApiRef.current = formApi;
   }, []);
@@ -511,9 +574,9 @@ function CreateNovelModal(props: CreateNovelModalProps) {
       return;
     }
 
-    let values: NovelCreateParams;
+    let values: CreateNovelFormValues;
     try {
-      values = (await formApi.validate()) as NovelCreateParams;
+      values = (await formApi.validate()) as CreateNovelFormValues;
     } catch {
       return;
     }
@@ -555,7 +618,7 @@ function CreateNovelModal(props: CreateNovelModalProps) {
       onOk={handleSubmit}
       onCancel={handleCancel}
     >
-      <Form<NovelCreateParams>
+      <Form<CreateNovelFormValues>
         className="create-novel-form"
         initValues={emptyCreateNovelFormValues}
         layout="vertical"
@@ -570,6 +633,14 @@ function CreateNovelModal(props: CreateNovelModalProps) {
           rules={[{ required: true, message: "请输入书名" }]}
           validator={validateNovelName}
         />
+        <Form.Select
+          field="status"
+          label="状态"
+          placeholder="选择作品状态"
+          optionList={novelStatusOptions}
+          trigger="change"
+          rules={[{ required: true, message: "请选择状态" }]}
+        />
         <Form.Input
           field="author_name"
           label="作者"
@@ -583,11 +654,17 @@ function CreateNovelModal(props: CreateNovelModalProps) {
           autosize={{ minRows: 3, maxRows: 5 }}
           trigger="blur"
         />
-        <Form.Input
+        <Form.TagInput
           field="tags"
           label="标签"
-          placeholder="多个标签用英文逗号分隔，例如：玄幻,冒险"
-          trigger="blur"
+          placeholder="输入标签后按逗号或回车"
+          addOnBlur
+          allowDuplicates={false}
+          className="novel-tags-input"
+          separator={novelTagSeparators}
+          showClear
+          split={splitNovelTagInputValue}
+          trigger="change"
         />
         <div className="cover-upload-field">
           <span className="cover-upload-label">封面</span>
@@ -663,10 +740,11 @@ function countRecentlyUpdatedNovels(novels: NovelItem[]): number {
 }
 
 // renderNovelCard 渲染小说列表中的单个小说卡片。
-// 参数 novel 表示当前需要渲染的小说；参数 index 表示小说在列表中的位置；参数 onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+// 参数 novel 表示当前需要渲染的小说；参数 index 表示小说在列表中的位置；参数 onNovelSelect 表示用户选择小说时执行的回调；参数 onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
 function renderNovelCard(
   novel: NovelItem,
   index: number,
+  onNovelSelect: (novelId: number) => void,
   onUnauthorized: () => void,
 ) {
   return (
@@ -674,6 +752,7 @@ function renderNovelCard(
       key={novel.id}
       novel={novel}
       index={index}
+      onSelect={onNovelSelect}
       onUnauthorized={onUnauthorized}
     />
   );
@@ -700,94 +779,32 @@ function renderSkeletonCard(index: number) {
   );
 }
 
-// splitNovelTags 将后端返回的逗号分隔标签拆成列表。
-// 参数 tags 表示后端返回的标签文本。
-function splitNovelTags(tags: string): string[] {
-  const normalizedTags = tags
-    .split(",")
-    .map(trimTag)
-    .filter(Boolean);
-  return normalizedTags.slice(0, 3);
-}
-
-// trimTag 清理单个标签文本两端空白。
-// 参数 tag 表示需要清理的标签文本。
-function trimTag(tag: string): string {
-  return tag.trim();
-}
-
-// formatUpdatedText 将更新时间格式化成书架展示文本。
-// 参数 updatedAt 表示后端返回的更新时间。
-function formatUpdatedText(updatedAt: string): string {
-  const date = new Date(updatedAt);
-  if (Number.isNaN(date.getTime())) {
-    return "尚未更新";
-  }
-
-  return `${date.getMonth() + 1}月${date.getDate()}日更新`;
-}
-
 // getCoverToneClass 根据小说位置选择封面配色。
 // 参数 index 表示当前小说在列表中的位置。
 function getCoverToneClass(index: number): string {
   return coverToneClasses[index % coverToneClasses.length];
 }
 
-// getCoverInitial 获取封面占位图中展示的单字。
-// 参数 name 表示小说名称。
-function getCoverInitial(name: string): string {
-  const normalizedName = name.trim();
-  return normalizedName ? normalizedName.slice(0, 1) : "卷";
-}
-
-// isPrivateObjectKey 判断封面字段是否为私有对象存储 key。
-// 参数 value 表示后端返回的封面字段值。
-function isPrivateObjectKey(value: string): boolean {
-  return value !== "" && !isDirectCoverURL(value) && isSafeObjectKey(value);
-}
-
-// isDirectCoverURL 判断封面字段是否可以直接作为图片地址展示。
-// 参数 value 表示后端返回的封面字段值。
-function isDirectCoverURL(value: string): boolean {
-  const normalizedValue = value.toLowerCase();
-  return (
-    normalizedValue.startsWith("http://") ||
-    normalizedValue.startsWith("https://") ||
-    normalizedValue.startsWith("data:") ||
-    normalizedValue.startsWith("blob:")
-  );
-}
-
-// isSafeObjectKey 判断对象 key 是否满足前端刷新预览的基础安全规则。
-// 参数 value 表示需要判断的对象 key。
-function isSafeObjectKey(value: string): boolean {
-  return (
-    !value.startsWith("/") &&
-    !value.includes("\\") &&
-    !value.includes("..") &&
-    (value.startsWith("covers/") || value.startsWith("characters/"))
-  );
+// getBookStatusClassName 获取书架卡片状态标签的样式类名。
+// 参数 status 表示已经标准化后的小说状态。
+function getBookStatusClassName(status: string): string {
+  return status === "已完结" ? "book-status-finished" : "book-status-ongoing";
 }
 
 // normalizeCreateNovelValues 清理添加小说表单数据。
 // 参数 values 表示 Semi 表单校验后返回的原始字段值；参数 coverObjectKey 表示封面图片上传后返回的对象 key。
 function normalizeCreateNovelValues(
-  values: NovelCreateParams,
+  values: CreateNovelFormValues,
   coverObjectKey: string,
 ): NovelCreateParams {
   return {
     name: normalizeText(values.name),
+    status: normalizeNovelStatus(values.status),
     author_name: normalizeText(values.author_name),
     description: normalizeText(values.description),
-    tags: normalizeText(values.tags),
+    tags: normalizeNovelTags(values.tags),
     cover_url: normalizeText(coverObjectKey),
   };
-}
-
-// normalizeText 将未知文本值转换为去除两端空白后的字符串。
-// 参数 value 表示需要清理的文本值。
-function normalizeText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 // validateNovelName 校验小说书名是否填写了非空白内容。

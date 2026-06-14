@@ -50,9 +50,14 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (NovelResponse,
 	if req.Name == "" {
 		return NovelResponse{}, ErrNameRequired
 	}
+	status, err := normalizeCreateStatus(req.Status)
+	if err != nil {
+		return NovelResponse{}, err
+	}
 
 	item := &Novel{
 		Name:        req.Name,
+		Status:      status,
 		AuthorName:  req.AuthorName,
 		Description: req.Description,
 		Tags:        req.Tags,
@@ -101,6 +106,10 @@ func (s *Service) Update(ctx context.Context, id uint64, req UpdateRequest) (Nov
 	if req.Name == "" {
 		return NovelResponse{}, ErrNameRequired
 	}
+	status, hasStatus, err := normalizeUpdateStatus(req.Status)
+	if err != nil {
+		return NovelResponse{}, err
+	}
 
 	item, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -108,6 +117,9 @@ func (s *Service) Update(ctx context.Context, id uint64, req UpdateRequest) (Nov
 	}
 
 	item.Name = req.Name
+	if hasStatus {
+		item.Status = status
+	}
 	item.AuthorName = req.AuthorName
 	item.Description = req.Description
 	item.Tags = req.Tags
@@ -133,6 +145,7 @@ func (s *Service) Delete(ctx context.Context, id uint64) error {
 // 参数 req 表示创建小说请求参数。
 func normalizeCreateRequest(req CreateRequest) CreateRequest {
 	req.Name = strings.TrimSpace(req.Name)
+	req.Status = NovelStatus(strings.TrimSpace(string(req.Status)))
 	req.AuthorName = strings.TrimSpace(req.AuthorName)
 	req.Description = strings.TrimSpace(req.Description)
 	req.Tags = strings.TrimSpace(req.Tags)
@@ -144,6 +157,7 @@ func normalizeCreateRequest(req CreateRequest) CreateRequest {
 // 参数 req 表示更新小说请求参数。
 func normalizeUpdateRequest(req UpdateRequest) UpdateRequest {
 	req.Name = strings.TrimSpace(req.Name)
+	req.Status = NovelStatus(strings.TrimSpace(string(req.Status)))
 	req.AuthorName = strings.TrimSpace(req.AuthorName)
 	req.Description = strings.TrimSpace(req.Description)
 	req.Tags = strings.TrimSpace(req.Tags)
@@ -166,12 +180,57 @@ func normalizeListRequest(req ListRequest) ListRequest {
 	return req
 }
 
+// normalizeCreateStatus 标准化创建小说时的状态。
+// 参数 status 表示请求中传入的小说状态。
+func normalizeCreateStatus(status NovelStatus) (NovelStatus, error) {
+	if status == "" {
+		return StatusOngoing, nil
+	}
+	if !isAllowedStatus(status) {
+		return "", ErrInvalidStatus
+	}
+	return status, nil
+}
+
+// normalizeUpdateStatus 标准化更新小说时的状态。
+// 参数 status 表示请求中传入的小说状态。
+func normalizeUpdateStatus(status NovelStatus) (NovelStatus, bool, error) {
+	if status == "" {
+		return "", false, nil
+	}
+	if !isAllowedStatus(status) {
+		return "", false, ErrInvalidStatus
+	}
+	return status, true, nil
+}
+
+// normalizeResponseStatus 标准化响应中的小说状态，兼容旧数据或异常数据。
+// 参数 status 表示数据库中保存的小说状态。
+func normalizeResponseStatus(status NovelStatus) NovelStatus {
+	if isAllowedStatus(status) {
+		return status
+	}
+	return StatusOngoing
+}
+
+// isAllowedStatus 判断小说状态是否属于允许范围。
+// 参数 status 表示需要校验的小说状态。
+func isAllowedStatus(status NovelStatus) bool {
+	switch status {
+	case StatusOngoing, StatusFinished:
+		return true
+	default:
+		return false
+	}
+}
+
 // toResponse 将小说模型转换为响应数据。
 // 参数 item 表示小说数据库模型。
 func toResponse(item Novel) NovelResponse {
 	return NovelResponse{
 		ID:          item.ID,
 		Name:        item.Name,
+		Status:      normalizeResponseStatus(item.Status),
 		AuthorName:  item.AuthorName,
 		Description: item.Description,
 		Tags:        item.Tags,

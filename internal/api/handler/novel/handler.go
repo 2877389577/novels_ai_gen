@@ -20,6 +20,8 @@ type Handler struct {
 type CreateRequest struct {
 	// Name 表示小说名，不能为空。
 	Name string `json:"name" binding:"required" example:"长夜余火"`
+	// Status 表示小说状态，只允许连载中或已完结，未传时默认连载中。
+	Status string `json:"status" example:"连载中" enums:"连载中,已完结"`
 	// AuthorName 表示作者名，可以为空。
 	AuthorName string `json:"author_name" example:"爱潜水的乌贼"`
 	// Description 表示简介，可以为空。
@@ -34,6 +36,8 @@ type CreateRequest struct {
 type UpdateRequest struct {
 	// Name 表示小说名，不能为空。
 	Name string `json:"name" binding:"required" example:"长夜余火"`
+	// Status 表示小说状态，只允许连载中或已完结，未传或空字符串时保留原状态。
+	Status string `json:"status" example:"连载中" enums:"连载中,已完结"`
 	// AuthorName 表示作者名，可以为空。
 	AuthorName string `json:"author_name" example:"爱潜水的乌贼"`
 	// Description 表示简介，可以为空。
@@ -50,6 +54,8 @@ type NovelData struct {
 	ID uint64 `json:"id" example:"1"`
 	// Name 表示小说名。
 	Name string `json:"name" example:"长夜余火"`
+	// Status 表示小说状态，只允许连载中或已完结。
+	Status string `json:"status" example:"连载中" enums:"连载中,已完结"`
 	// AuthorName 表示作者名。
 	AuthorName string `json:"author_name" example:"爱潜水的乌贼"`
 	// Description 表示简介。
@@ -304,6 +310,8 @@ func writeServiceError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, biznovel.ErrNameRequired):
 		response.Error(c, http.StatusBadRequest, "小说名不能为空")
+	case errors.Is(err, biznovel.ErrInvalidStatus):
+		response.Error(c, http.StatusBadRequest, "小说状态仅支持连载中或已完结")
 	case errors.Is(err, biznovel.ErrNotFound):
 		response.Error(c, http.StatusNotFound, "小说不存在")
 	default:

@@ -2,12 +2,24 @@ package novel
 
 import "time"
 
+// NovelStatus 表示小说状态，当前只允许连载中或已完结。
+type NovelStatus string
+
+const (
+	// StatusOngoing 表示小说正在连载。
+	StatusOngoing NovelStatus = "连载中"
+	// StatusFinished 表示小说已经完结。
+	StatusFinished NovelStatus = "已完结"
+)
+
 // Novel 表示小说数据库模型。
 type Novel struct {
 	// ID 表示小说主键 ID。
 	ID uint64 `json:"id" gorm:"column:id;primaryKey;autoIncrement;comment:小说主键ID" example:"1"`
 	// Name 表示小说名，不能为空。
 	Name string `json:"name" gorm:"column:name;not null;comment:小说名，不能为空" example:"长夜余火"`
+	// Status 表示小说状态，只允许连载中或已完结。
+	Status NovelStatus `json:"status" gorm:"column:status;type:varchar(16);not null;default:连载中;comment:小说状态，只允许连载中或已完结" example:"连载中" enums:"连载中,已完结"`
 	// AuthorName 表示作者名，可以为空。
 	AuthorName string `json:"author_name" gorm:"column:author_name;comment:作者名，可以为空" example:"爱潜水的乌贼"`
 	// Description 表示简介，可以为空。
@@ -31,6 +43,8 @@ func (Novel) TableName() string {
 type CreateRequest struct {
 	// Name 表示小说名，不能为空。
 	Name string `json:"name" binding:"required" example:"长夜余火"`
+	// Status 表示小说状态，只允许连载中或已完结，未传时默认连载中。
+	Status NovelStatus `json:"status" example:"连载中" enums:"连载中,已完结"`
 	// AuthorName 表示作者名，可以为空。
 	AuthorName string `json:"author_name" example:"爱潜水的乌贼"`
 	// Description 表示简介，可以为空。
@@ -45,6 +59,8 @@ type CreateRequest struct {
 type UpdateRequest struct {
 	// Name 表示小说名，不能为空。
 	Name string `json:"name" binding:"required" example:"长夜余火"`
+	// Status 表示小说状态，只允许连载中或已完结，未传或空字符串时保留原状态。
+	Status NovelStatus `json:"status" example:"连载中" enums:"连载中,已完结"`
 	// AuthorName 表示作者名，可以为空。
 	AuthorName string `json:"author_name" example:"爱潜水的乌贼"`
 	// Description 表示简介，可以为空。
@@ -69,6 +85,8 @@ type NovelResponse struct {
 	ID uint64 `json:"id" example:"1"`
 	// Name 表示小说名。
 	Name string `json:"name" example:"长夜余火"`
+	// Status 表示小说状态，只允许连载中或已完结。
+	Status NovelStatus `json:"status" example:"连载中" enums:"连载中,已完结"`
 	// AuthorName 表示作者名。
 	AuthorName string `json:"author_name" example:"爱潜水的乌贼"`
 	// Description 表示简介。

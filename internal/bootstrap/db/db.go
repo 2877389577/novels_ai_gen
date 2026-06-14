@@ -15,6 +15,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	bizchapter "novels_ai_gen/internal/biz/chapter"
 	biznovel "novels_ai_gen/internal/biz/novel"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
@@ -35,6 +36,7 @@ var (
 // migrationModels 表示启动时需要交给 GORM 自动迁移的数据模型列表。
 var migrationModels = []any{
 	&biznovel.Novel{},
+	&bizchapter.Chapter{},
 }
 
 // Provider 根据完整应用配置初始化全局数据库连接，并返回 Wire 清理函数。

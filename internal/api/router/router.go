@@ -10,6 +10,7 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	authhandler "novels_ai_gen/internal/api/handler/auth"
+	chapterhandler "novels_ai_gen/internal/api/handler/chapter"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	uploadhandler "novels_ai_gen/internal/api/handler/upload"
 	"novels_ai_gen/internal/api/middleware"
@@ -20,8 +21,8 @@ import (
 const indexHTML = "index.html"
 
 // NewRouter 创建 Gin 路由引擎并注册系统接口。
-// 参数 authHandler 表示登录鉴权 HTTP 处理器；参数 novelHandler 表示小说 HTTP 处理器；参数 uploadHandler 表示图片上传 HTTP 处理器；参数 authService 表示登录鉴权业务服务。
-func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Handler, uploadHandler *uploadhandler.Handler, authService *bizauth.Service) *gin.Engine {
+// 参数 authHandler 表示登录鉴权 HTTP 处理器；参数 novelHandler 表示小说 HTTP 处理器；参数 chapterHandler 表示章节 HTTP 处理器；参数 uploadHandler 表示图片上传 HTTP 处理器；参数 authService 表示登录鉴权业务服务。
+func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Handler, chapterHandler *chapterhandler.Handler, uploadHandler *uploadhandler.Handler, authService *bizauth.Service) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Recovery(), middleware.RequestLogger())
 
@@ -37,6 +38,11 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.GET("/novels/:id", novelHandler.Get)
 	protected.PUT("/novels/:id", novelHandler.Update)
 	protected.DELETE("/novels/:id", novelHandler.Delete)
+	protected.POST("/novels/:id/chapters", chapterHandler.Create)
+	protected.GET("/novels/:id/chapters", chapterHandler.List)
+	protected.GET("/novels/:id/chapters/:chapter_id", chapterHandler.Get)
+	protected.PUT("/novels/:id/chapters/:chapter_id", chapterHandler.Update)
+	protected.DELETE("/novels/:id/chapters/:chapter_id", chapterHandler.Delete)
 	protected.POST("/uploads/images", uploadHandler.UploadImage)
 	protected.GET("/uploads/preview", uploadHandler.Preview)
 

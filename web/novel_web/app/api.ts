@@ -20,12 +20,17 @@ export interface ApiResponse<TData> {
   data?: TData;
 }
 
+// NovelStatus 表示小说状态，只允许连载中或已完结。
+export type NovelStatus = "连载中" | "已完结";
+
 // NovelItem 表示书架中的小说条目。
 export interface NovelItem {
   // id 表示小说主键 ID。
   id: number;
   // name 表示小说名。
   name: string;
+  // status 表示小说状态，只允许连载中或已完结。
+  status: NovelStatus;
   // author_name 表示作者名。
   author_name: string;
   // description 表示小说简介。
@@ -66,6 +71,8 @@ export interface NovelListParams {
 export interface NovelCreateParams {
   // name 表示小说名，不能为空。
   name: string;
+  // status 表示小说状态，只允许连载中或已完结。
+  status: NovelStatus;
   // author_name 表示作者名，可以为空。
   author_name: string;
   // description 表示小说简介，可以为空。
@@ -74,6 +81,110 @@ export interface NovelCreateParams {
   tags: string;
   // cover_url 表示小说封面链接或私有对象存储 key，可以为空。
   cover_url: string;
+}
+
+// NovelUpdateParams 表示更新小说时提交给后端的参数。
+export interface NovelUpdateParams {
+  // name 表示小说名，不能为空。
+  name: string;
+  // status 表示小说状态，只允许连载中或已完结。
+  status: NovelStatus;
+  // author_name 表示作者名，可以为空。
+  author_name: string;
+  // description 表示小说简介，可以为空。
+  description: string;
+  // tags 表示英文逗号分隔的标签文本，可以为空。
+  tags: string;
+  // cover_url 表示小说封面链接或私有对象存储 key，可以为空。
+  cover_url: string;
+}
+
+// NovelDeleteData 表示删除小说接口返回的数据。
+export interface NovelDeleteData {
+  // deleted 表示后端是否已经删除该小说。
+  deleted: boolean;
+}
+
+// ChapterSummaryItem 表示章节列表中的章节摘要数据，不包含正文。
+export interface ChapterSummaryItem {
+  // id 表示章节主键 ID。
+  id: number;
+  // novel_id 表示章节所属小说 ID。
+  novel_id: number;
+  // chapter_number 表示章节号，即“第 x 章”中的 x。
+  chapter_number: number;
+  // title 表示章节名。
+  title: string;
+  // word_count 表示章节正文的非空白字符数量。
+  word_count: number;
+  // created_at 表示章节创建时间。
+  created_at: string;
+  // updated_at 表示章节更新时间。
+  updated_at: string;
+}
+
+// ChapterDetailItem 表示章节详情数据，包含正文。
+export interface ChapterDetailItem {
+  // id 表示章节主键 ID。
+  id: number;
+  // novel_id 表示章节所属小说 ID。
+  novel_id: number;
+  // chapter_number 表示章节号，即“第 x 章”中的 x。
+  chapter_number: number;
+  // title 表示章节名。
+  title: string;
+  // content 表示章节正文。
+  content: string;
+  // word_count 表示章节正文的非空白字符数量。
+  word_count: number;
+  // created_at 表示章节创建时间。
+  created_at: string;
+  // updated_at 表示章节更新时间。
+  updated_at: string;
+}
+
+// ChapterListData 表示章节列表分页数据。
+export interface ChapterListData {
+  // items 表示当前页章节摘要列表。
+  items: ChapterSummaryItem[];
+  // total 表示符合条件的章节总数。
+  total: number;
+  // page 表示当前页码。
+  page: number;
+  // page_size 表示每页数量。
+  page_size: number;
+}
+
+// ChapterListParams 表示查询章节列表时使用的分页参数。
+export interface ChapterListParams {
+  // page 表示当前页码，从 1 开始。
+  page: number;
+  // pageSize 表示每页数量。
+  pageSize: number;
+  // signal 表示用于取消请求的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// ChapterCreateParams 表示创建章节时提交给后端的参数。
+export interface ChapterCreateParams {
+  // title 表示章节名，不能为空。
+  title: string;
+  // content 表示章节正文，可以为空。
+  content: string;
+}
+
+// ChapterUpdateParams 表示更新章节时提交给后端的参数。
+export interface ChapterUpdateParams {
+  // title 表示章节名，不能为空。
+  title: string;
+  // content 表示章节正文，可以为空。
+  content: string;
+}
+
+// ChapterDeleteData 表示删除章节接口返回的数据。
+export interface ChapterDeleteData {
+  // deleted 表示后端是否已经删除该章节。
+  deleted: boolean;
 }
 
 // ImageUploadUsage 表示图片上传用途。
@@ -196,6 +307,37 @@ export async function fetchNovelList(
   return payload.data;
 }
 
+// fetchNovelDetail 查询指定小说的详情数据。
+// 参数 id 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNovelDetail(
+  id: number,
+  signal?: AbortSignal,
+): Promise<NovelItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${id}`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说详情加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
 // createNovel 调用后端接口创建小说并返回新小说数据。
 // 参数 params 表示创建小说时需要提交的表单数据。
 export async function createNovel(
@@ -223,6 +365,244 @@ export async function createNovel(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "小说创建失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateNovel 调用后端接口更新小说并返回更新后的小说数据。
+// 参数 id 表示小说主键 ID；参数 params 表示更新小说时需要提交的表单数据。
+export async function updateNovel(
+  id: number,
+  params: NovelUpdateParams,
+): Promise<NovelItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${id}`, {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说更新失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteNovel 调用后端接口删除指定小说。
+// 参数 id 表示小说主键 ID。
+export async function deleteNovel(id: number): Promise<NovelDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+  });
+  const payload = await parseApiResponse<NovelDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说删除失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchChapterList 查询指定小说的章节摘要列表。
+// 参数 novelId 表示小说主键 ID；参数 params 表示章节列表分页查询参数。
+export async function fetchChapterList(
+  novelId: number,
+  params: ChapterListParams,
+): Promise<ChapterListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    page_size: String(params.pageSize),
+  });
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/chapters?${searchParams.toString()}`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal: params.signal,
+    },
+  );
+  const payload = await parseApiResponse<ChapterListData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节列表加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchChapterDetail 查询指定章节详情。
+// 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchChapterDetail(
+  novelId: number,
+  chapterId: number,
+  signal?: AbortSignal,
+): Promise<ChapterDetailItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/chapters/${chapterId}`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+  const payload = await parseApiResponse<ChapterDetailItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节详情加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// createChapter 调用后端接口创建章节并返回新章节数据。
+// 参数 novelId 表示小说主键 ID；参数 params 表示创建章节时需要提交的表单数据。
+export async function createChapter(
+  novelId: number,
+  params: ChapterCreateParams,
+): Promise<ChapterDetailItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/chapters`, {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<ChapterDetailItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节创建失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateChapter 调用后端接口更新章节并返回更新后的章节数据。
+// 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID；参数 params 表示更新章节时需要提交的表单数据。
+export async function updateChapter(
+  novelId: number,
+  chapterId: number,
+  params: ChapterUpdateParams,
+): Promise<ChapterDetailItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/chapters/${chapterId}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    },
+  );
+  const payload = await parseApiResponse<ChapterDetailItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节更新失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteChapter 调用后端接口删除指定章节。
+// 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID。
+export async function deleteChapter(
+  novelId: number,
+  chapterId: number,
+): Promise<ChapterDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/chapters/${chapterId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+    },
+  );
+  const payload = await parseApiResponse<ChapterDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节删除失败，请稍后再试");
   }
 
   return payload.data;
