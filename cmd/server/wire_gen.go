@@ -9,6 +9,7 @@ package main
 import (
 	auth2 "novels_ai_gen/internal/api/handler/auth"
 	chapter3 "novels_ai_gen/internal/api/handler/chapter"
+	config2 "novels_ai_gen/internal/api/handler/config"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
 	upload2 "novels_ai_gen/internal/api/handler/upload"
 	"novels_ai_gen/internal/api/router"
@@ -34,18 +35,21 @@ import (
 // initializeApp 使用 Wire 生成应用依赖图。
 // 参数 configFile 表示实际配置文件路径。
 func initializeApp(configFile string) (*server.App, func(), error) {
-	appConfig, err := config.Load(configFile)
+	configManager, cleanup, err := config.NewManager(configFile)
 	if err != nil {
 		return nil, nil, err
 	}
-	slogLogger, cleanup, err := logger.Provider(appConfig)
+	appConfig := config.CurrentConfig(configManager)
+	slogLogger, cleanup2, err := logger.Provider(appConfig)
 	if err != nil {
+		cleanup()
 		return nil, nil, err
 	}
-	service := auth.NewService(appConfig)
+	service := auth.NewService(configManager)
 	handler := auth2.NewHandler(service)
-	gormDB, cleanup2, err := db.Provider(appConfig)
+	gormDB, cleanup3, err := db.Provider(appConfig)
 	if err != nil {
+		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
@@ -57,16 +61,19 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	chapterHandler := chapter3.NewHandler(chapterService)
 	client, err := objectstore.NewClient(appConfig)
 	if err != nil {
+		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
 	uploadService := upload.NewService(appConfig, client)
 	uploadHandler := upload2.NewHandler(uploadService)
-	engine := router.NewRouter(handler, novelHandler, chapterHandler, uploadHandler, service)
+	configHandler := config2.NewHandler(configManager)
+	engine := router.NewRouter(handler, novelHandler, chapterHandler, uploadHandler, configHandler, service)
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {
+		cleanup3()
 		cleanup2()
 		cleanup()
 	}, nil

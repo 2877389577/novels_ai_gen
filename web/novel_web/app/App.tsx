@@ -12,6 +12,7 @@ import { ChapterEditorPage } from "./chapter-editor";
 import { clearAuthData, readAuthData } from "./api";
 import { LoginPage } from "./login";
 import { NovelDetailPage } from "./novel-detail";
+import { SettingsPage } from "./settings";
 
 // AppRoute 表示前端当前浏览器路径对应的页面状态。
 type AppRoute =
@@ -22,6 +23,10 @@ type AppRoute =
   | {
       // view 表示当前展示书架页。
       view: "bookshelf";
+    }
+  | {
+      // view 表示当前展示配置管理页。
+      view: "settings";
     }
   | {
       // view 表示当前展示小说详情页。
@@ -54,6 +59,7 @@ interface GuardedRoute {
 
 const loginRoutePath = "/login";
 const bookshelfRoutePath = "/";
+const settingsRoutePath = "/settings";
 const novelDetailRoutePattern = /^\/novels\/([1-9]\d*)$/;
 const chapterCreateRoutePattern = /^\/novels\/([1-9]\d*)\/chapters\/new$/;
 const chapterEditRoutePattern =
@@ -130,6 +136,19 @@ export function App() {
     [],
   );
 
+  // handleOpenSettings 处理从书架头像菜单进入配置管理页。
+  const handleOpenSettings = useCallback(
+    function handleOpenSettings() {
+      navigateToRoute(
+        setRoute,
+        { view: "settings" },
+        settingsRoutePath,
+        "push",
+      );
+    },
+    [],
+  );
+
   // handleChapterCreate 处理进入章节创建页。
   const handleChapterCreate = useCallback(
     function handleChapterCreate(novelId: number) {
@@ -192,6 +211,7 @@ export function App() {
         onLoginSuccess: handleLoginSuccess,
         onNovelDeleted: handleNovelDeleted,
         onNovelSelect: handleNovelSelect,
+        onOpenSettings: handleOpenSettings,
         onUnauthorized: handleUnauthorized,
       })}
     </div>
@@ -214,6 +234,8 @@ interface RouteHandlers {
   onNovelDeleted: () => void;
   // onNovelSelect 表示书架页选择小说时执行的回调。
   onNovelSelect: (novelId: number) => void;
+  // onOpenSettings 表示打开配置管理页时执行的回调。
+  onOpenSettings: () => void;
   // onUnauthorized 表示登录态失效时执行的回调。
   onUnauthorized: () => void;
 }
@@ -226,6 +248,14 @@ function renderRoute(route: AppRoute, handlers: RouteHandlers) {
       return (
         <BookshelfPage
           onNovelSelect={handlers.onNovelSelect}
+          onOpenSettings={handlers.onOpenSettings}
+          onUnauthorized={handlers.onUnauthorized}
+        />
+      );
+    case "settings":
+      return (
+        <SettingsPage
+          onBackToBookshelf={handlers.onBackToBookshelf}
           onUnauthorized={handlers.onUnauthorized}
         />
       );
@@ -298,6 +328,13 @@ function resolveGuardedRoute(
     };
   }
 
+  if (isSettingsRoute(pathname)) {
+    return {
+      path: settingsRoutePath,
+      route: { view: "settings" },
+    };
+  }
+
   const novelId = parseNovelDetailPath(pathname);
   if (novelId !== null) {
     return {
@@ -330,6 +367,12 @@ function resolveGuardedRoute(
 // 参数 pathname 表示需要判断的浏览器路径。
 function isLoginRoute(pathname: string): boolean {
   return normalizeRoutePath(pathname) === loginRoutePath;
+}
+
+// isSettingsRoute 判断指定路径是否为配置管理页路径。
+// 参数 pathname 表示需要判断的浏览器路径。
+function isSettingsRoute(pathname: string): boolean {
+  return normalizeRoutePath(pathname) === settingsRoutePath;
 }
 
 // normalizeRoutePath 标准化浏览器路径，避免空路径造成守卫判断偏差。

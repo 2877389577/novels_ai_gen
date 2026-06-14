@@ -6,6 +6,7 @@ import (
 	"github.com/google/wire"
 	authhandler "novels_ai_gen/internal/api/handler/auth"
 	chapterhandler "novels_ai_gen/internal/api/handler/chapter"
+	confighandler "novels_ai_gen/internal/api/handler/config"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	uploadhandler "novels_ai_gen/internal/api/handler/upload"
 	"novels_ai_gen/internal/api/router"
@@ -26,9 +27,11 @@ import (
 // 参数 configFile 表示实际配置文件路径。
 func initializeApp(configFile string) (*server.App, func(), error) {
 	wire.Build(
-		config.Load,
+		config.NewManager,
+		config.CurrentConfig,
 		logger.Provider,
 		db.Provider,
+		wire.Bind(new(bizauth.PasswordProvider), new(*config.ConfigManager)),
 		bizauth.NewService,
 		datanovel.NewRepository,
 		wire.Bind(new(biznovel.Repository), new(*datanovel.Repository)),
@@ -43,6 +46,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		novelhandler.NewHandler,
 		chapterhandler.NewHandler,
 		uploadhandler.NewHandler,
+		confighandler.NewHandler,
 		router.NewRouter,
 		server.NewHTTPServer,
 		server.NewApp,

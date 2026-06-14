@@ -66,6 +66,8 @@ interface BookshelfPageProps {
   onUnauthorized: () => void;
   // onNovelSelect 表示用户选择某本小说后进入详情页的回调。
   onNovelSelect: (novelId: number) => void;
+  // onOpenSettings 表示用户进入配置管理页时执行的回调。
+  onOpenSettings: () => void;
 }
 
 // BookshelfState 表示书架首页的数据加载状态。
@@ -153,7 +155,11 @@ export function BookshelfPage(props: BookshelfPageProps) {
 
   return (
     <main className="bookshelf-page">
-      <BookshelfHeader totalCount={totalCount} updatedCount={updatedCount} />
+      <BookshelfHeader
+        totalCount={totalCount}
+        updatedCount={updatedCount}
+        onOpenSettings={props.onOpenSettings}
+      />
 
       <section className="bookshelf-content" aria-labelledby="bookshelf-title">
         <header className="bookshelf-title-block">
@@ -194,6 +200,8 @@ interface BookshelfHeaderProps {
   totalCount: number;
   // updatedCount 表示最近有更新的小说数量。
   updatedCount: number;
+  // onOpenSettings 表示用户进入配置管理页时执行的回调。
+  onOpenSettings: () => void;
 }
 
 // BookshelfHeader 渲染书架首页顶部导航。
@@ -224,9 +232,7 @@ function BookshelfHeader(props: BookshelfHeaderProps) {
           <button type="button" aria-label="设置">
             ⚙
           </button>
-          <div className="bookshelf-avatar" aria-label="作者头像">
-            <span>书</span>
-          </div>
+          <BookshelfUserMenu onOpenSettings={props.onOpenSettings} />
         </div>
       </div>
 
@@ -235,6 +241,41 @@ function BookshelfHeader(props: BookshelfHeaderProps) {
         <span>{props.updatedCount} 部近日更新</span>
       </div>
     </header>
+  );
+}
+
+// BookshelfUserMenuProps 表示书架头像菜单需要的外部回调。
+interface BookshelfUserMenuProps {
+  // onOpenSettings 表示用户进入配置管理页时执行的回调。
+  onOpenSettings: () => void;
+}
+
+// BookshelfUserMenu 渲染书架右上角头像和悬浮菜单。
+// 参数 props 表示头像菜单需要的外部回调。
+function BookshelfUserMenu(props: BookshelfUserMenuProps) {
+  return (
+    <div className="bookshelf-user-menu">
+      <button
+        type="button"
+        className="bookshelf-avatar"
+        aria-haspopup="menu"
+        aria-label="作者菜单"
+      >
+        <span>书</span>
+      </button>
+
+      <div className="bookshelf-user-dropdown" role="menu" aria-label="作者菜单">
+        <button
+          type="button"
+          role="menuitem"
+          className="bookshelf-user-menu-item"
+          onClick={props.onOpenSettings}
+        >
+          <span aria-hidden="true">⚙</span>
+          <span>配置管理</span>
+        </button>
+      </div>
+    </div>
   );
 }
 

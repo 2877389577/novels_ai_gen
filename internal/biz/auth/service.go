@@ -2,14 +2,13 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
-
-	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
 
 var (
@@ -22,6 +21,12 @@ var (
 )
 
 const defaultTokenTTL = 24 * time.Hour
+
+// PasswordProvider 表示登录服务读取当前系统登录密码的依赖。
+type PasswordProvider interface {
+	// AuthPassword 返回当前有效配置中的系统登录密码。
+	AuthPassword() string
+}
 
 // LoginRequest 表示登录请求参数。
 type LoginRequest struct {
@@ -41,8 +46,8 @@ type LoginResponse struct {
 
 // Service 表示登录鉴权业务服务。
 type Service struct {
-	// password 表示配置文件中的系统登录密码。
-	password string
+	// passwordProvider 表示运行时读取系统登录密码的配置依赖。
+	passwordProvider PasswordProvider
 	// ttl 表示访问令牌有效期。
 	ttl time.Duration
 	// tokens 表示内存中的令牌过期时间映射。
@@ -54,20 +59,20 @@ type Service struct {
 }
 
 // NewService 创建登录鉴权业务服务。
-// 参数 cfg 表示应用完整配置。
-func NewService(cfg *appconfig.AppConfig) *Service {
+// 参数 passwordProvider 表示运行时读取系统登录密码的配置依赖。
+func NewService(passwordProvider PasswordProvider) *Service {
 	return &Service{
-		password: cfg.Auth.Password,
-		ttl:      defaultTokenTTL,
-		tokens:   make(map[string]time.Time),
-		now:      time.Now,
+		passwordProvider: passwordProvider,
+		ttl:              defaultTokenTTL,
+		tokens:           make(map[string]time.Time),
+		now:              time.Now,
 	}
 }
 
 // Login 校验登录密码并生成访问令牌。
 // 参数 req 表示登录请求参数。
 func (s *Service) Login(req LoginRequest) (LoginResponse, error) {
-	if req.Password != s.password {
+	if !passwordMatches(req.Password, s.currentPassword()) {
 		return LoginResponse{}, ErrInvalidPassword
 	}
 
@@ -86,6 +91,14 @@ func (s *Service) Login(req LoginRequest) (LoginResponse, error) {
 		TokenType: "Bearer",
 		ExpiresAt: expiresAt,
 	}, nil
+}
+
+// currentPassword 返回当前有效的系统登录密码。
+func (s *Service) currentPassword() string {
+	if s.passwordProvider == nil {
+		return ""
+	}
+	return s.passwordProvider.AuthPassword()
 }
 
 // Verify 校验访问令牌是否存在且未过期。
@@ -120,4 +133,13 @@ func generateToken() (string, error) {
 		return "", fmt.Errorf("读取随机数失败: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// passwordMatches 使用常量时间比较判断登录密码是否匹配。
+// 参数 input 表示用户提交的密码；参数 expected 表示当前配置中的系统密码。
+func passwordMatches(input string, expected string) bool {
+	if len(input) != len(expected) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(input), []byte(expected)) == 1
 }

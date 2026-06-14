@@ -1,11 +1,17 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 )
 
@@ -123,39 +129,337 @@ type LoggerFileConfig struct {
 	Rotation string `mapstructure:"rotation"`
 }
 
-var current *AppConfig
+var (
+	current   *AppConfig
+	currentMu sync.RWMutex
+)
+
+var (
+	// ErrConfigContentRequired 表示配置文件内容不能为空。
+	ErrConfigContentRequired = errors.New("config content required")
+	// ErrInvalidConfigContent 表示配置文件内容无法解析为有效应用配置。
+	ErrInvalidConfigContent = errors.New("invalid config content")
+)
+
+// ConfigManager 表示运行期间共享的配置文件管理器。
+type ConfigManager struct {
+	// configFile 表示启动 -f 参数指定的实际配置文件绝对路径。
+	configFile string
+	// cfg 表示最近一次成功加载后的应用配置。
+	cfg *AppConfig
+	// reloadedAt 表示最近一次成功加载配置的时间。
+	reloadedAt time.Time
+	// watcher 表示监听配置文件变更的 fsnotify 监听器。
+	watcher *fsnotify.Watcher
+	// done 表示停止配置文件监听协程的信号。
+	done chan struct{}
+	// fileMu 表示保护配置文件读写和磁盘重载的互斥锁。
+	fileMu sync.Mutex
+	// mu 表示保护当前有效配置快照的读写锁。
+	mu sync.RWMutex
+}
+
+// FileSnapshot 表示配置文件文本和加载状态快照。
+type FileSnapshot struct {
+	// ConfigFile 表示启动 -f 参数指定的实际配置文件绝对路径。
+	ConfigFile string
+	// Content 表示配置文件当前文本内容。
+	Content string
+	// ModifiedAt 表示配置文件在文件系统中的最后修改时间。
+	ModifiedAt time.Time
+	// ReloadedAt 表示后端最近一次成功加载该配置文件的时间。
+	ReloadedAt time.Time
+}
+
+// NewManager 创建运行时配置文件管理器并启动热更新监听。
+// 参数 configFile 表示实际配置文件路径，不能为空。
+func NewManager(configFile string) (*ConfigManager, func(), error) {
+	absFile, err := absoluteConfigFile(configFile)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cfg, err := loadConfigFile(absFile)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	manager := &ConfigManager{
+		configFile: absFile,
+		cfg:        cfg,
+		reloadedAt: time.Now(),
+		done:       make(chan struct{}),
+	}
+	setCurrent(cfg)
+
+	if err := manager.startWatcher(); err != nil {
+		return nil, nil, err
+	}
+
+	return manager, manager.CloseWithLog, nil
+}
+
+// CurrentConfig 返回启动期间其它服务使用的配置快照。
+// 参数 manager 表示运行时配置文件管理器。
+func CurrentConfig(manager *ConfigManager) *AppConfig {
+	if manager == nil {
+		return Get()
+	}
+	return manager.Current()
+}
+
+// Current 返回最近一次成功加载的应用配置副本。
+func (m *ConfigManager) Current() *AppConfig {
+	if m == nil {
+		return nil
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.cfg == nil {
+		return nil
+	}
+	cfg := *m.cfg
+	return &cfg
+}
+
+// AuthPassword 返回当前有效配置中的系统登录密码。
+func (m *ConfigManager) AuthPassword() string {
+	cfg := m.Current()
+	if cfg == nil {
+		return ""
+	}
+	return cfg.Auth.Password
+}
+
+// ReadFile 读取当前启动配置文件的文本内容。
+func (m *ConfigManager) ReadFile() (FileSnapshot, error) {
+	if m == nil {
+		return FileSnapshot{}, errors.New("配置管理器未初始化")
+	}
+
+	m.fileMu.Lock()
+	defer m.fileMu.Unlock()
+
+	return m.readFileLocked()
+}
+
+// UpdateFile 校验并保存新的配置文件文本，成功后更新运行时配置快照。
+// 参数 content 表示需要写入配置文件的完整 YAML 文本。
+func (m *ConfigManager) UpdateFile(content string) (FileSnapshot, error) {
+	if m == nil {
+		return FileSnapshot{}, errors.New("配置管理器未初始化")
+	}
+	if strings.TrimSpace(content) == "" {
+		return FileSnapshot{}, ErrConfigContentRequired
+	}
+
+	cfg, err := parseConfigContent(content)
+	if err != nil {
+		return FileSnapshot{}, err
+	}
+
+	m.fileMu.Lock()
+	defer m.fileMu.Unlock()
+
+	mode := os.FileMode(0644)
+	if info, statErr := os.Stat(m.configFile); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if err := os.WriteFile(m.configFile, []byte(content), mode); err != nil {
+		return FileSnapshot{}, fmt.Errorf("写入配置文件失败: %w", err)
+	}
+
+	m.apply(cfg, time.Now())
+	slog.Info("配置文件保存并热加载成功", "config_file", m.configFile)
+	return m.readFileLocked()
+}
+
+// ReloadFromDisk 从磁盘重新读取配置文件，成功后更新运行时配置快照。
+func (m *ConfigManager) ReloadFromDisk() error {
+	if m == nil {
+		return errors.New("配置管理器未初始化")
+	}
+
+	m.fileMu.Lock()
+	defer m.fileMu.Unlock()
+
+	cfg, err := loadConfigFile(m.configFile)
+	if err != nil {
+		return err
+	}
+
+	m.apply(cfg, time.Now())
+	return nil
+}
+
+// CloseWithLog 关闭配置文件监听器，并记录关闭失败信息。
+func (m *ConfigManager) CloseWithLog() {
+	if err := m.Close(); err != nil {
+		slog.Error("关闭配置文件监听器失败", "error", err)
+	}
+}
+
+// Close 关闭配置文件热更新监听器。
+func (m *ConfigManager) Close() error {
+	if m == nil {
+		return nil
+	}
+
+	select {
+	case <-m.done:
+	default:
+		close(m.done)
+	}
+	if m.watcher == nil {
+		return nil
+	}
+	return m.watcher.Close()
+}
+
+// apply 将新配置设置为当前有效配置。
+// 参数 cfg 表示已经成功解析的配置；参数 reloadedAt 表示本次加载完成时间。
+func (m *ConfigManager) apply(cfg *AppConfig, reloadedAt time.Time) {
+	m.mu.Lock()
+	m.cfg = cfg
+	m.reloadedAt = reloadedAt
+	m.mu.Unlock()
+
+	setCurrent(cfg)
+}
+
+// readFileLocked 在持有文件锁时读取配置文件快照。
+func (m *ConfigManager) readFileLocked() (FileSnapshot, error) {
+	data, err := os.ReadFile(m.configFile)
+	if err != nil {
+		return FileSnapshot{}, fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	info, err := os.Stat(m.configFile)
+	if err != nil {
+		return FileSnapshot{}, fmt.Errorf("读取配置文件状态失败: %w", err)
+	}
+
+	m.mu.RLock()
+	reloadedAt := m.reloadedAt
+	m.mu.RUnlock()
+
+	return FileSnapshot{
+		ConfigFile: m.configFile,
+		Content:    string(data),
+		ModifiedAt: info.ModTime(),
+		ReloadedAt: reloadedAt,
+	}, nil
+}
+
+// startWatcher 启动配置文件目录监听，用于支持外部修改后的热加载。
+func (m *ConfigManager) startWatcher() error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("创建配置文件监听器失败: %w", err)
+	}
+
+	dir := filepath.Dir(m.configFile)
+	if err := watcher.Add(dir); err != nil {
+		_ = watcher.Close()
+		return fmt.Errorf("监听配置文件目录失败: %w", err)
+	}
+
+	m.watcher = watcher
+	go m.watchLoop()
+	return nil
+}
+
+// watchLoop 监听配置文件变化事件并尝试重新加载配置。
+func (m *ConfigManager) watchLoop() {
+	for {
+		select {
+		case <-m.done:
+			return
+		case event, ok := <-m.watcher.Events:
+			if !ok {
+				return
+			}
+			if !m.isConfigFileEvent(event) {
+				continue
+			}
+			go m.reloadAfterEvent(event)
+		case err, ok := <-m.watcher.Errors:
+			if !ok {
+				return
+			}
+			slog.Error("配置文件监听失败", "config_file", m.configFile, "error", err)
+		}
+	}
+}
+
+// reloadAfterEvent 在文件事件稳定后重新加载配置。
+// 参数 event 表示文件系统变更事件。
+func (m *ConfigManager) reloadAfterEvent(event fsnotify.Event) {
+	time.Sleep(120 * time.Millisecond)
+	if err := m.ReloadFromDisk(); err != nil {
+		slog.Error(
+			"配置文件热加载失败，继续使用上一份有效配置",
+			"config_file", m.configFile,
+			"operation", event.Op.String(),
+			"error", err,
+		)
+		return
+	}
+
+	slog.Info(
+		"配置文件热加载成功",
+		"config_file", m.configFile,
+		"operation", event.Op.String(),
+	)
+}
+
+// isConfigFileEvent 判断文件系统事件是否来自当前配置文件。
+// 参数 event 表示文件系统变更事件。
+func (m *ConfigManager) isConfigFileEvent(event fsnotify.Event) bool {
+	if event.Name == "" {
+		return false
+	}
+
+	absName, err := filepath.Abs(event.Name)
+	if err != nil {
+		return false
+	}
+	if !samePath(absName, m.configFile) {
+		return false
+	}
+
+	return event.Has(fsnotify.Write) ||
+		event.Has(fsnotify.Create) ||
+		event.Has(fsnotify.Rename)
+}
 
 // Init 读取指定配置文件并初始化应用配置。
 // 参数 configFile 表示实际配置文件路径，不能为空。
 func Init(configFile string) (*AppConfig, error) {
-	if strings.TrimSpace(configFile) == "" {
-		return nil, errors.New("config file required")
+	absFile, err := absoluteConfigFile(configFile)
+	if err != nil {
+		return nil, err
 	}
-
-	loader := viper.New()
-	loader.SetConfigFile(configFile)
-	loader.SetConfigType("yaml")
-	loader.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	loader.AutomaticEnv()
-
-	setDefaults(loader)
-
-	if err := loader.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("读取配置文件失败: %w", err)
+	cfg, err := loadConfigFile(absFile)
+	if err != nil {
+		return nil, err
 	}
-
-	var cfg AppConfig
-	if err := loader.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("解析配置文件失败: %w", err)
-	}
-
-	current = &cfg
-	return current, nil
+	setCurrent(cfg)
+	return cfg, nil
 }
 
 // Get 返回已经初始化的应用配置。
 func Get() *AppConfig {
-	return current
+	currentMu.RLock()
+	defer currentMu.RUnlock()
+
+	if current == nil {
+		return nil
+	}
+	cfg := *current
+	return &cfg
 }
 
 // setDefaults 设置配置文件缺省时使用的默认值。
@@ -183,4 +487,94 @@ func setDefaults(loader *viper.Viper) {
 // 参数 configFile 表示实际配置文件路径，不能为空。
 func Load(configFile string) (*AppConfig, error) {
 	return Init(configFile)
+}
+
+// setCurrent 设置全局当前配置快照。
+// 参数 cfg 表示最近一次成功加载的应用配置。
+func setCurrent(cfg *AppConfig) {
+	currentMu.Lock()
+	current = cfg
+	currentMu.Unlock()
+}
+
+// absoluteConfigFile 返回配置文件绝对路径并校验路径非空。
+// 参数 configFile 表示调用方传入的配置文件路径。
+func absoluteConfigFile(configFile string) (string, error) {
+	if strings.TrimSpace(configFile) == "" {
+		return "", errors.New("config file required")
+	}
+
+	absFile, err := filepath.Abs(configFile)
+	if err != nil {
+		return "", fmt.Errorf("解析配置文件绝对路径失败: %w", err)
+	}
+	return absFile, nil
+}
+
+// loadConfigFile 从磁盘读取并解析指定配置文件。
+// 参数 configFile 表示需要读取的配置文件绝对路径。
+func loadConfigFile(configFile string) (*AppConfig, error) {
+	loader := newLoader()
+	loader.SetConfigFile(configFile)
+	loader.SetConfigType("yaml")
+
+	if err := loader.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	return unmarshalLoader(loader)
+}
+
+// parseConfigContent 解析配置页提交的 YAML 配置文本。
+// 参数 content 表示配置文件完整文本内容。
+func parseConfigContent(content string) (*AppConfig, error) {
+	loader := newLoader()
+	loader.SetConfigType("yaml")
+
+	if err := loader.ReadConfig(bytes.NewReader([]byte(content))); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidConfigContent, err)
+	}
+
+	cfg, err := unmarshalLoader(loader)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidConfigContent, err)
+	}
+	return cfg, nil
+}
+
+// newLoader 创建带默认值和环境变量读取规则的 Viper 实例。
+func newLoader() *viper.Viper {
+	loader := viper.New()
+	loader.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	loader.AutomaticEnv()
+	setDefaults(loader)
+	return loader
+}
+
+// unmarshalLoader 将 Viper 当前解析结果转换为应用配置结构。
+// 参数 loader 表示已经读取配置来源的 Viper 实例。
+func unmarshalLoader(loader *viper.Viper) (*AppConfig, error) {
+	var cfg AppConfig
+	if err := loader.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("解析配置文件失败: %w", err)
+	}
+	return &cfg, nil
+}
+
+// IsValidationError 判断错误是否属于配置内容校验失败。
+// 参数 err 表示需要判断的错误。
+func IsValidationError(err error) bool {
+	return errors.Is(err, ErrConfigContentRequired) ||
+		errors.Is(err, ErrInvalidConfigContent)
+}
+
+// samePath 判断两个绝对路径是否指向同一路径。
+// 参数 left 表示左侧路径；参数 right 表示右侧路径。
+func samePath(left string, right string) bool {
+	left = filepath.Clean(left)
+	right = filepath.Clean(right)
+	if os.PathSeparator == '\\' {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
 }

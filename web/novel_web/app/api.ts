@@ -20,6 +20,24 @@ export interface ApiResponse<TData> {
   data?: TData;
 }
 
+// ConfigFileData 表示后端配置文件文本和加载状态。
+export interface ConfigFileData {
+  // config_file 表示后端启动 -f 参数使用的实际配置文件路径。
+  config_file: string;
+  // content 表示配置文件当前文本内容。
+  content: string;
+  // modified_at 表示配置文件最后修改时间。
+  modified_at: string;
+  // reloaded_at 表示后端最近一次成功加载配置的时间。
+  reloaded_at: string;
+}
+
+// ConfigFileUpdateParams 表示保存配置文件时提交给后端的参数。
+export interface ConfigFileUpdateParams {
+  // content 表示需要写入配置文件的完整 YAML 文本。
+  content: string;
+}
+
 // NovelStatus 表示小说状态，只允许连载中或已完结。
 export type NovelStatus = "连载中" | "已完结";
 
@@ -289,6 +307,68 @@ export function readAuthData(): AuthData | null {
   }
 
   return value;
+}
+
+// fetchConfigFile 查询后端当前启动配置文件的文本内容。
+// 参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchConfigFile(
+  signal?: AbortSignal,
+): Promise<ConfigFileData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/config/file", {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<ConfigFileData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "配置文件加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateConfigFile 保存后端当前启动配置文件的完整文本。
+// 参数 params 表示配置文件保存请求参数。
+export async function updateConfigFile(
+  params: ConfigFileUpdateParams,
+): Promise<ConfigFileData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/config/file", {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<ConfigFileData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "配置文件保存失败，请稍后再试");
+  }
+
+  return payload.data;
 }
 
 // fetchNovelList 查询当前用户可访问的小说列表。

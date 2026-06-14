@@ -58,6 +58,98 @@
                 }
             }
         },
+        "/config/file": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "返回当前后端启动 -f 参数指定配置文件的原始文本内容。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "config"
+                ],
+                "summary": "读取后端配置文件",
+                "responses": {
+                    "200": {
+                        "description": "读取成功",
+                        "schema": {
+                            "$ref": "#/definitions/config.FileSuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "保存当前后端启动 -f 参数指定配置文件的完整 YAML 文本，成功后热加载 auth.password。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "config"
+                ],
+                "summary": "保存后端配置文件",
+                "parameters": [
+                    {
+                        "description": "配置文件文本",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/config.UpdateFileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "保存成功",
+                        "schema": {
+                            "$ref": "#/definitions/config.FileSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "配置内容错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/novels": {
             "get": {
                 "security": [
@@ -1300,6 +1392,64 @@
                 }
             }
         },
+        "config.FileData": {
+            "type": "object",
+            "properties": {
+                "config_file": {
+                    "description": "ConfigFile 表示启动 -f 参数指定的实际配置文件绝对路径。",
+                    "type": "string",
+                    "example": "D:\\Go\\GOPATH\\src\\novels_ai_gen\\config\\config-dev.yaml"
+                },
+                "content": {
+                    "description": "Content 表示配置文件当前文本内容。",
+                    "type": "string",
+                    "example": "auth:\n  password: admin123\n"
+                },
+                "modified_at": {
+                    "description": "ModifiedAt 表示配置文件在文件系统中的最后修改时间。",
+                    "type": "string",
+                    "example": "2026-06-14T22:00:00+08:00"
+                },
+                "reloaded_at": {
+                    "description": "ReloadedAt 表示后端最近一次成功加载该配置文件的时间。",
+                    "type": "string",
+                    "example": "2026-06-14T22:00:00+08:00"
+                }
+            }
+        },
+        "config.FileSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示配置文件文本和加载状态。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/config.FileData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "config.UpdateFileRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示需要写入配置文件的完整 YAML 文本。",
+                    "type": "string",
+                    "example": "auth:\n  password: admin123\n"
+                }
+            }
+        },
         "internal_api_handler_auth.LoginRequest": {
             "type": "object",
             "required": [
@@ -1612,6 +1762,21 @@
                     "description": "Message 表示响应提示信息。",
                     "type": "string",
                     "example": "ok"
+                }
+            }
+        },
+        "response.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
+                    "type": "integer",
+                    "example": 400
+                },
+                "message": {
+                    "description": "Message 表示用户可理解的错误提示。",
+                    "type": "string",
+                    "example": "请求参数错误"
                 }
             }
         },

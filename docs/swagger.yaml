@@ -242,6 +242,51 @@ definitions:
         example: ok
         type: string
     type: object
+  config.FileData:
+    properties:
+      config_file:
+        description: ConfigFile 表示启动 -f 参数指定的实际配置文件绝对路径。
+        example: D:\Go\GOPATH\src\novels_ai_gen\config\config-dev.yaml
+        type: string
+      content:
+        description: Content 表示配置文件当前文本内容。
+        example: |
+          auth:
+            password: admin123
+        type: string
+      modified_at:
+        description: ModifiedAt 表示配置文件在文件系统中的最后修改时间。
+        example: "2026-06-14T22:00:00+08:00"
+        type: string
+      reloaded_at:
+        description: ReloadedAt 表示后端最近一次成功加载该配置文件的时间。
+        example: "2026-06-14T22:00:00+08:00"
+        type: string
+    type: object
+  config.FileSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/config.FileData'
+        description: Data 表示配置文件文本和加载状态。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+    type: object
+  config.UpdateFileRequest:
+    properties:
+      content:
+        description: Content 表示需要写入配置文件的完整 YAML 文本。
+        example: |
+          auth:
+            password: admin123
+        type: string
+    type: object
   internal_api_handler_auth.LoginRequest:
     properties:
       password:
@@ -472,6 +517,17 @@ definitions:
         example: ok
         type: string
     type: object
+  response.ErrorBody:
+    properties:
+      code:
+        description: Code 表示错误响应码，使用 HTTP 状态码。
+        example: 400
+        type: integer
+      message:
+        description: Message 表示用户可理解的错误提示。
+        example: 请求参数错误
+        type: string
+    type: object
   upload.ErrorBody:
     properties:
       code:
@@ -591,6 +647,64 @@ paths:
       summary: 用户登录
       tags:
       - auth
+  /config/file:
+    get:
+      description: 返回当前后端启动 -f 参数指定配置文件的原始文本内容。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 读取成功
+          schema:
+            $ref: '#/definitions/config.FileSuccessResponse'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 读取后端配置文件
+      tags:
+      - config
+    put:
+      consumes:
+      - application/json
+      description: 保存当前后端启动 -f 参数指定配置文件的完整 YAML 文本，成功后热加载 auth.password。
+      parameters:
+      - description: 配置文件文本
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/config.UpdateFileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存成功
+          schema:
+            $ref: '#/definitions/config.FileSuccessResponse'
+        "400":
+          description: 配置内容错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 保存后端配置文件
+      tags:
+      - config
   /novels:
     get:
       consumes:

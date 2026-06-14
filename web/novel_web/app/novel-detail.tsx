@@ -74,6 +74,9 @@ type NovelDetailState = "loading" | "ready" | "error";
 // NovelWordCountState 表示小说总字数统计的加载状态。
 type NovelWordCountState = "loading" | "ready" | "error";
 
+// NovelDetailTab 表示小说详情页顶部 Tab 当前展示的内容。
+type NovelDetailTab = "detail" | "characters";
+
 // NovelDetailPage 渲染小说详情页。
 // 参数 props 表示小说详情页需要的外部参数和回调。
 export function NovelDetailPage(props: NovelDetailPageProps) {
@@ -85,6 +88,7 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
   const [wordCount, setWordCount] = useState<number | null>(null);
   const [editVisible, setEditVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<NovelDetailTab>("detail");
   const onUnauthorized = props.onUnauthorized;
 
   // loadNovelDetail 从后端加载小说详情数据。
@@ -171,6 +175,14 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
     [loadNovelWordCount],
   );
 
+  // resetActiveTabOnNovelChange 在切换小说时默认回到作品详情页签。
+  useEffect(
+    function resetActiveTabOnNovelChange() {
+      setActiveTab("detail");
+    },
+    [props.novelId],
+  );
+
   // handleRetry 处理详情加载失败后的重试。
   function handleRetry() {
     void loadNovelDetail();
@@ -215,11 +227,21 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
     setDeleteVisible(false);
   }
 
+  // handleTabChange 处理详情页顶部 Tab 切换。
+  // 参数 nextTab 表示用户选择的目标 Tab。
+  function handleTabChange(nextTab: NovelDetailTab) {
+    setActiveTab(nextTab);
+  }
+
   return (
     <main className="novel-detail-page">
-      <DetailNav onBackToBookshelf={props.onBackToBookshelf} />
+      <DetailNav
+        activeTab={activeTab}
+        onBackToBookshelf={props.onBackToBookshelf}
+        onTabChange={handleTabChange}
+      />
 
-      <section className="novel-detail-content" aria-labelledby="novel-title">
+      <section className="novel-detail-content" aria-label="小说详情内容">
         {state === "loading" ? <NovelDetailSkeleton /> : null}
         {state === "error" ? (
           <NovelDetailError
@@ -229,26 +251,30 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
           />
         ) : null}
         {state === "ready" && novel ? (
-          <>
-            <NovelDetailHero
-              novel={novel}
-              wordCountText={formatNovelWordCountText(
-                wordCountState,
-                wordCount,
-              )}
-              onBackToBookshelf={props.onBackToBookshelf}
-              onDelete={handleOpenDeleteModal}
-              onEdit={handleOpenEditModal}
-              onUnauthorized={props.onUnauthorized}
-            />
-            <ChapterListPanel
-              novelId={props.novelId}
-              onChapterCreate={props.onChapterCreate}
-              onChapterDeleted={handleChapterDeleted}
-              onChapterEdit={props.onChapterEdit}
-              onUnauthorized={props.onUnauthorized}
-            />
-          </>
+          activeTab === "detail" ? (
+            <div className="detail-tab-panel" id="detail-panel" role="tabpanel">
+              <NovelDetailHero
+                novel={novel}
+                wordCountText={formatNovelWordCountText(
+                  wordCountState,
+                  wordCount,
+                )}
+                onBackToBookshelf={props.onBackToBookshelf}
+                onDelete={handleOpenDeleteModal}
+                onEdit={handleOpenEditModal}
+                onUnauthorized={props.onUnauthorized}
+              />
+              <ChapterListPanel
+                novelId={props.novelId}
+                onChapterCreate={props.onChapterCreate}
+                onChapterDeleted={handleChapterDeleted}
+                onChapterEdit={props.onChapterEdit}
+                onUnauthorized={props.onUnauthorized}
+              />
+            </div>
+          ) : (
+            <CharacterCardPanel novel={novel} />
+          )
         ) : null}
       </section>
 
@@ -278,8 +304,12 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
 
 // DetailNavProps 表示详情页顶部导航需要的回调。
 interface DetailNavProps {
+  // activeTab 表示当前选中的详情页顶部 Tab。
+  activeTab: NovelDetailTab;
   // onBackToBookshelf 表示返回书架页时执行的回调。
   onBackToBookshelf: () => void;
+  // onTabChange 表示用户切换详情页顶部 Tab 时执行的回调。
+  onTabChange: (tab: NovelDetailTab) => void;
 }
 
 // DetailNav 渲染小说详情页顶部导航。
@@ -299,11 +329,25 @@ function DetailNav(props: DetailNavProps) {
           <span>墨香墨苑</span>
         </button>
 
-        <nav className="detail-links" aria-label="详情页导航">
-          <button type="button" onClick={props.onBackToBookshelf}>
-            藏书阁
+        <nav className="detail-links" aria-label="详情页内容导航" role="tablist">
+          <button
+            type="button"
+            aria-controls="detail-panel"
+            aria-selected={props.activeTab === "detail"}
+            role="tab"
+            onClick={() => props.onTabChange("detail")}
+          >
+            作品详情
           </button>
-          <span aria-current="page">作品详情</span>
+          <button
+            type="button"
+            aria-controls="character-card-panel"
+            aria-selected={props.activeTab === "characters"}
+            role="tab"
+            onClick={() => props.onTabChange("characters")}
+          >
+            角色卡
+          </button>
         </nav>
 
         <button
@@ -316,6 +360,43 @@ function DetailNav(props: DetailNavProps) {
         </button>
       </div>
     </header>
+  );
+}
+
+// CharacterCardPanelProps 表示角色卡空态区域需要展示的数据。
+interface CharacterCardPanelProps {
+  // novel 表示当前角色卡所属的小说数据。
+  novel: NovelItem;
+}
+
+// CharacterCardPanel 渲染角色卡 Tab 的空态入口。
+// 参数 props 表示角色卡空态区域需要展示的数据。
+function CharacterCardPanel(props: CharacterCardPanelProps) {
+  return (
+    <section
+      className="character-card-panel"
+      id="character-card-panel"
+      role="tabpanel"
+      aria-label={`${props.novel.name}角色卡`}
+    >
+      <div className="character-card-panel-header">
+        <p className="detail-kicker">Character Cards</p>
+        <h1>角色卡</h1>
+        <p>
+          这里将用于整理《{props.novel.name}》的人物设定、关系线和灵感片段。
+        </p>
+      </div>
+
+      <div className="character-card-empty" aria-label="角色卡空态">
+        <div className="detail-corner detail-corner-left-top" />
+        <div className="detail-corner detail-corner-right-top" />
+        <div className="detail-corner detail-corner-left-bottom" />
+        <div className="detail-corner detail-corner-right-bottom" />
+        <span aria-hidden="true">角</span>
+        <strong>角色资料还没有落笔</strong>
+        <p>后续可以在这里保存角色头像、身份、性格、关系和剧情备忘。</p>
+      </div>
+    </section>
   );
 }
 
