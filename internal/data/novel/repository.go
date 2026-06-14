@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"gorm.io/gorm"
 	biznovel "novels_ai_gen/internal/biz/novel"
+
+	"gorm.io/gorm"
 )
 
 // Repository 表示基于 GORM 的小说数据仓储。

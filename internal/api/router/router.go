@@ -1,6 +1,11 @@
 package router
 
 import (
+	"io/fs"
+	"net/http"
+	"path"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -8,7 +13,10 @@ import (
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	"novels_ai_gen/internal/api/middleware"
 	bizauth "novels_ai_gen/internal/biz/auth"
+	frontend "novels_ai_gen/internal/web"
 )
+
+const indexHTML = "index.html"
 
 // NewRouter 创建 Gin 路由引擎并注册系统接口。
 // 参数 authHandler 表示登录鉴权 HTTP 处理器；参数 novelHandler 表示小说 HTTP 处理器；参数 authService 表示登录鉴权业务服务。
@@ -29,5 +37,79 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.PUT("/novels/:id", novelHandler.Update)
 	protected.DELETE("/novels/:id", novelHandler.Delete)
 
+	registerFrontendRoutes(engine, frontend.FS())
+
 	return engine
+}
+
+// registerFrontendRoutes 注册嵌入式前端静态文件路由。
+// 参数 engine 表示 Gin 路由引擎；参数 frontendFS 表示前端构建产物文件系统。
+func registerFrontendRoutes(engine *gin.Engine, frontendFS fs.FS) {
+	fileServer := http.FileServer(http.FS(frontendFS))
+
+	engine.NoRoute(func(c *gin.Context) {
+		serveFrontend(c, frontendFS, fileServer)
+	})
+}
+
+// serveFrontend 响应前端静态文件或单页应用入口文件。
+// 参数 c 表示 Gin 请求上下文；参数 frontendFS 表示前端构建产物文件系统；参数 fileServer 表示静态文件服务处理器。
+func serveFrontend(c *gin.Context, frontendFS fs.FS, fileServer http.Handler) {
+	if shouldSkipFrontendFallback(c.Request.URL.Path) || !isFrontendMethod(c.Request.Method) {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	fileName := frontendFileName(c.Request.URL.Path)
+	if fileName != "" && frontendFileExists(frontendFS, fileName) {
+		fileServer.ServeHTTP(c.Writer, c.Request)
+		return
+	}
+
+	serveFrontendIndex(c, frontendFS)
+}
+
+// shouldSkipFrontendFallback 判断请求路径是否应跳过前端单页应用兜底。
+// 参数 requestPath 表示 HTTP 请求路径。
+func shouldSkipFrontendFallback(requestPath string) bool {
+	return requestPath == "/api" ||
+		strings.HasPrefix(requestPath, "/api/") ||
+		requestPath == "/swagger" ||
+		strings.HasPrefix(requestPath, "/swagger/")
+}
+
+// isFrontendMethod 判断请求方法是否适合返回前端页面或静态文件。
+// 参数 method 表示 HTTP 请求方法。
+func isFrontendMethod(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
+}
+
+// frontendFileName 将请求路径转换为前端构建产物中的文件名。
+// 参数 requestPath 表示 HTTP 请求路径。
+func frontendFileName(requestPath string) string {
+	cleanPath := path.Clean("/" + requestPath)
+	fileName := strings.TrimPrefix(cleanPath, "/")
+	if fileName == "." {
+		return ""
+	}
+	return fileName
+}
+
+// frontendFileExists 判断前端构建产物中是否存在指定文件。
+// 参数 frontendFS 表示前端构建产物文件系统；参数 fileName 表示需要检查的文件名。
+func frontendFileExists(frontendFS fs.FS, fileName string) bool {
+	info, err := fs.Stat(frontendFS, fileName)
+	return err == nil && !info.IsDir()
+}
+
+// serveFrontendIndex 返回前端单页应用入口文件。
+// 参数 c 表示 Gin 请求上下文；参数 frontendFS 表示前端构建产物文件系统。
+func serveFrontendIndex(c *gin.Context, frontendFS fs.FS) {
+	data, err := fs.ReadFile(frontendFS, indexHTML)
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 }

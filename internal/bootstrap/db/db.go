@@ -15,6 +15,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	biznovel "novels_ai_gen/internal/biz/novel"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
 
@@ -30,6 +31,11 @@ var (
 	current *gorm.DB
 	mu      sync.Mutex
 )
+
+// migrationModels 表示启动时需要交给 GORM 自动迁移的数据模型列表。
+var migrationModels = []any{
+	&biznovel.Novel{},
+}
 
 // Provider 根据完整应用配置初始化全局数据库连接，并返回 Wire 清理函数。
 // 参数 cfg 表示应用完整配置。
@@ -79,11 +85,69 @@ func Init(cfg appconfig.DatabaseConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("连接数据库失败: %w", err)
 	}
 
+	if err := migrate(conn); err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("执行数据库迁移失败: %w", err)
+	}
+
 	if current != nil {
 		_ = close(current)
 	}
 	current = conn
 	return current, nil
+}
+
+// migrate 使用 GORM 自动迁移功能创建或更新数据库表结构。
+// 参数 conn 表示已经成功连接并通过 Ping 校验的 GORM 数据库连接。
+func migrate(conn *gorm.DB) error {
+	startedAt := time.Now()
+	slog.Info("数据库自动迁移开始", "model_count", len(migrationModels))
+
+	missingModels := missingMigrationModelNames(conn)
+	triggered := len(missingModels) > 0
+	slog.Info(
+		"数据库自动迁移检查完成",
+		"triggered", triggered,
+		"missing_model_count", len(missingModels),
+		"missing_models", missingModels,
+	)
+
+	if err := conn.AutoMigrate(migrationModels...); err != nil {
+		slog.Error(
+			"数据库自动迁移失败",
+			"triggered", triggered,
+			"missing_model_count", len(missingModels),
+			"missing_models", missingModels,
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"error", err,
+		)
+		return fmt.Errorf("自动迁移数据库表失败: %w", err)
+	}
+
+	slog.Info(
+		"数据库自动迁移完成",
+		"triggered", triggered,
+		"missing_model_count", len(missingModels),
+		"missing_models", missingModels,
+		"duration_ms", time.Since(startedAt).Milliseconds(),
+	)
+	return nil
+}
+
+// missingMigrationModelNames 返回迁移前还没有对应数据表的模型名称列表。
+// 参数 conn 表示用于检查数据表是否存在的 GORM 数据库连接。
+func missingMigrationModelNames(conn *gorm.DB) []string {
+	missingModels := make([]string, 0, len(migrationModels))
+	migrator := conn.Migrator()
+
+	for _, model := range migrationModels {
+		if migrator.HasTable(model) {
+			continue
+		}
+		missingModels = append(missingModels, fmt.Sprintf("%T", model))
+	}
+
+	return missingModels
 }
 
 // Get 返回已经初始化的数据库连接。

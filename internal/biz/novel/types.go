@@ -5,21 +5,21 @@ import "time"
 // Novel 表示小说数据库模型。
 type Novel struct {
 	// ID 表示小说主键 ID。
-	ID uint64 `json:"id" gorm:"column:id;primaryKey;autoIncrement" example:"1"`
+	ID uint64 `json:"id" gorm:"column:id;primaryKey;autoIncrement;comment:小说主键ID" example:"1"`
 	// Name 表示小说名，不能为空。
-	Name string `json:"name" gorm:"column:name;not null" example:"长夜余火"`
+	Name string `json:"name" gorm:"column:name;not null;comment:小说名，不能为空" example:"长夜余火"`
 	// AuthorName 表示作者名，可以为空。
-	AuthorName string `json:"author_name" gorm:"column:author_name" example:"爱潜水的乌贼"`
+	AuthorName string `json:"author_name" gorm:"column:author_name;comment:作者名，可以为空" example:"爱潜水的乌贼"`
 	// Description 表示简介，可以为空。
-	Description string `json:"description" gorm:"column:description" example:"一部关于废土冒险的小说"`
+	Description string `json:"description" gorm:"column:description;comment:简介，可以为空" example:"一部关于废土冒险的小说"`
 	// Tags 表示标签，可以为空，多个标签使用英文逗号分隔。
-	Tags string `json:"tags" gorm:"column:tags" example:"玄幻,冒险"`
+	Tags string `json:"tags" gorm:"column:tags;comment:标签，可以为空，多个标签使用英文逗号分隔" example:"玄幻,冒险"`
 	// CoverURL 表示封面链接，可以为空。
-	CoverURL string `json:"cover_url" gorm:"column:cover_url" example:"https://example.com/cover.jpg"`
+	CoverURL string `json:"cover_url" gorm:"column:cover_url;comment:封面链接，可以为空" example:"https://example.com/cover.jpg"`
 	// CreatedAt 表示创建时间。
-	CreatedAt time.Time `json:"created_at" gorm:"column:created_at" example:"2026-06-13T22:00:00+08:00"`
+	CreatedAt time.Time `json:"created_at" gorm:"column:created_at;comment:创建时间" example:"2026-06-13T22:00:00+08:00"`
 	// UpdatedAt 表示更新时间。
-	UpdatedAt time.Time `json:"updated_at" gorm:"column:updated_at" example:"2026-06-13T22:00:00+08:00"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"column:updated_at;comment:更新时间" example:"2026-06-13T22:00:00+08:00"`
 }
 
 // TableName 返回小说模型对应的数据表名称。
