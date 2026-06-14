@@ -1,19 +1,38 @@
-import { useCallback, useEffect, useState } from "react";
+import { Form } from "@douyinfe/semi-ui-19/lib/es/form";
+import type { FormApi } from "@douyinfe/semi-ui-19/lib/es/form";
+import Modal from "@douyinfe/semi-ui-19/lib/es/modal";
+import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
+import Upload from "@douyinfe/semi-ui-19/lib/es/upload";
+import type { customRequestArgs } from "@douyinfe/semi-ui-19/lib/es/upload";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   UnauthorizedError,
+  createNovel,
   fetchNovelList,
+  refreshImagePreview,
+  uploadImage,
+  type ImageUploadData,
+  type NovelCreateParams,
   type NovelItem,
   type NovelListData,
 } from "./api";
 
 const bookshelfPageSize = 20;
+const coverUploadMaxSizeKB = 20 * 1024;
 const coverToneClasses = [
   "book-cover-tone-jade",
   "book-cover-tone-cinnabar",
   "book-cover-tone-ink",
   "book-cover-tone-gold",
 ];
+const emptyCreateNovelFormValues: NovelCreateParams = {
+  name: "",
+  author_name: "",
+  description: "",
+  tags: "",
+  cover_url: "",
+};
 
 // BookshelfPageProps 表示书架首页需要的外部回调。
 interface BookshelfPageProps {
@@ -30,6 +49,7 @@ export function BookshelfPage(props: BookshelfPageProps) {
   const [state, setState] = useState<BookshelfState>("loading");
   const [message, setMessage] = useState("");
   const [listData, setListData] = useState<NovelListData | null>(null);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
   const onUnauthorized = props.onUnauthorized;
 
   // loadBookshelf 从后端加载小说书架数据。
@@ -88,6 +108,21 @@ export function BookshelfPage(props: BookshelfPageProps) {
     void loadBookshelf();
   }
 
+  // handleOpenCreateModal 打开添加小说弹窗。
+  function handleOpenCreateModal() {
+    setCreateModalVisible(true);
+  }
+
+  // handleCloseCreateModal 关闭添加小说弹窗。
+  function handleCloseCreateModal() {
+    setCreateModalVisible(false);
+  }
+
+  // handleNovelCreated 处理小说创建成功后的书架刷新。
+  async function handleNovelCreated() {
+    await loadBookshelf();
+  }
+
   return (
     <main className="bookshelf-page">
       <BookshelfHeader totalCount={totalCount} updatedCount={updatedCount} />
@@ -105,8 +140,21 @@ export function BookshelfPage(props: BookshelfPageProps) {
         {state === "error" ? (
           <BookshelfError message={message} onRetry={handleRetry} />
         ) : null}
-        {state === "ready" ? <NovelGrid novels={novels} /> : null}
+        {state === "ready" ? (
+          <NovelGrid
+            novels={novels}
+            onCreateClick={handleOpenCreateModal}
+            onUnauthorized={onUnauthorized}
+          />
+        ) : null}
       </section>
+
+      <CreateNovelModal
+        visible={createModalVisible}
+        onCancel={handleCloseCreateModal}
+        onCreated={handleNovelCreated}
+        onUnauthorized={onUnauthorized}
+      />
     </main>
   );
 }
@@ -165,6 +213,10 @@ function BookshelfHeader(props: BookshelfHeaderProps) {
 interface NovelGridProps {
   // novels 表示当前书架中的小说列表。
   novels: NovelItem[];
+  // onCreateClick 表示点击创建小说入口时执行的回调。
+  onCreateClick: () => void;
+  // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+  onUnauthorized: () => void;
 }
 
 // NovelGrid 渲染小说卡片网格和新建入口。
@@ -173,7 +225,7 @@ function NovelGrid(props: NovelGridProps) {
   if (props.novels.length === 0) {
     return (
       <div className="bookshelf-empty">
-        <CreateBookButton />
+        <CreateBookButton onClick={props.onCreateClick} />
         <p>书架还空着，第一卷可以从这里开始。</p>
       </div>
     );
@@ -181,8 +233,10 @@ function NovelGrid(props: NovelGridProps) {
 
   return (
     <div className="book-grid">
-      {props.novels.map(renderNovelCard)}
-      <CreateBookButton />
+      {props.novels.map((novel, index) =>
+        renderNovelCard(novel, index, props.onUnauthorized),
+      )}
+      <CreateBookButton onClick={props.onCreateClick} />
     </div>
   );
 }
@@ -193,6 +247,8 @@ interface NovelCardProps {
   novel: NovelItem;
   // index 表示当前小说在列表中的位置。
   index: number;
+  // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+  onUnauthorized: () => void;
 }
 
 // NovelCard 渲染单本小说的封面与元信息。
@@ -203,7 +259,11 @@ function NovelCard(props: NovelCardProps) {
 
   return (
     <article className="book-card">
-      <BookCover novel={props.novel} index={props.index} />
+      <BookCover
+        novel={props.novel}
+        index={props.index}
+        onUnauthorized={props.onUnauthorized}
+      />
 
       <div className="book-meta">
         <h2>{props.novel.name}</h2>
@@ -224,12 +284,50 @@ interface BookCoverProps {
   novel: NovelItem;
   // index 表示当前小说在列表中的位置。
   index: number;
+  // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+  onUnauthorized: () => void;
 }
 
 // BookCover 渲染小说封面或无封面时的书卷占位图。
 // 参数 props 表示小说封面需要展示的数据。
 function BookCover(props: BookCoverProps) {
   const toneClass = getCoverToneClass(props.index);
+  const [resolvedCoverURL, setResolvedCoverURL] = useState("");
+  const rawCoverURL = normalizeText(props.novel.cover_url);
+  const coverURL = isPrivateObjectKey(rawCoverURL)
+    ? resolvedCoverURL
+    : rawCoverURL;
+
+  // resolvePrivateCoverURL 在封面字段为对象 key 时刷新私有图片预览链接。
+  useEffect(
+    function resolvePrivateCoverURL() {
+      if (!rawCoverURL || !isPrivateObjectKey(rawCoverURL)) {
+        setResolvedCoverURL("");
+        return;
+      }
+
+      const controller = new AbortController();
+      setResolvedCoverURL("");
+
+      void refreshImagePreview(rawCoverURL, controller.signal)
+        .then(function handlePreviewLoaded(data) {
+          setResolvedCoverURL(data.preview_url);
+        })
+        .catch(function handlePreviewError(error) {
+          if (controller.signal.aborted) {
+            return;
+          }
+          if (error instanceof UnauthorizedError) {
+            props.onUnauthorized();
+          }
+        });
+
+      return function cancelPreviewLoad() {
+        controller.abort();
+      };
+    },
+    [rawCoverURL, props.onUnauthorized],
+  );
 
   return (
     <div className={`book-cover ${toneClass}`}>
@@ -239,8 +337,8 @@ function BookCover(props: BookCoverProps) {
         <span />
         <span />
       </div>
-      {props.novel.cover_url ? (
-        <img src={props.novel.cover_url} alt={`${props.novel.name}封面`} />
+      {coverURL ? (
+        <img src={coverURL} alt={`${props.novel.name}封面`} />
       ) : (
         <div className="book-cover-placeholder" aria-hidden="true">
           <span>{getCoverInitial(props.novel.name)}</span>
@@ -293,16 +391,258 @@ function BookshelfError(props: BookshelfErrorProps) {
   );
 }
 
+// CreateBookButtonProps 表示开启新卷按钮需要的外部回调。
+interface CreateBookButtonProps {
+  // onClick 表示点击开启新卷按钮时执行的回调。
+  onClick: () => void;
+}
+
 // CreateBookButton 渲染开启新卷按钮。
-function CreateBookButton() {
+// 参数 props 表示开启新卷按钮需要的外部回调。
+function CreateBookButton(props: CreateBookButtonProps) {
   return (
-    <button type="button" className="create-book-button" aria-label="开启新卷">
+    <button
+      type="button"
+      className="create-book-button"
+      aria-label="开启新卷"
+      onClick={props.onClick}
+    >
       <span className="create-book-symbol" aria-hidden="true">
         ＋
       </span>
       <span className="create-book-text">开启新卷</span>
     </button>
   );
+}
+
+// CreateNovelModalProps 表示添加小说弹窗需要的外部状态和回调。
+interface CreateNovelModalProps {
+  // visible 表示添加小说弹窗是否可见。
+  visible: boolean;
+  // onCancel 表示取消或关闭添加小说弹窗时执行的回调。
+  onCancel: () => void;
+  // onCreated 表示小说创建成功后刷新书架的回调。
+  onCreated: () => Promise<void>;
+  // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+  onUnauthorized: () => void;
+}
+
+// CreateNovelModal 渲染添加小说弹窗和创建表单。
+// 参数 props 表示添加小说弹窗需要的外部状态和回调。
+function CreateNovelModal(props: CreateNovelModalProps) {
+  const [submitting, setSubmitting] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [uploadedCover, setUploadedCover] = useState<ImageUploadData | null>(
+    null,
+  );
+  const [uploadResetKey, setUploadResetKey] = useState(0);
+  const formApiRef = useRef<FormApi<NovelCreateParams> | null>(null);
+
+  // handleGetFormApi 保存 Semi 表单 API，供弹窗确认按钮触发表单校验。
+  // 参数 formApi 表示 Semi Form 暴露的表单操作对象。
+  const handleGetFormApi = useCallback(function handleGetFormApi(
+    formApi: FormApi<NovelCreateParams>,
+  ) {
+    formApiRef.current = formApi;
+  }, []);
+
+  // resetCreateForm 重置添加小说表单和封面上传状态。
+  function resetCreateForm() {
+    formApiRef.current?.reset();
+    setUploadedCover(null);
+    setUploadResetKey((currentKey) => currentKey + 1);
+  }
+
+  // handleCancel 处理添加小说弹窗关闭并重置表单。
+  function handleCancel() {
+    if (submitting || coverUploading) {
+      return;
+    }
+
+    resetCreateForm();
+    props.onCancel();
+  }
+
+  // handleCoverUpload 处理封面图片上传。
+  // 参数 options 表示 Semi Upload 传入的自定义上传参数。
+  const handleCoverUpload = useCallback(
+    function handleCoverUpload(options: customRequestArgs) {
+      setCoverUploading(true);
+
+      void uploadImage(options.fileInstance, "cover")
+        .then(function handleCoverUploaded(data) {
+          setUploadedCover(data);
+          options.onSuccess(data);
+          Toast.success("封面已上传");
+        })
+        .catch(function handleCoverUploadError(error) {
+          options.onError({
+            status: error instanceof UnauthorizedError ? 401 : 500,
+          });
+
+          if (error instanceof UnauthorizedError) {
+            props.onUnauthorized();
+            return;
+          }
+
+          Toast.error(getErrorMessage(error, "封面上传失败，请稍后再试"));
+        })
+        .finally(function finishCoverUpload() {
+          setCoverUploading(false);
+        });
+    },
+    [props.onUnauthorized],
+  );
+
+  // handleCoverRemove 处理用户移除已上传封面。
+  function handleCoverRemove() {
+    setUploadedCover(null);
+  }
+
+  // handleSubmit 校验添加小说表单并提交创建请求。
+  async function handleSubmit() {
+    if (coverUploading) {
+      Toast.warning("封面正在上传，请稍候");
+      return;
+    }
+
+    const formApi = formApiRef.current;
+    if (!formApi) {
+      return;
+    }
+
+    let values: NovelCreateParams;
+    try {
+      values = (await formApi.validate()) as NovelCreateParams;
+    } catch {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await createNovel(
+        normalizeCreateNovelValues(values, uploadedCover?.object_key ?? ""),
+      );
+      Toast.success("小说已创建");
+      resetCreateForm();
+      props.onCancel();
+      await props.onCreated();
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        props.onUnauthorized();
+        return;
+      }
+
+      Toast.error(getErrorMessage(error, "小说创建失败，请稍后再试"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      className="create-novel-modal"
+      title="添加小说"
+      visible={props.visible}
+      width={640}
+      okText="创建小说"
+      cancelText="取消"
+      confirmLoading={submitting || coverUploading}
+      maskClosable={!submitting && !coverUploading}
+      closable={!submitting && !coverUploading}
+      keepDOM
+      onOk={handleSubmit}
+      onCancel={handleCancel}
+    >
+      <Form<NovelCreateParams>
+        className="create-novel-form"
+        initValues={emptyCreateNovelFormValues}
+        layout="vertical"
+        autoScrollToError
+        getFormApi={handleGetFormApi}
+      >
+        <Form.Input
+          field="name"
+          label="书名"
+          placeholder="例如：长夜行灯"
+          trigger="blur"
+          rules={[{ required: true, message: "请输入书名" }]}
+          validator={validateNovelName}
+        />
+        <Form.Input
+          field="author_name"
+          label="作者"
+          placeholder="留空时显示未署名作者"
+          trigger="blur"
+        />
+        <Form.TextArea
+          field="description"
+          label="简介"
+          placeholder="写下这部小说的核心气质、世界观或一句灵感"
+          autosize={{ minRows: 3, maxRows: 5 }}
+          trigger="blur"
+        />
+        <Form.Input
+          field="tags"
+          label="标签"
+          placeholder="多个标签用英文逗号分隔，例如：玄幻,冒险"
+          trigger="blur"
+        />
+        <div className="cover-upload-field">
+          <span className="cover-upload-label">封面</span>
+          <Upload
+            key={uploadResetKey}
+            className="cover-upload"
+            action="/api/v1/uploads/images"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            data={{ usage: "cover" }}
+            draggable
+            dragMainText="封面图片"
+            dragSubText="JPEG / PNG / WebP / GIF，20MB 内"
+            listType="picture"
+            limit={1}
+            maxSize={coverUploadMaxSizeKB}
+            name="file"
+            picHeight={148}
+            picWidth={104}
+            showReplace
+            showRetry={false}
+            disabled={submitting || coverUploading}
+            customRequest={handleCoverUpload}
+            onAcceptInvalid={handleCoverAcceptInvalid}
+            onExceed={handleCoverExceed}
+            onRemove={handleCoverRemove}
+            onSizeError={handleCoverSizeError}
+          >
+            <button
+              type="button"
+              className="cover-upload-trigger"
+              disabled={submitting || coverUploading}
+            >
+              <span aria-hidden="true">＋</span>
+              <span>{uploadedCover ? "更换封面" : "选择封面"}</span>
+            </button>
+          </Upload>
+        </div>
+      </Form>
+    </Modal>
+  );
+}
+
+// handleCoverAcceptInvalid 处理封面文件类型不符合要求的情况。
+function handleCoverAcceptInvalid() {
+  Toast.error("仅支持 JPEG、PNG、WebP、GIF 图片");
+}
+
+// handleCoverExceed 处理封面上传数量超过限制的情况。
+function handleCoverExceed() {
+  Toast.warning("只能上传一张封面");
+}
+
+// handleCoverSizeError 处理封面文件大小超过限制的情况。
+function handleCoverSizeError() {
+  Toast.error("封面图片不能超过 20MB");
 }
 
 // countRecentlyUpdatedNovels 统计最近三十天内更新过的小说数量。
@@ -323,9 +663,20 @@ function countRecentlyUpdatedNovels(novels: NovelItem[]): number {
 }
 
 // renderNovelCard 渲染小说列表中的单个小说卡片。
-// 参数 novel 表示当前需要渲染的小说；参数 index 表示小说在列表中的位置。
-function renderNovelCard(novel: NovelItem, index: number) {
-  return <NovelCard key={novel.id} novel={novel} index={index} />;
+// 参数 novel 表示当前需要渲染的小说；参数 index 表示小说在列表中的位置；参数 onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+function renderNovelCard(
+  novel: NovelItem,
+  index: number,
+  onUnauthorized: () => void,
+) {
+  return (
+    <NovelCard
+      key={novel.id}
+      novel={novel}
+      index={index}
+      onUnauthorized={onUnauthorized}
+    />
+  );
 }
 
 // renderTag 渲染单个小说标签。
@@ -387,4 +738,66 @@ function getCoverToneClass(index: number): string {
 function getCoverInitial(name: string): string {
   const normalizedName = name.trim();
   return normalizedName ? normalizedName.slice(0, 1) : "卷";
+}
+
+// isPrivateObjectKey 判断封面字段是否为私有对象存储 key。
+// 参数 value 表示后端返回的封面字段值。
+function isPrivateObjectKey(value: string): boolean {
+  return value !== "" && !isDirectCoverURL(value) && isSafeObjectKey(value);
+}
+
+// isDirectCoverURL 判断封面字段是否可以直接作为图片地址展示。
+// 参数 value 表示后端返回的封面字段值。
+function isDirectCoverURL(value: string): boolean {
+  const normalizedValue = value.toLowerCase();
+  return (
+    normalizedValue.startsWith("http://") ||
+    normalizedValue.startsWith("https://") ||
+    normalizedValue.startsWith("data:") ||
+    normalizedValue.startsWith("blob:")
+  );
+}
+
+// isSafeObjectKey 判断对象 key 是否满足前端刷新预览的基础安全规则。
+// 参数 value 表示需要判断的对象 key。
+function isSafeObjectKey(value: string): boolean {
+  return (
+    !value.startsWith("/") &&
+    !value.includes("\\") &&
+    !value.includes("..") &&
+    (value.startsWith("covers/") || value.startsWith("characters/"))
+  );
+}
+
+// normalizeCreateNovelValues 清理添加小说表单数据。
+// 参数 values 表示 Semi 表单校验后返回的原始字段值；参数 coverObjectKey 表示封面图片上传后返回的对象 key。
+function normalizeCreateNovelValues(
+  values: NovelCreateParams,
+  coverObjectKey: string,
+): NovelCreateParams {
+  return {
+    name: normalizeText(values.name),
+    author_name: normalizeText(values.author_name),
+    description: normalizeText(values.description),
+    tags: normalizeText(values.tags),
+    cover_url: normalizeText(coverObjectKey),
+  };
+}
+
+// normalizeText 将未知文本值转换为去除两端空白后的字符串。
+// 参数 value 表示需要清理的文本值。
+function normalizeText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// validateNovelName 校验小说书名是否填写了非空白内容。
+// 参数 value 表示书名输入框当前值。
+function validateNovelName(value: unknown): string {
+  return normalizeText(value) ? "" : "请输入书名";
+}
+
+// getErrorMessage 获取可展示给用户的错误提示。
+// 参数 error 表示捕获到的未知错误；参数 fallback 表示兜底错误提示。
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }

@@ -32,7 +32,7 @@ export interface NovelItem {
   description: string;
   // tags 表示英文逗号分隔的标签文本。
   tags: string;
-  // cover_url 表示小说封面链接。
+  // cover_url 表示小说封面链接或私有对象存储 key。
   cover_url: string;
   // created_at 表示小说创建时间。
   created_at: string;
@@ -60,6 +60,49 @@ export interface NovelListParams {
   pageSize: number;
   // signal 表示用于取消请求的浏览器 AbortSignal。
   signal?: AbortSignal;
+}
+
+// NovelCreateParams 表示创建小说时提交给后端的参数。
+export interface NovelCreateParams {
+  // name 表示小说名，不能为空。
+  name: string;
+  // author_name 表示作者名，可以为空。
+  author_name: string;
+  // description 表示小说简介，可以为空。
+  description: string;
+  // tags 表示英文逗号分隔的标签文本，可以为空。
+  tags: string;
+  // cover_url 表示小说封面链接或私有对象存储 key，可以为空。
+  cover_url: string;
+}
+
+// ImageUploadUsage 表示图片上传用途。
+export type ImageUploadUsage = "cover" | "character";
+
+// ImageUploadData 表示图片上传成功后返回的数据。
+export interface ImageUploadData {
+  // object_key 表示图片保存在对象存储中的对象 key。
+  object_key: string;
+  // preview_url 表示可直接预览私有图片的预签名链接。
+  preview_url: string;
+  // preview_expires_at 表示预签名预览链接过期时间。
+  preview_expires_at: string;
+  // content_type 表示后端根据文件内容探测出的 MIME 类型。
+  content_type: string;
+  // size 表示上传文件大小，单位为字节。
+  size: number;
+  // original_filename 表示用户上传文件的原始文件名。
+  original_filename: string;
+}
+
+// ImagePreviewData 表示刷新私有图片预览链接后返回的数据。
+export interface ImagePreviewData {
+  // object_key 表示图片保存在对象存储中的对象 key。
+  object_key: string;
+  // preview_url 表示可直接预览私有图片的预签名链接。
+  preview_url: string;
+  // preview_expires_at 表示预签名预览链接过期时间。
+  preview_expires_at: string;
 }
 
 // UnauthorizedError 表示前端检测到登录态不存在或已失效。
@@ -148,6 +191,111 @@ export async function fetchNovelList(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "书架加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// createNovel 调用后端接口创建小说并返回新小说数据。
+// 参数 params 表示创建小说时需要提交的表单数据。
+export async function createNovel(
+  params: NovelCreateParams,
+): Promise<NovelItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/novels", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说创建失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// uploadImage 调用后端接口上传图片并返回对象 key 和预览链接。
+// 参数 file 表示用户选择的图片文件；参数 usage 表示图片用途。
+export async function uploadImage(
+  file: File,
+  usage: ImageUploadUsage,
+): Promise<ImageUploadData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("usage", usage);
+
+  const response = await fetch("/api/v1/uploads/images", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    body: formData,
+  });
+  const payload = await parseApiResponse<ImageUploadData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "图片上传失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// refreshImagePreview 调用后端接口刷新私有图片的预签名预览链接。
+// 参数 objectKey 表示图片对象 key；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function refreshImagePreview(
+  objectKey: string,
+  signal?: AbortSignal,
+): Promise<ImagePreviewData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({
+    object_key: objectKey,
+  });
+  const response = await fetch(
+    `/api/v1/uploads/preview?${searchParams.toString()}`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+  const payload = await parseApiResponse<ImagePreviewData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "封面预览加载失败，请稍后再试");
   }
 
   return payload.data;

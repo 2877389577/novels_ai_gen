@@ -984,6 +984,157 @@ input {
   color: var(--color-on-primary);
 }
 
+.create-novel-modal {
+  max-width: calc(100vw - 32px);
+}
+
+.create-novel-modal .semi-modal-content {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 76%, transparent);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), transparent 46%),
+    var(--color-paper);
+  box-shadow: 0 18px 56px rgba(89, 65, 62, 0.16);
+}
+
+.create-novel-modal .semi-modal-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-outline-variant) 68%, transparent);
+  background: color-mix(in srgb, var(--color-surface-container-low) 38%, transparent);
+  padding: 22px 28px 18px;
+}
+
+.create-novel-modal .semi-modal-title {
+  color: var(--color-on-surface);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.create-novel-modal .semi-modal-body {
+  padding: 24px 28px 8px;
+}
+
+.create-novel-modal .semi-modal-footer {
+  border-top: 1px solid color-mix(in srgb, var(--color-outline-variant) 54%, transparent);
+  padding: 16px 28px 22px;
+}
+
+.create-novel-form {
+  display: grid;
+  gap: 2px;
+}
+
+.create-novel-form .semi-form-field {
+  margin-bottom: 14px;
+}
+
+.create-novel-form .semi-form-field-label {
+  color: var(--color-on-surface-variant);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.create-novel-form .semi-input-wrapper,
+.create-novel-form .semi-input-textarea-wrapper {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-surface-container-low) 58%, transparent);
+}
+
+.cover-upload-field {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.cover-upload-label {
+  color: var(--color-on-surface-variant);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.cover-upload {
+  width: 100%;
+}
+
+.cover-upload .semi-upload {
+  width: 100%;
+}
+
+.cover-upload .semi-upload-drag-area {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 78%, transparent);
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(141, 112, 109, 0.04) 10px,
+      rgba(141, 112, 109, 0.04) 11px
+    ),
+    color-mix(in srgb, var(--color-surface-container-low) 58%, transparent);
+}
+
+.cover-upload .semi-upload-drag-area:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 44%, transparent);
+}
+
+.cover-upload-trigger {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--color-primary);
+  border-radius: 4px;
+  background: var(--color-paper);
+  color: var(--color-primary);
+  cursor: pointer;
+  padding: 9px 14px;
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.cover-upload-trigger:hover:not(:disabled),
+.cover-upload-trigger:focus-visible {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.cover-upload-trigger:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.cover-upload-trigger:disabled {
+  cursor: progress;
+  opacity: 0.66;
+}
+
+.cover-upload-trigger span:first-child {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.cover-upload .semi-upload-file-list {
+  margin-top: 12px;
+}
+
+.cover-upload .semi-upload-file-card {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-paper) 82%, transparent);
+}
+
 .book-card-skeleton .book-cover,
 .book-card-skeleton .book-meta span {
   background:
@@ -1123,6 +1274,16 @@ input {
   .bookshelf-error {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .create-novel-modal {
+    width: calc(100vw - 32px) !important;
+  }
+
+  .create-novel-modal .semi-modal-header,
+  .create-novel-modal .semi-modal-body,
+  .create-novel-modal .semi-modal-footer {
+    padding-inline: 20px;
   }
 }
 

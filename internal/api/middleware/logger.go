@@ -13,12 +13,29 @@ func RequestLogger() gin.HandlerFunc {
 		start := time.Now()
 		c.Next()
 
-		slog.Info(
-			"http request",
+		duration := time.Since(start)
+		attrs := []any{
 			"method", c.Request.Method,
 			"path", c.Request.URL.Path,
+			"route", c.FullPath(),
 			"status", c.Writer.Status(),
-			"duration", time.Since(start).String(),
+			"duration", duration.String(),
+			"client_ip", c.ClientIP(),
+		}
+
+		if len(c.Errors) > 0 {
+			attrs = append(attrs, "errors", c.Errors.String())
+		}
+
+		if c.Writer.Status() >= 500 || len(c.Errors) > 0 {
+			slog.ErrorContext(c.Request.Context(), "http request failed", attrs...)
+			return
+		}
+
+		slog.InfoContext(
+			c.Request.Context(),
+			"http request",
+			attrs...,
 		)
 	}
 }

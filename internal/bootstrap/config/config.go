@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -18,6 +19,8 @@ type AppConfig struct {
 	Logger LoggerConfig `mapstructure:"logger"`
 	// Auth 表示登录鉴权相关配置。
 	Auth AuthConfig `mapstructure:"auth"`
+	// Storage 表示文件对象存储相关配置。
+	Storage StorageConfig `mapstructure:"storage"`
 }
 
 // ServerConfig 表示 HTTP 服务监听配置。
@@ -54,6 +57,38 @@ type DatabaseConnectionConfig struct {
 type AuthConfig struct {
 	// Password 表示访问系统资源需要使用的登录密码。
 	Password string `mapstructure:"password"`
+}
+
+// StorageConfig 表示文件对象存储配置集合。
+type StorageConfig struct {
+	// S3 表示 S3 兼容对象存储配置。
+	S3 S3Config `mapstructure:"s3"`
+}
+
+// S3Config 表示 S3 兼容对象存储连接与上传限制配置。
+type S3Config struct {
+	// Endpoint 表示对象存储服务地址，不包含 bucket 名称。
+	Endpoint string `mapstructure:"endpoint"`
+	// AccessKey 表示服务端访问对象存储使用的访问密钥 ID。
+	AccessKey string `mapstructure:"access_key"`
+	// SecretKey 表示服务端访问对象存储使用的访问密钥 Secret。
+	SecretKey string `mapstructure:"secret_key"`
+	// Bucket 表示图片对象保存的 bucket 名称。
+	Bucket string `mapstructure:"bucket"`
+	// Region 表示对象存储 bucket 所在区域，可以为空。
+	Region string `mapstructure:"region"`
+	// UseSSL 表示连接对象存储时是否使用 HTTPS。
+	UseSSL bool `mapstructure:"use_ssl"`
+	// BucketLookup 表示 bucket 寻址方式，支持 auto、dns、path。
+	BucketLookup string `mapstructure:"bucket_lookup"`
+	// PreviewExpire 表示预签名预览链接有效期。
+	PreviewExpire time.Duration `mapstructure:"preview_expire"`
+	// MaxUploadSizeMB 表示单个图片允许上传的最大大小，单位为 MB。
+	MaxUploadSizeMB int64 `mapstructure:"max_upload_size_mb"`
+	// CoverPrefix 表示小说封面图片对象 key 的前缀。
+	CoverPrefix string `mapstructure:"cover_prefix"`
+	// CharacterPrefix 表示人物图片对象 key 的前缀。
+	CharacterPrefix string `mapstructure:"character_prefix"`
 }
 
 // LoggerConfig 表示日志服务的整体配置。
@@ -137,6 +172,11 @@ func setDefaults(loader *viper.Viper) {
 	loader.SetDefault("logger.file.filename", "app.log")
 	loader.SetDefault("logger.file.rotation", "daily")
 	loader.SetDefault("auth.password", "admin123")
+	loader.SetDefault("storage.s3.bucket_lookup", "auto")
+	loader.SetDefault("storage.s3.preview_expire", "24h")
+	loader.SetDefault("storage.s3.max_upload_size_mb", 20)
+	loader.SetDefault("storage.s3.cover_prefix", "covers")
+	loader.SetDefault("storage.s3.character_prefix", "characters")
 }
 
 // Load 读取指定路径的应用配置。

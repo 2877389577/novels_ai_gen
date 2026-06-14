@@ -359,6 +359,127 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/uploads/images": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "上传小说封面或人物图片到私有对象存储，并返回对象 key 和预签名预览链接。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "uploads"
+                ],
+                "summary": "上传图片",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "图片文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "cover",
+                            "character"
+                        ],
+                        "type": "string",
+                        "description": "图片用途",
+                        "name": "usage",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "上传成功",
+                        "schema": {
+                            "$ref": "#/definitions/upload.UploadImageSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/upload.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/upload.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/upload.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/uploads/preview": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "根据对象 key 生成新的私有图片预签名预览链接。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "uploads"
+                ],
+                "summary": "刷新图片预览链接",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "对象 key",
+                        "name": "object_key",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "刷新成功",
+                        "schema": {
+                            "$ref": "#/definitions/upload.PreviewSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/upload.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/upload.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/upload.ErrorBody"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -655,6 +776,122 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/novel.NovelData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "upload.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
+                    "type": "integer",
+                    "example": 400
+                },
+                "message": {
+                    "description": "Message 表示用户可理解的错误提示。",
+                    "type": "string",
+                    "example": "请求参数错误"
+                }
+            }
+        },
+        "upload.PreviewData": {
+            "type": "object",
+            "properties": {
+                "object_key": {
+                    "description": "ObjectKey 表示图片保存在对象存储中的对象 key。",
+                    "type": "string",
+                    "example": "covers/2026/06/9f1c1c0a1b2c3d4e.png"
+                },
+                "preview_expires_at": {
+                    "description": "PreviewExpiresAt 表示预签名预览链接过期时间。",
+                    "type": "string",
+                    "example": "2026-06-15T22:00:00+08:00"
+                },
+                "preview_url": {
+                    "description": "PreviewURL 表示可直接预览私有图片的预签名链接。",
+                    "type": "string",
+                    "example": "https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=..."
+                }
+            }
+        },
+        "upload.PreviewSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示刷新预览链接后的响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/upload.PreviewData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "upload.UploadImageData": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "description": "ContentType 表示根据文件内容探测出的 MIME 类型。",
+                    "type": "string",
+                    "example": "image/png"
+                },
+                "object_key": {
+                    "description": "ObjectKey 表示图片保存在对象存储中的对象 key。",
+                    "type": "string",
+                    "example": "covers/2026/06/9f1c1c0a1b2c3d4e.png"
+                },
+                "original_filename": {
+                    "description": "OriginalFilename 表示用户上传文件的原始文件名。",
+                    "type": "string",
+                    "example": "cover.png"
+                },
+                "preview_expires_at": {
+                    "description": "PreviewExpiresAt 表示预签名预览链接过期时间。",
+                    "type": "string",
+                    "example": "2026-06-15T22:00:00+08:00"
+                },
+                "preview_url": {
+                    "description": "PreviewURL 表示可直接预览私有图片的预签名链接。",
+                    "type": "string",
+                    "example": "https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=..."
+                },
+                "size": {
+                    "description": "Size 表示上传文件大小，单位为字节。",
+                    "type": "integer",
+                    "example": 1024
+                }
+            }
+        },
+        "upload.UploadImageSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示图片上传成功后的响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/upload.UploadImageData"
                         }
                     ]
                 },
