@@ -1,2 +1,3 @@
 config/config-dev.yaml
 .trae/
+*_test.go
