@@ -16,7 +16,9 @@ import (
 	"gorm.io/gorm"
 
 	bizchapter "novels_ai_gen/internal/biz/chapter"
+	bizcharacter "novels_ai_gen/internal/biz/character"
 	biznovel "novels_ai_gen/internal/biz/novel"
+	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
 
@@ -37,6 +39,10 @@ var (
 var migrationModels = []any{
 	&biznovel.Novel{},
 	&bizchapter.Chapter{},
+	&bizcharacter.Character{},
+	&bizrelationship.Graph{},
+	&bizrelationship.Node{},
+	&bizrelationship.Edge{},
 }
 
 // Provider 根据完整应用配置初始化全局数据库连接，并返回 Wire 清理函数。

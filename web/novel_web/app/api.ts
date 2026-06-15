@@ -223,6 +223,180 @@ export interface ChapterDeleteData {
   deleted: boolean;
 }
 
+// CharacterSummaryItem 表示角色卡列表中的角色摘要数据。
+export interface CharacterSummaryItem {
+  // id 表示角色卡主键 ID。
+  id: number;
+  // novel_id 表示角色卡所属小说 ID。
+  novel_id: number;
+  // portrait_url 表示角色肖像图链接或私有对象存储 key。
+  portrait_url: string;
+  // name 表示角色姓名。
+  name: string;
+  // gender 表示角色性别。
+  gender: string;
+  // tags 表示英文逗号分隔的角色标签文本。
+  tags: string;
+  // background 表示角色背景摘要，后端列表接口未返回时为空。
+  background?: string;
+  // created_at 表示角色卡创建时间。
+  created_at: string;
+  // updated_at 表示角色卡更新时间。
+  updated_at: string;
+}
+
+// CharacterDetailItem 表示角色卡详情数据。
+export interface CharacterDetailItem {
+  // id 表示角色卡主键 ID。
+  id: number;
+  // novel_id 表示角色卡所属小说 ID。
+  novel_id: number;
+  // portrait_url 表示角色肖像图链接或私有对象存储 key。
+  portrait_url: string;
+  // name 表示角色姓名。
+  name: string;
+  // gender 表示角色性别。
+  gender: string;
+  // tags 表示英文逗号分隔的角色标签文本。
+  tags: string;
+  // background 表示角色背景。
+  background: string;
+  // personality 表示角色性格。
+  personality: string;
+  // ability 表示角色能力。
+  ability: string;
+  // goal 表示角色目的。
+  goal: string;
+  // created_at 表示角色卡创建时间。
+  created_at: string;
+  // updated_at 表示角色卡更新时间。
+  updated_at: string;
+}
+
+// CharacterListData 表示角色卡列表分页数据。
+export interface CharacterListData {
+  // items 表示当前页角色卡摘要列表。
+  items: CharacterSummaryItem[];
+  // total 表示符合条件的角色卡总数。
+  total: number;
+  // page 表示当前页码。
+  page: number;
+  // page_size 表示每页数量。
+  page_size: number;
+}
+
+// CharacterListParams 表示查询角色卡列表时使用的分页参数。
+export interface CharacterListParams {
+  // page 表示当前页码，从 1 开始。
+  page: number;
+  // pageSize 表示每页数量。
+  pageSize: number;
+  // signal 表示用于取消请求的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// CharacterCreateParams 表示创建角色卡时提交给后端的参数。
+export interface CharacterCreateParams {
+  // portrait_url 表示角色肖像图链接或私有对象存储 key，可以为空。
+  portrait_url: string;
+  // name 表示角色姓名，不能为空。
+  name: string;
+  // gender 表示角色性别，可以为空。
+  gender: string;
+  // tags 表示英文逗号分隔的角色标签文本，可以为空。
+  tags: string;
+  // background 表示角色背景，可以为空。
+  background: string;
+  // personality 表示角色性格，可以为空。
+  personality: string;
+  // ability 表示角色能力，可以为空。
+  ability: string;
+  // goal 表示角色目的，可以为空。
+  goal: string;
+}
+
+// CharacterUpdateParams 表示更新角色卡时提交给后端的参数。
+export interface CharacterUpdateParams {
+  // portrait_url 表示角色肖像图链接或私有对象存储 key，可以为空。
+  portrait_url: string;
+  // name 表示角色姓名，不能为空。
+  name: string;
+  // gender 表示角色性别，可以为空。
+  gender: string;
+  // tags 表示英文逗号分隔的角色标签文本，可以为空。
+  tags: string;
+  // background 表示角色背景，可以为空。
+  background: string;
+  // personality 表示角色性格，可以为空。
+  personality: string;
+  // ability 表示角色能力，可以为空。
+  ability: string;
+  // goal 表示角色目的，可以为空。
+  goal: string;
+}
+
+// CharacterDeleteData 表示删除角色卡接口返回的数据。
+export interface CharacterDeleteData {
+  // deleted 表示后端是否已经删除该角色卡。
+  deleted: boolean;
+}
+
+// RelationshipGraphViewport 表示角色关系图画布视口状态。
+export interface RelationshipGraphViewport {
+  // x 表示画布视口 X 坐标。
+  x: number;
+  // y 表示画布视口 Y 坐标。
+  y: number;
+  // zoom 表示画布视口缩放比例。
+  zoom: number;
+}
+
+// RelationshipGraphNodeItem 表示角色关系图中的角色节点。
+export interface RelationshipGraphNodeItem {
+  // character_id 表示画布节点引用的角色卡 ID。
+  character_id: number;
+  // position_x 表示节点在画布中的 X 坐标。
+  position_x: number;
+  // position_y 表示节点在画布中的 Y 坐标。
+  position_y: number;
+}
+
+// RelationshipGraphEdgeItem 表示角色关系图中的无方向关系线。
+export interface RelationshipGraphEdgeItem {
+  // id 表示关系线稳定 ID，由两个角色 ID 计算得到。
+  id: string;
+  // character_a_id 表示无方向关系线中较小的角色卡 ID。
+  character_a_id: number;
+  // character_b_id 表示无方向关系线中较大的角色卡 ID。
+  character_b_id: number;
+  // note 表示关系线备注，用于描述两个角色之间的关系。
+  note: string;
+}
+
+// RelationshipGraphData 表示角色关系图完整快照数据。
+export interface RelationshipGraphData {
+  // novel_id 表示小说主键 ID。
+  novel_id: number;
+  // viewport 表示画布视口状态。
+  viewport: RelationshipGraphViewport;
+  // nodes 表示当前画布中的角色节点列表。
+  nodes: RelationshipGraphNodeItem[];
+  // edges 表示当前画布中的无方向关系线列表。
+  edges: RelationshipGraphEdgeItem[];
+  // updated_at 表示关系图最后更新时间，尚未保存时可能为空。
+  updated_at?: string | null;
+}
+
+// RelationshipGraphSaveParams 表示保存角色关系图时提交的整图快照。
+export interface RelationshipGraphSaveParams {
+  // viewport 表示画布视口状态。
+  viewport: RelationshipGraphViewport;
+  // nodes 表示当前画布中的角色节点列表。
+  nodes: RelationshipGraphNodeItem[];
+  // edges 表示当前画布中的无方向关系线列表。
+  edges: RelationshipGraphEdgeItem[];
+}
+
 // ImageUploadUsage 表示图片上传用途。
 export type ImageUploadUsage = "cover" | "character";
 
@@ -766,6 +940,253 @@ export async function deleteChapter(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "章节删除失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchCharacterList 查询指定小说的角色卡摘要列表。
+// 参数 novelId 表示小说主键 ID；参数 params 表示角色卡列表分页查询参数。
+export async function fetchCharacterList(
+  novelId: number,
+  params: CharacterListParams,
+): Promise<CharacterListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    page_size: String(params.pageSize),
+  });
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/characters?${searchParams.toString()}`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal: params.signal,
+    },
+  );
+  const payload = await parseApiResponse<CharacterListData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "角色卡列表加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchCharacterDetail 查询指定角色卡详情。
+// 参数 novelId 表示小说主键 ID；参数 characterId 表示角色卡主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchCharacterDetail(
+  novelId: number,
+  characterId: number,
+  signal?: AbortSignal,
+): Promise<CharacterDetailItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/characters/${characterId}`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+  const payload = await parseApiResponse<CharacterDetailItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "角色卡详情加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// createCharacter 调用后端接口创建角色卡并返回新角色数据。
+// 参数 novelId 表示小说主键 ID；参数 params 表示创建角色卡时需要提交的表单数据。
+export async function createCharacter(
+  novelId: number,
+  params: CharacterCreateParams,
+): Promise<CharacterDetailItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/characters`, {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<CharacterDetailItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "角色卡创建失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateCharacter 调用后端接口更新角色卡并返回更新后的角色数据。
+// 参数 novelId 表示小说主键 ID；参数 characterId 表示角色卡主键 ID；参数 params 表示更新角色卡时需要提交的表单数据。
+export async function updateCharacter(
+  novelId: number,
+  characterId: number,
+  params: CharacterUpdateParams,
+): Promise<CharacterDetailItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/characters/${characterId}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    },
+  );
+  const payload = await parseApiResponse<CharacterDetailItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "角色卡更新失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteCharacter 调用后端接口删除指定角色卡。
+// 参数 novelId 表示小说主键 ID；参数 characterId 表示角色卡主键 ID。
+export async function deleteCharacter(
+  novelId: number,
+  characterId: number,
+): Promise<CharacterDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/characters/${characterId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+    },
+  );
+  const payload = await parseApiResponse<CharacterDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "角色卡删除失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchRelationshipGraph 查询指定小说的角色关系图快照。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchRelationshipGraph(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<RelationshipGraphData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/relationship-graph`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+  const payload = await parseApiResponse<RelationshipGraphData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "角色关系图加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// saveRelationshipGraph 保存指定小说的完整角色关系图快照。
+// 参数 novelId 表示小说主键 ID；参数 params 表示当前需要保存的关系图快照。
+export async function saveRelationshipGraph(
+  novelId: number,
+  params: RelationshipGraphSaveParams,
+): Promise<RelationshipGraphData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/relationship-graph`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    },
+  );
+  const payload = await parseApiResponse<RelationshipGraphData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "角色关系图保存失败，请稍后再试");
   }
 
   return payload.data;

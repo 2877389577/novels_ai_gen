@@ -10,6 +10,7 @@ import {
 import { BookshelfPage } from "./bookshelf";
 import { ChapterEditorPage } from "./chapter-editor";
 import { clearAuthData, readAuthData } from "./api";
+import { AppFooter } from "./app-footer";
 import { LoginPage } from "./login";
 import { NovelDetailPage } from "./novel-detail";
 import { SettingsPage } from "./settings";
@@ -214,6 +215,7 @@ export function App() {
         onOpenSettings: handleOpenSettings,
         onUnauthorized: handleUnauthorized,
       })}
+      <AppFooter />
     </div>
   );
 }

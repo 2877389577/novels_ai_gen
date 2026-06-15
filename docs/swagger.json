@@ -807,6 +807,358 @@
                 }
             }
         },
+        "/novels/{novel_id}/characters": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "分页查询指定小说下的角色卡列表，列表项包含摘要信息。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "characters"
+                ],
+                "summary": "查询小说角色卡列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "当前页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/character.ListSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说不存在",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "在指定小说下创建角色卡，角色姓名必填，其余字段选填。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "characters"
+                ],
+                "summary": "创建小说角色卡",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "创建角色卡请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_handler_character.CreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/character.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说不存在",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/novels/{novel_id}/characters/{character_id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "根据小说 ID 和角色卡 ID 查询角色卡详情。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "characters"
+                ],
+                "summary": "查询小说角色卡详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "角色卡 ID",
+                        "name": "character_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/character.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "角色卡不存在",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "根据小说 ID 和角色卡 ID 更新角色卡信息，角色姓名必填。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "characters"
+                ],
+                "summary": "更新小说角色卡",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "角色卡 ID",
+                        "name": "character_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新角色卡请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_handler_character.UpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/character.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "角色卡不存在",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "根据小说 ID 和角色卡 ID 删除角色卡。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "characters"
+                ],
+                "summary": "删除小说角色卡",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "角色卡 ID",
+                        "name": "character_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/character.DeleteSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "角色卡不存在",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/character.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/novels/{novel_id}/next-chapter-number": {
             "get": {
                 "security": [
@@ -863,6 +1215,135 @@
                         "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/chapter.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/novels/{novel_id}/relationship-graph": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "查询指定小说的角色关系图，包含画布视口、画布节点和无方向关系线。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "relationships"
+                ],
+                "summary": "查询小说角色关系图",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说不存在",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "使用整图快照保存指定小说的角色关系图；关系线为无方向关系，同一对角色只能存在一条关系线。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "relationships"
+                ],
+                "summary": "保存小说角色关系图",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "保存角色关系图请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_handler_relationship.SaveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "保存成功",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说不存在",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/relationship.ErrorBody"
                         }
                     }
                 }
@@ -1392,6 +1873,237 @@
                 }
             }
         },
+        "character.CharacterData": {
+            "type": "object",
+            "properties": {
+                "ability": {
+                    "description": "Ability 表示角色能力。",
+                    "type": "string",
+                    "example": "擅长御剑与阵法。"
+                },
+                "background": {
+                    "description": "Background 表示角色背景。",
+                    "type": "string",
+                    "example": "出身边城旧族。"
+                },
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-14T22:00:00+08:00"
+                },
+                "gender": {
+                    "description": "Gender 表示角色性别。",
+                    "type": "string",
+                    "example": "女"
+                },
+                "goal": {
+                    "description": "Goal 表示角色目的。",
+                    "type": "string",
+                    "example": "寻找失踪的兄长。"
+                },
+                "id": {
+                    "description": "ID 表示角色卡主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 表示角色姓名。",
+                    "type": "string",
+                    "example": "林知夏"
+                },
+                "novel_id": {
+                    "description": "NovelID 表示所属小说 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "personality": {
+                    "description": "Personality 表示角色性格。",
+                    "type": "string",
+                    "example": "冷静克制，重诺。"
+                },
+                "portrait_url": {
+                    "description": "PortraitURL 表示肖像图链接或对象存储 key。",
+                    "type": "string",
+                    "example": "covers/character-a.webp"
+                },
+                "tags": {
+                    "description": "Tags 表示角色标签，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "主角,剑修"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示更新时间。",
+                    "type": "string",
+                    "example": "2026-06-14T22:00:00+08:00"
+                }
+            }
+        },
+        "character.CharacterSummaryData": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-14T22:00:00+08:00"
+                },
+                "gender": {
+                    "description": "Gender 表示角色性别。",
+                    "type": "string",
+                    "example": "女"
+                },
+                "id": {
+                    "description": "ID 表示角色卡主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 表示角色姓名。",
+                    "type": "string",
+                    "example": "林知夏"
+                },
+                "novel_id": {
+                    "description": "NovelID 表示所属小说 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "portrait_url": {
+                    "description": "PortraitURL 表示肖像图链接或对象存储 key。",
+                    "type": "string",
+                    "example": "covers/character-a.webp"
+                },
+                "tags": {
+                    "description": "Tags 表示角色标签，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "主角,剑修"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示更新时间。",
+                    "type": "string",
+                    "example": "2026-06-14T22:00:00+08:00"
+                }
+            }
+        },
+        "character.DeleteData": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "description": "Deleted 表示是否已经删除。",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "character.DeleteSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示删除结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/character.DeleteData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "character.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
+                    "type": "integer",
+                    "example": 400
+                },
+                "message": {
+                    "description": "Message 表示用户可理解的错误提示。",
+                    "type": "string",
+                    "example": "请求参数错误"
+                }
+            }
+        },
+        "character.ListData": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items 表示当前页角色卡摘要列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/character.CharacterSummaryData"
+                    }
+                },
+                "page": {
+                    "description": "Page 表示当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 表示每页数量。",
+                    "type": "integer",
+                    "example": 20
+                },
+                "total": {
+                    "description": "Total 表示符合条件的角色卡总数。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "character.ListSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示角色卡分页列表响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/character.ListData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "character.SuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示角色卡响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/character.CharacterData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
         "config.FileData": {
             "type": "object",
             "properties": {
@@ -1506,6 +2218,102 @@
                 }
             }
         },
+        "internal_api_handler_character.CreateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "ability": {
+                    "description": "Ability 表示角色能力，可以为空。",
+                    "type": "string",
+                    "example": "擅长御剑与阵法。"
+                },
+                "background": {
+                    "description": "Background 表示角色背景，可以为空。",
+                    "type": "string",
+                    "example": "出身边城旧族。"
+                },
+                "gender": {
+                    "description": "Gender 表示角色性别，可以为空。",
+                    "type": "string",
+                    "example": "女"
+                },
+                "goal": {
+                    "description": "Goal 表示角色目的，可以为空。",
+                    "type": "string",
+                    "example": "寻找失踪的兄长。"
+                },
+                "name": {
+                    "description": "Name 表示角色姓名，不能为空。",
+                    "type": "string",
+                    "example": "林知夏"
+                },
+                "personality": {
+                    "description": "Personality 表示角色性格，可以为空。",
+                    "type": "string",
+                    "example": "冷静克制，重诺。"
+                },
+                "portrait_url": {
+                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
+                    "type": "string",
+                    "example": "covers/character-a.webp"
+                },
+                "tags": {
+                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "主角,剑修"
+                }
+            }
+        },
+        "internal_api_handler_character.UpdateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "ability": {
+                    "description": "Ability 表示角色能力，可以为空。",
+                    "type": "string",
+                    "example": "擅长御剑与阵法。"
+                },
+                "background": {
+                    "description": "Background 表示角色背景，可以为空。",
+                    "type": "string",
+                    "example": "出身边城旧族。"
+                },
+                "gender": {
+                    "description": "Gender 表示角色性别，可以为空。",
+                    "type": "string",
+                    "example": "女"
+                },
+                "goal": {
+                    "description": "Goal 表示角色目的，可以为空。",
+                    "type": "string",
+                    "example": "寻找失踪的兄长。"
+                },
+                "name": {
+                    "description": "Name 表示角色姓名，不能为空。",
+                    "type": "string",
+                    "example": "林知夏"
+                },
+                "personality": {
+                    "description": "Personality 表示角色性格，可以为空。",
+                    "type": "string",
+                    "example": "冷静克制，重诺。"
+                },
+                "portrait_url": {
+                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
+                    "type": "string",
+                    "example": "covers/character-a.webp"
+                },
+                "tags": {
+                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "主角,剑修"
+                }
+            }
+        },
         "internal_api_handler_novel.CreateRequest": {
             "type": "object",
             "required": [
@@ -1587,6 +2395,33 @@
                     "description": "Tags 表示标签，可以为空，多个标签使用英文逗号分隔。",
                     "type": "string",
                     "example": "玄幻,冒险"
+                }
+            }
+        },
+        "internal_api_handler_relationship.SaveRequest": {
+            "type": "object",
+            "properties": {
+                "edges": {
+                    "description": "Edges 表示当前画布中的无方向关系线列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.EdgeData"
+                    }
+                },
+                "nodes": {
+                    "description": "Nodes 表示当前画布中的角色节点列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.NodeData"
+                    }
+                },
+                "viewport": {
+                    "description": "Viewport 表示画布视口。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/relationship.ViewportData"
+                        }
+                    ]
                 }
             }
         },
@@ -1762,6 +2597,146 @@
                     "description": "Message 表示响应提示信息。",
                     "type": "string",
                     "example": "ok"
+                }
+            }
+        },
+        "relationship.EdgeData": {
+            "type": "object",
+            "properties": {
+                "character_a_id": {
+                    "description": "CharacterAID 表示无方向关系线中较小的角色卡 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "character_b_id": {
+                    "description": "CharacterBID 表示无方向关系线中较大的角色卡 ID。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "id": {
+                    "description": "ID 表示关系线稳定 ID，由两个角色 ID 计算得到。",
+                    "type": "string",
+                    "example": "rel-1-2"
+                },
+                "note": {
+                    "description": "Note 表示关系线备注，用于描述两个角色之间的关系。",
+                    "type": "string",
+                    "example": "旧友"
+                }
+            }
+        },
+        "relationship.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
+                    "type": "integer",
+                    "example": 400
+                },
+                "message": {
+                    "description": "Message 表示用户可理解的错误提示。",
+                    "type": "string",
+                    "example": "请求参数错误"
+                }
+            }
+        },
+        "relationship.GraphData": {
+            "type": "object",
+            "properties": {
+                "edges": {
+                    "description": "Edges 表示当前画布中的无方向关系线列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.EdgeData"
+                    }
+                },
+                "nodes": {
+                    "description": "Nodes 表示当前画布中的角色节点列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.NodeData"
+                    }
+                },
+                "novel_id": {
+                    "description": "NovelID 表示小说主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示关系图最后更新时间；关系图尚未保存时为空。",
+                    "type": "string",
+                    "example": "2026-06-15T10:00:00+08:00"
+                },
+                "viewport": {
+                    "description": "Viewport 表示画布视口。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/relationship.ViewportData"
+                        }
+                    ]
+                }
+            }
+        },
+        "relationship.NodeData": {
+            "type": "object",
+            "properties": {
+                "character_id": {
+                    "description": "CharacterID 表示画布节点引用的角色卡 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "position_x": {
+                    "description": "PositionX 表示节点在画布中的 X 坐标。",
+                    "type": "number",
+                    "example": 120
+                },
+                "position_y": {
+                    "description": "PositionY 表示节点在画布中的 Y 坐标。",
+                    "type": "number",
+                    "example": 80
+                }
+            }
+        },
+        "relationship.SuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示角色关系图响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/relationship.GraphData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        },
+        "relationship.ViewportData": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "description": "X 表示画布视口 X 坐标。",
+                    "type": "number",
+                    "example": 0
+                },
+                "y": {
+                    "description": "Y 表示画布视口 Y 坐标。",
+                    "type": "number",
+                    "example": 0
+                },
+                "zoom": {
+                    "description": "Zoom 表示画布视口缩放比例。",
+                    "type": "number",
+                    "example": 1
                 }
             }
         },

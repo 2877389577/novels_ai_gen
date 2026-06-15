@@ -9,20 +9,26 @@ package main
 import (
 	auth2 "novels_ai_gen/internal/api/handler/auth"
 	chapter3 "novels_ai_gen/internal/api/handler/chapter"
+	character3 "novels_ai_gen/internal/api/handler/character"
 	config2 "novels_ai_gen/internal/api/handler/config"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
+	relationship3 "novels_ai_gen/internal/api/handler/relationship"
 	upload2 "novels_ai_gen/internal/api/handler/upload"
 	"novels_ai_gen/internal/api/router"
 	"novels_ai_gen/internal/biz/auth"
 	chapter2 "novels_ai_gen/internal/biz/chapter"
+	character2 "novels_ai_gen/internal/biz/character"
 	novel2 "novels_ai_gen/internal/biz/novel"
+	relationship2 "novels_ai_gen/internal/biz/relationship"
 	"novels_ai_gen/internal/biz/upload"
 	"novels_ai_gen/internal/bootstrap/config"
 	"novels_ai_gen/internal/bootstrap/db"
 	"novels_ai_gen/internal/bootstrap/logger"
 	"novels_ai_gen/internal/data/chapter"
+	"novels_ai_gen/internal/data/character"
 	"novels_ai_gen/internal/data/novel"
 	"novels_ai_gen/internal/data/objectstore"
+	"novels_ai_gen/internal/data/relationship"
 	"novels_ai_gen/internal/server"
 )
 
@@ -59,6 +65,12 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	chapterRepository := chapter.NewRepository(gormDB)
 	chapterService := chapter2.NewService(chapterRepository)
 	chapterHandler := chapter3.NewHandler(chapterService)
+	characterRepository := character.NewRepository(gormDB)
+	characterService := character2.NewService(characterRepository)
+	characterHandler := character3.NewHandler(characterService)
+	relationshipRepository := relationship.NewRepository(gormDB)
+	relationshipService := relationship2.NewService(relationshipRepository)
+	relationshipHandler := relationship3.NewHandler(relationshipService)
 	client, err := objectstore.NewClient(appConfig)
 	if err != nil {
 		cleanup3()
@@ -69,7 +81,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	uploadService := upload.NewService(appConfig, client)
 	uploadHandler := upload2.NewHandler(uploadService)
 	configHandler := config2.NewHandler(configManager)
-	engine := router.NewRouter(handler, novelHandler, chapterHandler, uploadHandler, configHandler, service)
+	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, uploadHandler, configHandler, service)
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {
