@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	appconfig "novels_ai_gen/internal/bootstrap/config"
+	"novels_ai_gen/internal/requestid"
 )
 
 var (
@@ -168,12 +170,51 @@ func buildHandler(cfg appconfig.LoggerConfig, writer io.Writer, level slog.Level
 
 	switch strings.ToLower(strings.TrimSpace(cfg.Format)) {
 	case "", "text":
-		return slog.NewTextHandler(writer, options), nil
+		return withRequestID(slog.NewTextHandler(writer, options)), nil
 	case "json":
-		return slog.NewJSONHandler(writer, options), nil
+		return withRequestID(slog.NewJSONHandler(writer, options)), nil
 	default:
 		return nil, fmt.Errorf("不支持的日志格式: %s", cfg.Format)
 	}
+}
+
+// withRequestID 创建会从上下文追加 RequestID 属性的日志处理器。
+// 参数 handler 表示原始 slog 处理器。
+func withRequestID(handler slog.Handler) slog.Handler {
+	return requestIDHandler{next: handler}
+}
+
+// requestIDHandler 表示自动注入 RequestID 的 slog 处理器。
+type requestIDHandler struct {
+	// next 表示实际写入日志的底层处理器。
+	next slog.Handler
+}
+
+// Enabled 判断指定日志等级是否需要写入。
+// 参数 ctx 表示日志调用上下文；参数 level 表示本次日志等级。
+func (h requestIDHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.next.Enabled(ctx, level)
+}
+
+// Handle 写入日志记录并在存在 RequestID 时追加追踪字段。
+// 参数 ctx 表示日志调用上下文；参数 record 表示待写入的日志记录。
+func (h requestIDHandler) Handle(ctx context.Context, record slog.Record) error {
+	if id := requestid.FromContext(ctx); id != "" {
+		record.AddAttrs(slog.String("request_id", id))
+	}
+	return h.next.Handle(ctx, record)
+}
+
+// WithAttrs 返回带固定属性的新日志处理器。
+// 参数 attrs 表示需要附加到后续日志中的属性列表。
+func (h requestIDHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return requestIDHandler{next: h.next.WithAttrs(attrs)}
+}
+
+// WithGroup 返回带属性分组的新日志处理器。
+// 参数 name 表示后续属性所在的分组名称。
+func (h requestIDHandler) WithGroup(name string) slog.Handler {
+	return requestIDHandler{next: h.next.WithGroup(name)}
 }
 
 // timeRotateWriter 表示按时间轮转的日志文件写入器。
@@ -277,9 +318,7 @@ func (w *timeRotateWriter) rotate(key string) error {
 // filePath 生成指定时间片对应的日志文件路径。
 // 参数 key 表示日志文件对应的时间片标识。
 func (w *timeRotateWriter) filePath(key string) string {
-	ext := filepath.Ext(w.filename)
-	name := strings.TrimSuffix(w.filename, ext)
-	return filepath.Join(w.dir, fmt.Sprintf("%s-%s%s", name, key, ext))
+	return rotatedFilePath(w.dir, w.filename, key)
 }
 
 // rotationLayout 将轮转粒度转换为 Go 时间格式。
@@ -295,4 +334,60 @@ func rotationLayout(rotation string) (string, error) {
 	default:
 		return "", fmt.Errorf("不支持的日志轮转粒度: %s", rotation)
 	}
+}
+
+// LogFilePath 生成指定时间对应的日志文件路径。
+// 参数 cfg 表示文件日志输出配置；参数 at 表示需要定位的时间。
+func LogFilePath(cfg appconfig.LoggerFileConfig, at time.Time) (string, error) {
+	layout, err := rotationLayout(cfg.Rotation)
+	if err != nil {
+		return "", err
+	}
+	dir, filename := normalizeFileConfig(cfg)
+	return rotatedFilePath(dir, filename, at.Format(layout)), nil
+}
+
+// LogFilePathsForDate 生成指定日期可能对应的日志文件路径列表。
+// 参数 cfg 表示文件日志输出配置；参数 date 表示需要读取的日期。
+func LogFilePathsForDate(cfg appconfig.LoggerFileConfig, date time.Time) ([]string, error) {
+	rotation := strings.ToLower(strings.TrimSpace(cfg.Rotation))
+	if rotation == "hourly" || rotation == "hour" {
+		paths := make([]string, 0, 24)
+		for hour := 0; hour < 24; hour++ {
+			path, err := LogFilePath(cfg, time.Date(date.Year(), date.Month(), date.Day(), hour, 0, 0, 0, date.Location()))
+			if err != nil {
+				return nil, err
+			}
+			paths = append(paths, path)
+		}
+		return paths, nil
+	}
+
+	path, err := LogFilePath(cfg, date)
+	if err != nil {
+		return nil, err
+	}
+	return []string{path}, nil
+}
+
+// normalizeFileConfig 返回带默认值的日志目录和基础文件名。
+// 参数 cfg 表示文件日志输出配置。
+func normalizeFileConfig(cfg appconfig.LoggerFileConfig) (string, string) {
+	dir := cfg.Dir
+	filename := cfg.Filename
+	if dir == "" {
+		dir = "logs"
+	}
+	if filename == "" {
+		filename = "app.log"
+	}
+	return dir, filename
+}
+
+// rotatedFilePath 生成带时间片后缀的日志文件路径。
+// 参数 dir 表示日志目录；参数 filename 表示基础文件名；参数 key 表示时间片标识。
+func rotatedFilePath(dir string, filename string, key string) string {
+	ext := filepath.Ext(filename)
+	name := strings.TrimSuffix(filename, ext)
+	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", name, key, ext))
 }

@@ -106,6 +106,8 @@ type ErrorBody struct {
 	Code int `json:"code" example:"400"`
 	// Message 表示用户可理解的错误提示。
 	Message string `json:"message" example:"请求参数错误"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 }
 
 // SuccessResponse 表示单个章节接口 Swagger 成功响应结构。
@@ -114,6 +116,8 @@ type SuccessResponse struct {
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示章节响应数据。
 	Data ChapterData `json:"data"`
 }
@@ -124,6 +128,8 @@ type ListSuccessResponse struct {
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示章节分页列表响应数据。
 	Data ListData `json:"data"`
 }
@@ -134,6 +140,8 @@ type NextChapterNumberSuccessResponse struct {
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示下一章节号响应数据。
 	Data NextChapterNumberData `json:"data"`
 }
@@ -144,6 +152,8 @@ type WordCountSuccessResponse struct {
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示小说总字数响应数据。
 	Data WordCountData `json:"data"`
 }
@@ -160,6 +170,8 @@ type DeleteSuccessResponse struct {
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示删除结果。
 	Data DeleteData `json:"data"`
 }

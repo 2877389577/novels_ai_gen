@@ -25,6 +25,8 @@ type ErrorBody struct {
 	Code int `json:"code" example:"400"`
 	// Message 表示用户可理解的错误提示。
 	Message string `json:"message" example:"请求参数错误"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 }
 
 // UploadImageData 表示 Swagger 文档中的图片上传响应数据。
@@ -59,6 +61,8 @@ type UploadImageSuccessResponse struct {
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示图片上传成功后的响应数据。
 	Data UploadImageData `json:"data"`
 }
@@ -69,6 +73,8 @@ type PreviewSuccessResponse struct {
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示刷新预览链接后的响应数据。
 	Data PreviewData `json:"data"`
 }

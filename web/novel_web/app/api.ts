@@ -16,8 +16,85 @@ export interface ApiResponse<TData> {
   code: number;
   // message 表示后端返回的用户提示信息。
   message: string;
+  // request_id 表示后端为本次请求生成的追踪标识。
+  request_id?: string;
   // data 表示接口成功返回的数据内容。
   data?: TData;
+}
+
+// LogLevel 表示日志预览支持筛选的日志等级。
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+// LogEntry 表示日志流中的单条日志内容。
+export interface LogEntry {
+  // time 表示日志记录时间。
+  time?: string;
+  // level 表示日志等级。
+  level?: string;
+  // message 表示日志消息。
+  message?: string;
+  // request_id 表示日志关联的请求追踪标识。
+  request_id?: string;
+  // source 表示日志来源位置。
+  source?: string;
+  // attrs 表示除标准字段外的结构化日志属性。
+  attrs?: Record<string, unknown>;
+  // raw 表示原始日志行文本。
+  raw: string;
+}
+
+// LogStreamMetaEvent 表示日志流开始时返回的元信息事件。
+export interface LogStreamMetaEvent {
+  // type 表示日志流事件类型。
+  type: "meta";
+  // request_id 表示日志流请求自身的追踪标识。
+  request_id?: string;
+  // path 表示当前读取或跟随的日志文件路径。
+  path?: string;
+  // follow 表示是否会继续跟随当天文件追加。
+  follow?: boolean;
+}
+
+// LogStreamEntryEvent 表示日志流中的日志条目事件。
+export interface LogStreamEntryEvent {
+  // type 表示日志流事件类型。
+  type: "entry";
+  // entry 表示本次推送的日志条目。
+  entry: LogEntry;
+}
+
+// LogStreamErrorEvent 表示日志流开始后的可展示错误事件。
+export interface LogStreamErrorEvent {
+  // type 表示日志流事件类型。
+  type: "error";
+  // message 表示可展示给用户的错误提示。
+  message?: string;
+}
+
+// LogStreamEvent 表示日志流可能返回的事件集合。
+export type LogStreamEvent =
+  | LogStreamMetaEvent
+  | LogStreamEntryEvent
+  | LogStreamErrorEvent;
+
+// LogStreamParams 表示日志流查询参数。
+export interface LogStreamParams {
+  // date 表示需要筛选的单日日期，格式为 YYYY-MM-DD。
+  date: string;
+  // levels 表示需要展示的日志等级集合，空数组表示全部等级。
+  levels: LogLevel[];
+  // keyword 表示需要匹配的关键词。
+  keyword: string;
+  // tail 表示首次返回的最近匹配行数。
+  tail: number;
+  // signal 表示用于取消日志流读取的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// LogStreamHandlers 表示日志流读取过程中的回调集合。
+export interface LogStreamHandlers {
+  // onEvent 表示收到单个日志流事件时执行的回调。
+  onEvent: (event: LogStreamEvent) => void;
 }
 
 // ConfigFileData 表示后端配置文件文本和加载状态。
@@ -543,6 +620,51 @@ export async function updateConfigFile(
   }
 
   return payload.data;
+}
+
+// streamLogs 读取后端文件日志 NDJSON 实时流。
+// 参数 params 表示日志流筛选和取消参数；参数 handlers 表示日志流事件回调集合。
+export async function streamLogs(
+  params: LogStreamParams,
+  handlers: LogStreamHandlers,
+): Promise<void> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({
+    date: params.date,
+    keyword: params.keyword,
+    tail: String(params.tail),
+  });
+  if (params.levels.length > 0) {
+    searchParams.set("levels", params.levels.join(","));
+  }
+
+  const response = await fetch(`/api/v1/logs/stream?${searchParams.toString()}`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal: params.signal,
+  });
+
+  if (response.status === 401) {
+    const payload = await parseApiResponse<unknown>(response);
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok) {
+    const payload = await parseApiResponse<unknown>(response);
+    throw new Error(payload?.message || "日志流连接失败，请稍后再试");
+  }
+
+  if (!response.body) {
+    throw new Error("当前浏览器不支持日志流读取");
+  }
+
+  await readLogStream(response.body, handlers);
 }
 
 // fetchNovelList 查询当前用户可访问的小说列表。
@@ -1263,6 +1385,76 @@ export async function refreshImagePreview(
   }
 
   return payload.data;
+}
+
+// readLogStream 从浏览器 ReadableStream 中按行读取日志事件。
+// 参数 body 表示 fetch 返回的响应体流；参数 handlers 表示日志流事件回调集合。
+async function readLogStream(
+  body: ReadableStream<Uint8Array>,
+  handlers: LogStreamHandlers,
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) {
+        break;
+      }
+
+      buffer += decoder.decode(result.value, { stream: true });
+      buffer = consumeLogStreamBuffer(buffer, handlers);
+    }
+
+    buffer += decoder.decode();
+    consumeLogStreamBuffer(`${buffer}\n`, handlers);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// consumeLogStreamBuffer 消费缓冲区中的完整 NDJSON 行并返回剩余半行。
+// 参数 buffer 表示当前缓冲文本；参数 handlers 表示日志流事件回调集合。
+function consumeLogStreamBuffer(
+  buffer: string,
+  handlers: LogStreamHandlers,
+): string {
+  const lines = buffer.split(/\r?\n/);
+  const rest = lines.pop() ?? "";
+
+  for (const line of lines) {
+    const event = parseLogStreamEvent(line);
+    if (event) {
+      handlers.onEvent(event);
+    }
+  }
+
+  return rest;
+}
+
+// parseLogStreamEvent 将单行 NDJSON 文本解析为日志流事件。
+// 参数 line 表示后端返回的一行 NDJSON 文本。
+function parseLogStreamEvent(line: string): LogStreamEvent | null {
+  const trimmedLine = line.trim();
+  if (!trimmedLine) {
+    return null;
+  }
+
+  try {
+    const event = JSON.parse(trimmedLine) as LogStreamEvent;
+    if (event.type === "meta" || event.type === "error") {
+      return event;
+    }
+    if (event.type === "entry" && event.entry) {
+      return event;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 // parseStoredAuthData 解析本地存储中的登录令牌。

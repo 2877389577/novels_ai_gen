@@ -11,6 +11,7 @@ import (
 	chapter3 "novels_ai_gen/internal/api/handler/chapter"
 	character3 "novels_ai_gen/internal/api/handler/character"
 	config2 "novels_ai_gen/internal/api/handler/config"
+	log2 "novels_ai_gen/internal/api/handler/log"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
 	relationship3 "novels_ai_gen/internal/api/handler/relationship"
 	upload2 "novels_ai_gen/internal/api/handler/upload"
@@ -81,7 +82,8 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	uploadService := upload.NewService(appConfig, client)
 	uploadHandler := upload2.NewHandler(uploadService)
 	configHandler := config2.NewHandler(configManager)
-	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, uploadHandler, configHandler, service)
+	logHandler := log2.NewHandler(configManager)
+	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, uploadHandler, configHandler, logHandler, service)
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {

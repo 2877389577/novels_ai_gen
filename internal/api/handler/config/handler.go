@@ -41,6 +41,8 @@ type FileSuccessResponse struct {
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示配置文件文本和加载状态。
 	Data FileData `json:"data"`
 }
