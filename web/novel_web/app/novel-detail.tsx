@@ -50,6 +50,7 @@ import {
   splitNovelTagInputValue,
   splitNovelTags,
 } from "./novel-utils";
+import { EventGraphPanel } from "./event-graph";
 import { RelationshipGraphPanel } from "./relationship-graph";
 
 const coverUploadMaxSizeKB = 20 * 1024;
@@ -85,7 +86,7 @@ type NovelDetailState = "loading" | "ready" | "error";
 type NovelWordCountState = "loading" | "ready" | "error";
 
 // NovelDetailTab 表示小说详情页顶部 Tab 当前展示的内容。
-type NovelDetailTab = "detail" | "characters" | "relationshipGraph";
+type NovelDetailTab = "detail" | "characters" | "relationshipGraph" | "events";
 
 // NovelDetailPage 渲染小说详情页。
 // 参数 props 表示小说详情页需要的外部参数和回调。
@@ -253,7 +254,7 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
 
       <section
         className={
-          activeTab === "relationshipGraph"
+          activeTab === "relationshipGraph" || activeTab === "events"
             ? "novel-detail-content novel-detail-content-relationship"
             : "novel-detail-content"
         }
@@ -294,8 +295,13 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
               novel={novel}
               onUnauthorized={props.onUnauthorized}
             />
-          ) : (
+          ) : activeTab === "relationshipGraph" ? (
             <RelationshipGraphPanel
+              novel={novel}
+              onUnauthorized={props.onUnauthorized}
+            />
+          ) : (
+            <EventGraphPanel
               novel={novel}
               onUnauthorized={props.onUnauthorized}
             />
@@ -379,6 +385,15 @@ function DetailNav(props: DetailNavProps) {
             onClick={() => props.onTabChange("relationshipGraph")}
           >
             角色关系图
+          </button>
+          <button
+            type="button"
+            aria-controls="event-graph-panel"
+            aria-selected={props.activeTab === "events"}
+            role="tab"
+            onClick={() => props.onTabChange("events")}
+          >
+            事件管理
           </button>
         </nav>
 

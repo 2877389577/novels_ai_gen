@@ -8,6 +8,7 @@ import (
 	chapterhandler "novels_ai_gen/internal/api/handler/chapter"
 	characterhandler "novels_ai_gen/internal/api/handler/character"
 	confighandler "novels_ai_gen/internal/api/handler/config"
+	eventhandler "novels_ai_gen/internal/api/handler/event"
 	loghandler "novels_ai_gen/internal/api/handler/log"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	relationshiphandler "novels_ai_gen/internal/api/handler/relationship"
@@ -17,6 +18,7 @@ import (
 	bizauth "novels_ai_gen/internal/biz/auth"
 	bizchapter "novels_ai_gen/internal/biz/chapter"
 	bizcharacter "novels_ai_gen/internal/biz/character"
+	bizevent "novels_ai_gen/internal/biz/event"
 	biznovel "novels_ai_gen/internal/biz/novel"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	bizsystem "novels_ai_gen/internal/biz/system"
@@ -26,6 +28,7 @@ import (
 	"novels_ai_gen/internal/bootstrap/logger"
 	datachapter "novels_ai_gen/internal/data/chapter"
 	datacharacter "novels_ai_gen/internal/data/character"
+	dataevent "novels_ai_gen/internal/data/event"
 	datanovel "novels_ai_gen/internal/data/novel"
 	"novels_ai_gen/internal/data/objectstore"
 	datarelationship "novels_ai_gen/internal/data/relationship"
@@ -54,6 +57,9 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		datarelationship.NewRepository,
 		wire.Bind(new(bizrelationship.Repository), new(*datarelationship.Repository)),
 		bizrelationship.NewService,
+		dataevent.NewRepository,
+		wire.Bind(new(bizevent.Repository), new(*dataevent.Repository)),
+		bizevent.NewService,
 		objectstore.NewClient,
 		wire.Bind(new(bizupload.ObjectStorage), new(*objectstore.Client)),
 		bizupload.NewService,
@@ -62,6 +68,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		chapterhandler.NewHandler,
 		characterhandler.NewHandler,
 		relationshiphandler.NewHandler,
+		eventhandler.NewHandler,
 		uploadhandler.NewHandler,
 		confighandler.NewHandler,
 		loghandler.NewHandler,

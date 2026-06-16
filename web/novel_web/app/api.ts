@@ -97,6 +97,56 @@ export interface LogStreamHandlers {
   onEvent: (event: LogStreamEvent) => void;
 }
 
+// LogFileItem 表示日志目录中的单个日志文件。
+export interface LogFileItem {
+  // path 表示相对日志目录的文件路径，删除时按该值提交。
+  path: string;
+  // name 表示日志文件名。
+  name: string;
+  // size 表示日志文件大小，单位为字节。
+  size: number;
+  // modified_at 表示日志文件最后修改时间。
+  modified_at: string;
+  // active 表示该文件是否为当前正在写入的日志文件。
+  active: boolean;
+}
+
+// LogFilesData 表示日志文件列表响应数据。
+export interface LogFilesData {
+  // items 表示日志目录中的普通日志文件列表。
+  items: LogFileItem[];
+}
+
+// LogClearTodayData 表示清空今日日志后的响应数据。
+export interface LogClearTodayData {
+  // cleared 表示成功清空的日志文件数量。
+  cleared: number;
+  // skipped 表示因文件不存在而跳过的日志文件数量。
+  skipped: number;
+}
+
+// LogDeleteFileFailure 表示单个日志文件删除失败的结果。
+export interface LogDeleteFileFailure {
+  // path 表示删除失败的日志文件相对路径。
+  path: string;
+  // reason 表示删除失败原因。
+  reason: string;
+}
+
+// LogDeleteFilesData 表示批量删除日志文件后的响应数据。
+export interface LogDeleteFilesData {
+  // deleted 表示已经成功删除的日志文件相对路径列表。
+  deleted: string[];
+  // failed 表示删除失败的日志文件列表和原因。
+  failed: LogDeleteFileFailure[];
+}
+
+// LogDeleteFilesParams 表示批量删除日志文件请求参数。
+export interface LogDeleteFilesParams {
+  // paths 表示需要删除的日志文件相对路径列表。
+  paths: string[];
+}
+
 // ConfigFileData 表示后端配置文件文本和加载状态。
 export interface ConfigFileData {
   // config_file 表示后端启动 -f 参数使用的实际配置文件路径。
@@ -486,6 +536,185 @@ export interface RelationshipGraphSaveParams {
   edges: RelationshipGraphEdgeItem[];
 }
 
+// EventGraphViewport 表示事件图画布视口状态。
+export interface EventGraphViewport {
+  // x 表示画布视口 X 坐标。
+  x: number;
+  // y 表示画布视口 Y 坐标。
+  y: number;
+  // zoom 表示画布视口缩放比例。
+  zoom: number;
+}
+
+// EventParticipantItem 表示事件详情中的参与者摘要。
+export interface EventParticipantItem {
+  // id 表示角色卡主键 ID。
+  id: number;
+  // novel_id 表示角色卡所属小说 ID。
+  novel_id: number;
+  // name 表示角色姓名。
+  name: string;
+  // gender 表示角色性别。
+  gender: string;
+  // tags 表示英文逗号分隔的角色标签文本。
+  tags: string;
+}
+
+// NovelEventItem 表示小说事件详情数据。
+export interface NovelEventItem {
+  // id 表示事件主键 ID。
+  id: number;
+  // novel_id 表示所属小说 ID。
+  novel_id: number;
+  // name 表示事件名称。
+  name: string;
+  // cause 表示事件起因。
+  cause: string;
+  // process 表示事件经过。
+  process: string;
+  // result 表示事件结果。
+  result: string;
+  // impact 表示事件造成的影响。
+  impact: string;
+  // location 表示事件发生地点。
+  location: string;
+  // position_x 表示事件节点在画布中的 X 坐标。
+  position_x: number;
+  // position_y 表示事件节点在画布中的 Y 坐标。
+  position_y: number;
+  // participants 表示事件参与者摘要列表。
+  participants: EventParticipantItem[];
+  // created_at 表示事件创建时间。
+  created_at: string;
+  // updated_at 表示事件更新时间。
+  updated_at: string;
+}
+
+// EventListData 表示事件列表分页数据。
+export interface EventListData {
+  // items 表示当前页事件列表。
+  items: NovelEventItem[];
+  // total 表示符合条件的事件总数。
+  total: number;
+  // page 表示当前页码。
+  page: number;
+  // page_size 表示每页数量。
+  page_size: number;
+}
+
+// EventRelationItem 表示事件图中的有向关系线。
+export interface EventRelationItem {
+  // id 表示事件关系线主键 ID。
+  id: number;
+  // source_event_id 表示前置事件 ID。
+  source_event_id: number;
+  // target_event_id 表示后续事件 ID。
+  target_event_id: number;
+  // note 表示关系线备注。
+  note: string;
+  // created_at 表示关系线创建时间。
+  created_at: string;
+  // updated_at 表示关系线更新时间。
+  updated_at: string;
+}
+
+// EventGraphData 表示事件图完整数据。
+export interface EventGraphData {
+  // novel_id 表示小说主键 ID。
+  novel_id: number;
+  // viewport 表示事件图画布视口状态。
+  viewport: EventGraphViewport;
+  // nodes 表示事件图中的事件节点列表。
+  nodes: NovelEventItem[];
+  // edges 表示事件图中的有向关系线列表。
+  edges: EventRelationItem[];
+  // updated_at 表示事件图布局最后更新时间，尚未保存时可能为空。
+  updated_at?: string | null;
+}
+
+// EventListParams 表示查询事件列表时使用的分页参数。
+export interface EventListParams {
+  // page 表示当前页码，从 1 开始。
+  page: number;
+  // pageSize 表示每页数量。
+  pageSize: number;
+  // signal 表示用于取消请求的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// EventCreateParams 表示创建事件时提交给后端的参数。
+export interface EventCreateParams {
+  // name 表示事件名称，不能为空。
+  name: string;
+  // cause 表示事件起因，可以为空。
+  cause: string;
+  // process 表示事件经过，可以为空。
+  process: string;
+  // result 表示事件结果，可以为空。
+  result: string;
+  // impact 表示事件造成的影响，可以为空。
+  impact: string;
+  // location 表示事件发生地点，可以为空。
+  location: string;
+  // participant_ids 表示参与事件的角色卡 ID 列表。
+  participant_ids: number[];
+  // position_x 表示事件节点初始画布 X 坐标。
+  position_x: number;
+  // position_y 表示事件节点初始画布 Y 坐标。
+  position_y: number;
+}
+
+// EventUpdateParams 表示更新事件时提交给后端的参数。
+export type EventUpdateParams = EventCreateParams;
+
+// EventLayoutNodeItem 表示保存事件图布局时提交的节点坐标。
+export interface EventLayoutNodeItem {
+  // event_id 表示需要保存坐标的事件 ID。
+  event_id: number;
+  // position_x 表示事件节点在画布中的 X 坐标。
+  position_x: number;
+  // position_y 表示事件节点在画布中的 Y 坐标。
+  position_y: number;
+}
+
+// EventLayoutParams 表示保存事件图布局时提交给后端的数据。
+export interface EventLayoutParams {
+  // viewport 表示事件图画布视口状态。
+  viewport: EventGraphViewport;
+  // nodes 表示需要保存坐标的事件节点列表。
+  nodes: EventLayoutNodeItem[];
+}
+
+// EventRelationCreateParams 表示创建事件关系线时提交给后端的数据。
+export interface EventRelationCreateParams {
+  // source_event_id 表示前置事件 ID。
+  source_event_id: number;
+  // target_event_id 表示后续事件 ID。
+  target_event_id: number;
+  // note 表示关系线备注，可以为空。
+  note: string;
+}
+
+// EventRelationUpdateParams 表示更新事件关系线时提交给后端的数据。
+export interface EventRelationUpdateParams {
+  // note 表示关系线备注，可以为空。
+  note: string;
+}
+
+// EventDeleteData 表示删除事件接口返回的数据。
+export interface EventDeleteData {
+  // deleted 表示后端是否已经删除该事件。
+  deleted: boolean;
+  // deleted_relation_count 表示随事件一并删除的关系线数量。
+  deleted_relation_count: number;
+}
+
+// EventRelationDeleteData 表示删除事件关系线接口返回的数据。
+export interface EventRelationDeleteData {
+  // deleted 表示后端是否已经删除该事件关系线。
+  deleted: boolean;
+}
+
 // ImageUploadUsage 表示图片上传用途。
 export type ImageUploadUsage = "cover" | "character";
 
@@ -704,6 +933,93 @@ export async function streamLogs(
   }
 
   await readLogStream(response.body, handlers);
+}
+
+// fetchLogFiles 查询后端日志目录中的普通日志文件。
+// 参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchLogFiles(signal?: AbortSignal): Promise<LogFilesData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/logs/files", {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<LogFilesData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "日志文件列表加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// clearTodayLogs 请求后端清空今日日志文件内容。
+export async function clearTodayLogs(): Promise<LogClearTodayData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/logs/clear-today", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+  });
+  const payload = await parseApiResponse<LogClearTodayData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "今日日志清空失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteLogFiles 请求后端批量删除日志文件。
+// 参数 params 表示需要删除的日志文件相对路径列表。
+export async function deleteLogFiles(
+  params: LogDeleteFilesParams,
+): Promise<LogDeleteFilesData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/logs/files", {
+    method: "DELETE",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<LogDeleteFilesData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "日志文件删除失败，请稍后再试");
+  }
+
+  return payload.data;
 }
 
 // fetchNovelList 查询当前用户可访问的小说列表。
@@ -1348,6 +1664,342 @@ export async function saveRelationshipGraph(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "角色关系图保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchEventGraph 查询指定小说的事件图数据。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchEventGraph(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<EventGraphData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/event-graph`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<EventGraphData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件图加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// saveEventGraphLayout 保存指定小说的事件图布局。
+// 参数 novelId 表示小说主键 ID；参数 params 表示需要保存的事件图视口和节点坐标。
+export async function saveEventGraphLayout(
+  novelId: number,
+  params: EventLayoutParams,
+): Promise<EventGraphData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/event-graph/layout`, {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<EventGraphData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件图布局保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchEventList 查询指定小说的事件列表。
+// 参数 novelId 表示小说主键 ID；参数 params 表示事件列表分页查询参数。
+export async function fetchEventList(
+  novelId: number,
+  params: EventListParams,
+): Promise<EventListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    page_size: String(params.pageSize),
+  });
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/events?${searchParams.toString()}`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal: params.signal,
+    },
+  );
+  const payload = await parseApiResponse<EventListData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件列表加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchEventDetail 查询指定小说事件详情。
+// 参数 novelId 表示小说主键 ID；参数 eventId 表示事件主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchEventDetail(
+  novelId: number,
+  eventId: number,
+  signal?: AbortSignal,
+): Promise<NovelEventItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/events/${eventId}`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelEventItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件详情加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// createEvent 调用后端接口创建事件并返回新事件数据。
+// 参数 novelId 表示小说主键 ID；参数 params 表示创建事件时需要提交的表单数据。
+export async function createEvent(
+  novelId: number,
+  params: EventCreateParams,
+): Promise<NovelEventItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/events`, {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelEventItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件创建失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateEvent 调用后端接口更新事件并返回更新后的事件数据。
+// 参数 novelId 表示小说主键 ID；参数 eventId 表示事件主键 ID；参数 params 表示更新事件时需要提交的表单数据。
+export async function updateEvent(
+  novelId: number,
+  eventId: number,
+  params: EventUpdateParams,
+): Promise<NovelEventItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/events/${eventId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelEventItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件更新失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteEvent 调用后端接口删除指定事件。
+// 参数 novelId 表示小说主键 ID；参数 eventId 表示事件主键 ID。
+export async function deleteEvent(
+  novelId: number,
+  eventId: number,
+): Promise<EventDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/events/${eventId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+  });
+  const payload = await parseApiResponse<EventDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件删除失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// createEventRelation 调用后端接口创建事件关系线。
+// 参数 novelId 表示小说主键 ID；参数 params 表示创建关系线时需要提交的数据。
+export async function createEventRelation(
+  novelId: number,
+  params: EventRelationCreateParams,
+): Promise<EventRelationItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/event-relations`, {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<EventRelationItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件关系线创建失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateEventRelation 调用后端接口更新事件关系线备注。
+// 参数 novelId 表示小说主键 ID；参数 relationId 表示关系线主键 ID；参数 params 表示更新关系线时需要提交的数据。
+export async function updateEventRelation(
+  novelId: number,
+  relationId: number,
+  params: EventRelationUpdateParams,
+): Promise<EventRelationItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/event-relations/${relationId}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    },
+  );
+  const payload = await parseApiResponse<EventRelationItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件关系线更新失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteEventRelation 调用后端接口删除指定事件关系线。
+// 参数 novelId 表示小说主键 ID；参数 relationId 表示关系线主键 ID。
+export async function deleteEventRelation(
+  novelId: number,
+  relationId: number,
+): Promise<EventRelationDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/event-relations/${relationId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+    },
+  );
+  const payload = await parseApiResponse<EventRelationDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "事件关系线删除失败，请稍后再试");
   }
 
   return payload.data;

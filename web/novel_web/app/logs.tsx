@@ -11,8 +11,12 @@ import {
 
 import {
   UnauthorizedError,
+  clearTodayLogs,
+  deleteLogFiles,
+  fetchLogFiles,
   streamLogs,
   type LogEntry,
+  type LogFileItem,
   type LogLevel,
   type LogStreamMetaEvent,
 } from "./api";
@@ -40,6 +44,14 @@ export function LogsPage(props: LogsPageProps) {
   const [meta, setMeta] = useState<LogStreamMetaEvent | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [autoFollow, setAutoFollow] = useState(true);
+  const [streamVersion, setStreamVersion] = useState(0);
+  const [fileManagerOpen, setFileManagerOpen] = useState(false);
+  const [logFiles, setLogFiles] = useState<LogFileItem[]>([]);
+  const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesErrorMessage, setFilesErrorMessage] = useState("");
+  const [clearingToday, setClearingToday] = useState(false);
+  const [deletingFiles, setDeletingFiles] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const streamLevels = useMemo(
@@ -114,7 +126,63 @@ export function LogsPage(props: LogsPageProps) {
         controller.abort();
       };
     },
-    [date, keyword, paused, props.onUnauthorized, streamLevels],
+    [date, keyword, paused, props.onUnauthorized, streamLevels, streamVersion],
+  );
+
+  const loadLogFiles = useCallback(
+    // loadLogFiles 读取日志文件列表。
+    // 参数 signal 表示用于取消请求的浏览器 AbortSignal。
+    async function loadLogFiles(signal?: AbortSignal) {
+      setFilesLoading(true);
+      setFilesErrorMessage("");
+      try {
+        const data = await fetchLogFiles(signal);
+        setLogFiles(data.items);
+        setSelectedFilePaths(function keepExistingSelection(currentPaths) {
+          const availablePaths = new Set(
+            data.items
+              .filter(function keepDeletableFile(file) {
+                return !file.active;
+              })
+              .map(getLogFilePath),
+          );
+          return currentPaths.filter(function keepAvailablePath(path) {
+            return availablePaths.has(path);
+          });
+        });
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+        if (error instanceof UnauthorizedError) {
+          props.onUnauthorized();
+          return;
+        }
+        const message = getErrorMessage(error, "日志文件列表加载失败，请稍后再试");
+        setFilesErrorMessage(message);
+        Toast.error(message);
+      } finally {
+        if (!signal?.aborted) {
+          setFilesLoading(false);
+        }
+      }
+    },
+    [props.onUnauthorized],
+  );
+
+  useEffect(
+    // loadFilesWhenOpen 在日志文件管理区打开时加载文件列表。
+    function loadFilesWhenOpen() {
+      if (!fileManagerOpen) {
+        return;
+      }
+      const controller = new AbortController();
+      void loadLogFiles(controller.signal);
+      return function cancelLoadFiles() {
+        controller.abort();
+      };
+    },
+    [fileManagerOpen, loadLogFiles],
   );
 
   useEffect(
@@ -145,9 +213,37 @@ export function LogsPage(props: LogsPageProps) {
   }
 
   // handleClearClick 清空当前页面中已经展示的日志条目。
-  function handleClearClick() {
+  function handleClearScreenClick() {
     setEntries([]);
     setAutoFollow(true);
+  }
+
+  // handleClearTodayClick 清空后端今日日志文件内容。
+  async function handleClearTodayClick() {
+    if (!window.confirm("确定清空今日日志内容吗？文件会保留，但内容不可恢复。")) {
+      return;
+    }
+    setClearingToday(true);
+    try {
+      const data = await clearTodayLogs();
+      setEntries([]);
+      setAutoFollow(true);
+      setStreamVersion(function reconnectStream(version) {
+        return version + 1;
+      });
+      if (fileManagerOpen) {
+        void loadLogFiles();
+      }
+      Toast.success(`已清空 ${data.cleared} 个日志文件`);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        props.onUnauthorized();
+        return;
+      }
+      Toast.error(getErrorMessage(error, "今日日志清空失败，请稍后再试"));
+    } finally {
+      setClearingToday(false);
+    }
   }
 
   // handlePauseToggle 切换日志流暂停或继续状态。
@@ -195,6 +291,70 @@ export function LogsPage(props: LogsPageProps) {
     const distanceToBottom =
       target.scrollHeight - target.scrollTop - target.clientHeight;
     setAutoFollow(distanceToBottom < 36);
+  }
+
+  // handleFileManagerToggle 切换日志文件管理区展开状态。
+  function handleFileManagerToggle() {
+    setFileManagerOpen(function toggleFileManager(open) {
+      return !open;
+    });
+  }
+
+  // handleFilesRefreshClick 手动刷新日志文件列表。
+  function handleFilesRefreshClick() {
+    void loadLogFiles();
+  }
+
+  // handleFileSelectionChange 切换单个日志文件的选中状态。
+  // 参数 file 表示需要切换选中状态的日志文件。
+  function handleFileSelectionChange(file: LogFileItem) {
+    if (file.active) {
+      return;
+    }
+    setSelectedFilePaths(function updateSelectedPaths(currentPaths) {
+      if (currentPaths.includes(file.path)) {
+        return currentPaths.filter(function removePath(path) {
+          return path !== file.path;
+        });
+      }
+      return [...currentPaths, file.path];
+    });
+  }
+
+  // handleDeleteFilesClick 删除当前选中的日志文件。
+  async function handleDeleteFilesClick() {
+    if (selectedFilePaths.length === 0) {
+      Toast.info("请先选择需要删除的日志文件");
+      return;
+    }
+    if (!window.confirm(`确定删除 ${selectedFilePaths.length} 个日志文件吗？此操作不可恢复。`)) {
+      return;
+    }
+
+    setDeletingFiles(true);
+    try {
+      const data = await deleteLogFiles({ paths: selectedFilePaths });
+      setEntries([]);
+      setAutoFollow(true);
+      setStreamVersion(function reconnectStream(version) {
+        return version + 1;
+      });
+      setSelectedFilePaths(data.failed.map(getDeleteFailurePath));
+      await loadLogFiles();
+      if (data.failed.length > 0) {
+        Toast.error(`已删除 ${data.deleted.length} 个，${data.failed.length} 个删除失败`);
+        return;
+      }
+      Toast.success(`已删除 ${data.deleted.length} 个日志文件`);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        props.onUnauthorized();
+        return;
+      }
+      Toast.error(getErrorMessage(error, "日志文件删除失败，请稍后再试"));
+    } finally {
+      setDeletingFiles(false);
+    }
   }
 
   const statusText = getConnectionStatus(paused, connecting, meta);
@@ -275,8 +435,19 @@ export function LogsPage(props: LogsPageProps) {
             <button type="button" onClick={handlePauseToggle}>
               {paused ? "继续" : "暂停"}
             </button>
-            <button type="button" onClick={handleClearClick}>
-              清空
+            <button type="button" onClick={handleClearScreenClick}>
+              清屏
+            </button>
+            <button
+              type="button"
+              className="logs-danger-action"
+              disabled={clearingToday}
+              onClick={handleClearTodayClick}
+            >
+              {clearingToday ? "清空中" : "清空今日日志"}
+            </button>
+            <button type="button" onClick={handleFileManagerToggle}>
+              {fileManagerOpen ? "收起文件" : "日志文件管理"}
             </button>
           </div>
         </section>
@@ -285,6 +456,54 @@ export function LogsPage(props: LogsPageProps) {
           <p className="logs-error-message" role="alert">
             {errorMessage}
           </p>
+        ) : null}
+
+        {fileManagerOpen ? (
+          <section className="logs-file-manager" aria-label="日志文件管理">
+            <div className="logs-file-manager-header">
+              <div>
+                <h2>日志文件</h2>
+                <p>{selectedFilePaths.length} 个已选择</p>
+              </div>
+              <div className="logs-file-manager-actions">
+                <button
+                  type="button"
+                  disabled={filesLoading}
+                  onClick={handleFilesRefreshClick}
+                >
+                  {filesLoading ? "刷新中" : "刷新"}
+                </button>
+                <button
+                  type="button"
+                  className="logs-danger-action"
+                  disabled={deletingFiles || selectedFilePaths.length === 0}
+                  onClick={handleDeleteFilesClick}
+                >
+                  {deletingFiles ? "删除中" : "删除所选"}
+                </button>
+              </div>
+            </div>
+            {filesErrorMessage ? (
+              <p className="logs-error-message" role="alert">
+                {filesErrorMessage}
+              </p>
+            ) : null}
+            <div className="logs-file-list">
+              {logFiles.length === 0 ? (
+                <div className="logs-file-empty">
+                  {filesLoading ? "正在读取日志文件..." : "暂无日志文件"}
+                </div>
+              ) : (
+                logFiles.map(function renderFile(file) {
+                  return renderLogFileItem(
+                    file,
+                    selectedFilePaths.includes(file.path),
+                    handleFileSelectionChange,
+                  );
+                })
+              )}
+            </div>
+          </section>
         ) : null}
 
         <div
@@ -303,6 +522,34 @@ export function LogsPage(props: LogsPageProps) {
         </div>
       </section>
     </main>
+  );
+}
+
+// renderLogFileItem 渲染单个日志文件管理项。
+// 参数 file 表示需要展示的日志文件；参数 selected 表示该文件是否已被选中；参数 onToggle 表示切换选择状态的回调。
+function renderLogFileItem(
+  file: LogFileItem,
+  selected: boolean,
+  onToggle: (file: LogFileItem) => void,
+) {
+  return (
+    <label
+      className={`logs-file-item${file.active ? " logs-file-item-active" : ""}`}
+      key={file.path}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        disabled={file.active}
+        onChange={() => onToggle(file)}
+      />
+      <span className="logs-file-name" title={file.path}>
+        {file.name}
+      </span>
+      <span className="logs-file-size">{formatBytes(file.size)}</span>
+      <span className="logs-file-time">{formatDateTime(file.modified_at)}</span>
+      <span className="logs-file-state">{file.active ? "写入中" : "可删除"}</span>
+    </label>
   );
 }
 
@@ -401,6 +648,18 @@ function getLevelSummary(selectedLevels: LogLevel[]): string {
   return selectedLevels.map((level) => level.toUpperCase()).join(" / ");
 }
 
+// getLogFilePath 返回日志文件的相对路径。
+// 参数 file 表示需要读取路径的日志文件。
+function getLogFilePath(file: LogFileItem): string {
+  return file.path;
+}
+
+// getDeleteFailurePath 返回删除失败结果中的相对路径。
+// 参数 failure 表示单个文件删除失败结果。
+function getDeleteFailurePath(failure: { path: string }): string {
+  return failure.path;
+}
+
 // formatLogTime 格式化日志时间。
 // 参数 value 表示日志中携带的时间文本。
 function formatLogTime(value?: string): string {
@@ -413,6 +672,31 @@ function formatLogTime(value?: string): string {
     return value;
   }
   return date.toLocaleTimeString();
+}
+
+// formatDateTime 格式化日志文件修改时间。
+// 参数 value 表示后端返回的时间文本。
+function formatDateTime(value?: string): string {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
+
+// formatBytes 格式化文件大小。
+// 参数 value 表示文件大小，单位为字节。
+function formatBytes(value: number): string {
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 // getErrorMessage 从未知错误中提取用户提示。

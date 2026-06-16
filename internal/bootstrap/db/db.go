@@ -20,6 +20,7 @@ import (
 
 	bizchapter "novels_ai_gen/internal/biz/chapter"
 	bizcharacter "novels_ai_gen/internal/biz/character"
+	bizevent "novels_ai_gen/internal/biz/event"
 	biznovel "novels_ai_gen/internal/biz/novel"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
@@ -47,6 +48,10 @@ var migrationModels = []any{
 	&bizrelationship.Graph{},
 	&bizrelationship.Node{},
 	&bizrelationship.Edge{},
+	&bizevent.EventGraph{},
+	&bizevent.Event{},
+	&bizevent.Participant{},
+	&bizevent.Relation{},
 }
 
 // Provider 根据完整应用配置初始化全局数据库连接，并返回 Wire 清理函数。

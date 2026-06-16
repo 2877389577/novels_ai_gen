@@ -13,6 +13,7 @@ import (
 	chapterhandler "novels_ai_gen/internal/api/handler/chapter"
 	characterhandler "novels_ai_gen/internal/api/handler/character"
 	confighandler "novels_ai_gen/internal/api/handler/config"
+	eventhandler "novels_ai_gen/internal/api/handler/event"
 	loghandler "novels_ai_gen/internal/api/handler/log"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	relationshiphandler "novels_ai_gen/internal/api/handler/relationship"
@@ -26,8 +27,8 @@ import (
 const indexHTML = "index.html"
 
 // NewRouter 创建 Gin 路由引擎并注册系统接口。
-// 参数 authHandler 表示登录鉴权 HTTP 处理器；参数 novelHandler 表示小说 HTTP 处理器；参数 chapterHandler 表示章节 HTTP 处理器；参数 characterHandler 表示角色卡 HTTP 处理器；参数 relationshipHandler 表示角色关系图 HTTP 处理器；参数 uploadHandler 表示图片上传 HTTP 处理器；参数 configHandler 表示配置文件管理 HTTP 处理器；参数 logHandler 表示文件日志预览 HTTP 处理器；参数 systemHandler 表示系统维护 HTTP 处理器；参数 authService 表示登录鉴权业务服务。
-func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Handler, chapterHandler *chapterhandler.Handler, characterHandler *characterhandler.Handler, relationshipHandler *relationshiphandler.Handler, uploadHandler *uploadhandler.Handler, configHandler *confighandler.Handler, logHandler *loghandler.Handler, systemHandler *systemhandler.Handler, authService *bizauth.Service) *gin.Engine {
+// 参数 authHandler 表示登录鉴权 HTTP 处理器；参数 novelHandler 表示小说 HTTP 处理器；参数 chapterHandler 表示章节 HTTP 处理器；参数 characterHandler 表示角色卡 HTTP 处理器；参数 relationshipHandler 表示角色关系图 HTTP 处理器；参数 eventHandler 表示小说事件 HTTP 处理器；参数 uploadHandler 表示图片上传 HTTP 处理器；参数 configHandler 表示配置文件管理 HTTP 处理器；参数 logHandler 表示文件日志预览 HTTP 处理器；参数 systemHandler 表示系统维护 HTTP 处理器；参数 authService 表示登录鉴权业务服务。
+func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Handler, chapterHandler *chapterhandler.Handler, characterHandler *characterhandler.Handler, relationshipHandler *relationshiphandler.Handler, eventHandler *eventhandler.Handler, uploadHandler *uploadhandler.Handler, configHandler *confighandler.Handler, logHandler *loghandler.Handler, systemHandler *systemhandler.Handler, authService *bizauth.Service) *gin.Engine {
 	engine := gin.New()
 	engine.Use(middleware.RequestID(), middleware.RequestLogger(), gin.Recovery())
 
@@ -47,6 +48,8 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.GET("/novels/:id/word-count", chapterHandler.WordCount)
 	protected.GET("/novels/:id/relationship-graph", relationshipHandler.Get)
 	protected.PUT("/novels/:id/relationship-graph", relationshipHandler.Save)
+	protected.GET("/novels/:id/event-graph", eventHandler.GetGraph)
+	protected.PUT("/novels/:id/event-graph/layout", eventHandler.SaveLayout)
 	protected.POST("/novels/:id/chapters", chapterHandler.Create)
 	protected.GET("/novels/:id/chapters", chapterHandler.List)
 	protected.GET("/novels/:id/chapters/:chapter_id", chapterHandler.Get)
@@ -57,11 +60,22 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.GET("/novels/:id/characters/:character_id", characterHandler.Get)
 	protected.PUT("/novels/:id/characters/:character_id", characterHandler.Update)
 	protected.DELETE("/novels/:id/characters/:character_id", characterHandler.Delete)
+	protected.POST("/novels/:id/events", eventHandler.Create)
+	protected.GET("/novels/:id/events", eventHandler.List)
+	protected.GET("/novels/:id/events/:event_id", eventHandler.Get)
+	protected.PUT("/novels/:id/events/:event_id", eventHandler.Update)
+	protected.DELETE("/novels/:id/events/:event_id", eventHandler.Delete)
+	protected.POST("/novels/:id/event-relations", eventHandler.CreateRelation)
+	protected.PUT("/novels/:id/event-relations/:relation_id", eventHandler.UpdateRelation)
+	protected.DELETE("/novels/:id/event-relations/:relation_id", eventHandler.DeleteRelation)
 	protected.POST("/uploads/images", uploadHandler.UploadImage)
 	protected.GET("/uploads/preview", uploadHandler.Preview)
 	protected.GET("/config/file", configHandler.GetFile)
 	protected.PUT("/config/file", configHandler.UpdateFile)
 	protected.GET("/logs/stream", logHandler.Stream)
+	protected.GET("/logs/files", logHandler.Files)
+	protected.POST("/logs/clear-today", logHandler.ClearToday)
+	protected.DELETE("/logs/files", logHandler.DeleteFiles)
 	protected.POST("/system/update", systemHandler.Update)
 
 	registerFrontendRoutes(engine, frontend.FS())

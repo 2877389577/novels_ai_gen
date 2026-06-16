@@ -11,6 +11,7 @@ import (
 	chapter3 "novels_ai_gen/internal/api/handler/chapter"
 	character3 "novels_ai_gen/internal/api/handler/character"
 	config2 "novels_ai_gen/internal/api/handler/config"
+	event3 "novels_ai_gen/internal/api/handler/event"
 	log2 "novels_ai_gen/internal/api/handler/log"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
 	relationship3 "novels_ai_gen/internal/api/handler/relationship"
@@ -20,6 +21,7 @@ import (
 	"novels_ai_gen/internal/biz/auth"
 	chapter2 "novels_ai_gen/internal/biz/chapter"
 	character2 "novels_ai_gen/internal/biz/character"
+	event2 "novels_ai_gen/internal/biz/event"
 	novel2 "novels_ai_gen/internal/biz/novel"
 	relationship2 "novels_ai_gen/internal/biz/relationship"
 	"novels_ai_gen/internal/biz/system"
@@ -29,6 +31,7 @@ import (
 	"novels_ai_gen/internal/bootstrap/logger"
 	"novels_ai_gen/internal/data/chapter"
 	"novels_ai_gen/internal/data/character"
+	"novels_ai_gen/internal/data/event"
 	"novels_ai_gen/internal/data/novel"
 	"novels_ai_gen/internal/data/objectstore"
 	"novels_ai_gen/internal/data/relationship"
@@ -74,6 +77,9 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	relationshipRepository := relationship.NewRepository(gormDB)
 	relationshipService := relationship2.NewService(relationshipRepository)
 	relationshipHandler := relationship3.NewHandler(relationshipService)
+	eventRepository := event.NewRepository(gormDB)
+	eventService := event2.NewService(eventRepository)
+	eventHandler := event3.NewHandler(eventService)
 	client, err := objectstore.NewClient(appConfig)
 	if err != nil {
 		cleanup3()
@@ -87,7 +93,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	logHandler := log2.NewHandler(configManager)
 	systemService := system.NewService()
 	systemHandler := system2.NewHandler(systemService)
-	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, uploadHandler, configHandler, logHandler, systemHandler, service)
+	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, eventHandler, uploadHandler, configHandler, logHandler, systemHandler, service)
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {
