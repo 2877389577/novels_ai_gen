@@ -770,6 +770,12 @@ input {
   transform: translateX(2px);
 }
 
+.bookshelf-user-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
 .bookshelf-summary {
   display: none;
   width: min(100%, 1200px);

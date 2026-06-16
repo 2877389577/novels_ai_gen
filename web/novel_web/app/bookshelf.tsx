@@ -17,6 +17,7 @@ import {
   createNovel,
   fetchNovelList,
   refreshImagePreview,
+  triggerSystemUpdate,
   uploadImage,
   type ImageUploadData,
   type NovelCreateParams,
@@ -82,6 +83,7 @@ export function BookshelfPage(props: BookshelfPageProps) {
   const [message, setMessage] = useState("");
   const [listData, setListData] = useState<NovelListData | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [systemUpdating, setSystemUpdating] = useState(false);
   const onUnauthorized = props.onUnauthorized;
 
   // loadBookshelf 从后端加载小说书架数据。
@@ -155,6 +157,48 @@ export function BookshelfPage(props: BookshelfPageProps) {
     await loadBookshelf();
   }
 
+  // handleSystemUpdateClick 打开系统一键更新确认框。
+  function handleSystemUpdateClick() {
+    if (systemUpdating) {
+      return;
+    }
+
+    Modal.confirm({
+      title: "更新系统",
+      content: "确认后会从 GitHub 拉取最新代码并重启服务，页面会短暂不可用。",
+      okText: "更新",
+      cancelText: "取消",
+      className: "settings-confirm-modal",
+      onOk: function confirmSystemUpdate() {
+        void updateSystem();
+      },
+    });
+  }
+
+  // updateSystem 请求后端执行一键更新并在成功后回到登录页。
+  async function updateSystem() {
+    setSystemUpdating(true);
+    let shouldResetUpdating = true;
+
+    try {
+      await triggerSystemUpdate();
+      Toast.success("更新已开始，服务即将重启");
+      shouldResetUpdating = false;
+      props.onUnauthorized();
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        shouldResetUpdating = false;
+        props.onUnauthorized();
+        return;
+      }
+      Toast.error(getErrorMessage(error, "系统更新失败，请稍后再试"));
+    } finally {
+      if (shouldResetUpdating) {
+        setSystemUpdating(false);
+      }
+    }
+  }
+
   return (
     <main className="bookshelf-page">
       <BookshelfHeader
@@ -162,6 +206,8 @@ export function BookshelfPage(props: BookshelfPageProps) {
         updatedCount={updatedCount}
         onOpenLogs={props.onOpenLogs}
         onOpenSettings={props.onOpenSettings}
+        onSystemUpdate={handleSystemUpdateClick}
+        systemUpdating={systemUpdating}
       />
 
       <section className="bookshelf-content" aria-labelledby="bookshelf-title">
@@ -207,6 +253,10 @@ interface BookshelfHeaderProps {
   onOpenSettings: () => void;
   // onOpenLogs 表示用户进入日志预览页时执行的回调。
   onOpenLogs: () => void;
+  // onSystemUpdate 表示用户触发系统一键更新时执行的回调。
+  onSystemUpdate: () => void;
+  // systemUpdating 表示系统更新请求是否正在提交。
+  systemUpdating: boolean;
 }
 
 // BookshelfHeader 渲染书架首页顶部导航。
@@ -240,6 +290,8 @@ function BookshelfHeader(props: BookshelfHeaderProps) {
           <BookshelfUserMenu
             onOpenLogs={props.onOpenLogs}
             onOpenSettings={props.onOpenSettings}
+            onSystemUpdate={props.onSystemUpdate}
+            systemUpdating={props.systemUpdating}
           />
         </div>
       </div>
@@ -258,6 +310,10 @@ interface BookshelfUserMenuProps {
   onOpenSettings: () => void;
   // onOpenLogs 表示用户进入日志预览页时执行的回调。
   onOpenLogs: () => void;
+  // onSystemUpdate 表示用户触发系统一键更新时执行的回调。
+  onSystemUpdate: () => void;
+  // systemUpdating 表示系统更新请求是否正在提交。
+  systemUpdating: boolean;
 }
 
 // BookshelfUserMenu 渲染书架右上角头像和悬浮菜单。
@@ -292,6 +348,16 @@ function BookshelfUserMenu(props: BookshelfUserMenuProps) {
         >
           <span aria-hidden="true">☰</span>
           <span>日志</span>
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="bookshelf-user-menu-item"
+          disabled={props.systemUpdating}
+          onClick={props.onSystemUpdate}
+        >
+          <span aria-hidden="true">↻</span>
+          <span>{props.systemUpdating ? "更新中" : "更新"}</span>
         </button>
       </div>
     </div>

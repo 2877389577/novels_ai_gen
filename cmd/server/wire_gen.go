@@ -14,6 +14,7 @@ import (
 	log2 "novels_ai_gen/internal/api/handler/log"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
 	relationship3 "novels_ai_gen/internal/api/handler/relationship"
+	system2 "novels_ai_gen/internal/api/handler/system"
 	upload2 "novels_ai_gen/internal/api/handler/upload"
 	"novels_ai_gen/internal/api/router"
 	"novels_ai_gen/internal/biz/auth"
@@ -21,6 +22,7 @@ import (
 	character2 "novels_ai_gen/internal/biz/character"
 	novel2 "novels_ai_gen/internal/biz/novel"
 	relationship2 "novels_ai_gen/internal/biz/relationship"
+	"novels_ai_gen/internal/biz/system"
 	"novels_ai_gen/internal/biz/upload"
 	"novels_ai_gen/internal/bootstrap/config"
 	"novels_ai_gen/internal/bootstrap/db"
@@ -83,7 +85,9 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	uploadHandler := upload2.NewHandler(uploadService)
 	configHandler := config2.NewHandler(configManager)
 	logHandler := log2.NewHandler(configManager)
-	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, uploadHandler, configHandler, logHandler, service)
+	systemService := system.NewService()
+	systemHandler := system2.NewHandler(systemService)
+	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, uploadHandler, configHandler, logHandler, systemHandler, service)
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {
