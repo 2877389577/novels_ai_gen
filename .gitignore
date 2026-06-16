@@ -3,3 +3,4 @@ config/config-dev.yaml
 *_test.go
 !internal/biz/system/service_test.go
 logs/
+.idea/

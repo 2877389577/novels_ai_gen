@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +52,56 @@ type LogEntry struct {
 	Attrs map[string]any `json:"attrs,omitempty"`
 	// Raw 表示原始日志文本。
 	Raw string `json:"raw"`
+}
+
+// LogFileItem 表示日志目录中的单个文件。
+type LogFileItem struct {
+	// Path 表示相对日志目录的文件路径，前端删除时按该值提交。
+	Path string `json:"path"`
+	// Name 表示日志文件名。
+	Name string `json:"name"`
+	// Size 表示日志文件大小，单位为字节。
+	Size int64 `json:"size"`
+	// ModifiedAt 表示日志文件最后修改时间。
+	ModifiedAt string `json:"modified_at"`
+	// Active 表示该文件是否为当前正在写入的日志文件。
+	Active bool `json:"active"`
+}
+
+// LogFilesData 表示日志文件列表响应数据。
+type LogFilesData struct {
+	// Items 表示日志目录中的普通文件列表。
+	Items []LogFileItem `json:"items"`
+}
+
+// ClearTodayData 表示清空今日日志后的响应数据。
+type ClearTodayData struct {
+	// Cleared 表示成功清空的日志文件数量。
+	Cleared int `json:"cleared"`
+	// Skipped 表示因文件不存在而跳过的日志文件数量。
+	Skipped int `json:"skipped"`
+}
+
+// DeleteFilesRequest 表示批量删除日志文件请求。
+type DeleteFilesRequest struct {
+	// Paths 表示需要删除的日志文件相对路径列表。
+	Paths []string `json:"paths" binding:"required"`
+}
+
+// DeleteFileFailure 表示单个日志文件删除失败的结果。
+type DeleteFileFailure struct {
+	// Path 表示删除失败的日志文件相对路径。
+	Path string `json:"path"`
+	// Reason 表示删除失败的用户可读原因。
+	Reason string `json:"reason"`
+}
+
+// DeleteFilesData 表示批量删除日志文件后的响应数据。
+type DeleteFilesData struct {
+	// Deleted 表示已经成功删除的日志文件相对路径列表。
+	Deleted []string `json:"deleted"`
+	// Failed 表示删除失败的日志文件列表和原因。
+	Failed []DeleteFileFailure `json:"failed"`
 }
 
 // streamEvent 表示日志流中的 NDJSON 事件。
@@ -107,13 +159,8 @@ func NewHandler(manager *appconfig.ConfigManager) *Handler {
 // @Failure 500 {object} response.ErrorBody "服务器内部错误"
 // @Router /logs/stream [get]
 func (h *Handler) Stream(c *gin.Context) {
-	cfg := h.manager.Current()
-	if cfg == nil {
-		response.Error(c, http.StatusInternalServerError, "日志配置未加载")
-		return
-	}
-	if !cfg.Logger.File.Enabled {
-		response.Error(c, http.StatusBadRequest, "当前未启用文件日志")
+	fileCfg, ok := h.fileConfig(c)
+	if !ok {
 		return
 	}
 
@@ -123,13 +170,13 @@ func (h *Handler) Stream(c *gin.Context) {
 		return
 	}
 
-	paths, err := logger.LogFilePathsForDate(cfg.Logger.File, filter.date)
+	paths, err := logger.LogFilePathsForDate(fileCfg, filter.date)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	activePath, err := logger.LogFilePath(cfg.Logger.File, h.now())
+	activePath, err := logger.LogFilePath(fileCfg, h.now())
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
@@ -172,7 +219,169 @@ func (h *Handler) Stream(c *gin.Context) {
 	}
 
 	offset := fileSize(activePath)
-	h.follow(ctx, encoder, flusher, cfg.Logger.File, filter, activePath, offset)
+	h.follow(ctx, encoder, flusher, fileCfg, filter, activePath, offset)
+}
+
+// Files 处理日志文件列表查询请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 查询日志文件列表
+// @Description 列出日志目录中的普通文件，用于前端多选删除。
+// @Tags logs
+// @Security Bearer
+// @Produce json
+// @Success 200 {object} response.Body "查询成功"
+// @Failure 400 {object} response.ErrorBody "文件日志未开启或参数错误"
+// @Failure 401 {object} response.ErrorBody "未登录或登录过期"
+// @Failure 500 {object} response.ErrorBody "服务器内部错误"
+// @Router /logs/files [get]
+func (h *Handler) Files(c *gin.Context) {
+	fileCfg, ok := h.fileConfig(c)
+	if !ok {
+		return
+	}
+
+	dir, activePath, err := h.logDirectory(fileCfg)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			response.OK(c, LogFilesData{Items: []LogFileItem{}})
+			return
+		}
+		response.Error(c, http.StatusInternalServerError, "读取日志目录失败")
+		return
+	}
+
+	items := make([]LogFileItem, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		fullPath := filepath.Join(dir, entry.Name())
+		relPath, err := filepath.Rel(dir, fullPath)
+		if err != nil {
+			continue
+		}
+		items = append(items, LogFileItem{
+			Path:       filepath.ToSlash(relPath),
+			Name:       entry.Name(),
+			Size:       info.Size(),
+			ModifiedAt: info.ModTime().Format(time.RFC3339),
+			Active:     sameFilePath(fullPath, activePath),
+		})
+	}
+
+	sort.Slice(items, func(i int, j int) bool {
+		return items[i].ModifiedAt > items[j].ModifiedAt
+	})
+	response.OK(c, LogFilesData{Items: items})
+}
+
+// ClearToday 处理清空今日日志文件内容请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 清空今日日志
+// @Description 清空今天对应的日志文件内容，但不删除日志文件。
+// @Tags logs
+// @Security Bearer
+// @Produce json
+// @Success 200 {object} response.Body "清空成功"
+// @Failure 400 {object} response.ErrorBody "文件日志未开启或参数错误"
+// @Failure 401 {object} response.ErrorBody "未登录或登录过期"
+// @Failure 500 {object} response.ErrorBody "服务器内部错误"
+// @Router /logs/clear-today [post]
+func (h *Handler) ClearToday(c *gin.Context) {
+	fileCfg, ok := h.fileConfig(c)
+	if !ok {
+		return
+	}
+
+	paths, err := logger.LogFilePathsForDate(fileCfg, h.now())
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	data := ClearTodayData{}
+	for _, path := range paths {
+		cleared, err := truncateLogFile(path)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "清空日志文件失败")
+			return
+		}
+		if cleared {
+			data.Cleared++
+		} else {
+			data.Skipped++
+		}
+	}
+	response.OK(c, data)
+}
+
+// DeleteFiles 处理批量删除日志文件请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 删除日志文件
+// @Description 按相对路径批量删除日志目录中的普通文件，当前写入文件不会被删除。
+// @Tags logs
+// @Security Bearer
+// @Accept json
+// @Produce json
+// @Param request body DeleteFilesRequest true "日志文件删除请求"
+// @Success 200 {object} response.Body "删除完成"
+// @Failure 400 {object} response.ErrorBody "文件日志未开启或参数错误"
+// @Failure 401 {object} response.ErrorBody "未登录或登录过期"
+// @Failure 500 {object} response.ErrorBody "服务器内部错误"
+// @Router /logs/files [delete]
+func (h *Handler) DeleteFiles(c *gin.Context) {
+	fileCfg, ok := h.fileConfig(c)
+	if !ok {
+		return
+	}
+
+	var req DeleteFilesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "请求参数错误")
+		return
+	}
+	if len(req.Paths) == 0 {
+		response.Error(c, http.StatusBadRequest, "请选择需要删除的日志文件")
+		return
+	}
+
+	dir, activePath, err := h.logDirectory(fileCfg)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	data := DeleteFilesData{
+		Deleted: []string{},
+		Failed:  []DeleteFileFailure{},
+	}
+	for _, path := range req.Paths {
+		fullPath, relPath, err := resolveLogFilePath(dir, path)
+		if err != nil {
+			data.Failed = append(data.Failed, DeleteFileFailure{Path: path, Reason: err.Error()})
+			continue
+		}
+		if sameFilePath(fullPath, activePath) {
+			data.Failed = append(data.Failed, DeleteFileFailure{Path: relPath, Reason: "当前日志文件正在写入，请使用清空功能"})
+			continue
+		}
+		if err := os.Remove(fullPath); err != nil {
+			data.Failed = append(data.Failed, DeleteFileFailure{Path: relPath, Reason: "删除日志文件失败"})
+			continue
+		}
+		data.Deleted = append(data.Deleted, relPath)
+	}
+	response.OK(c, data)
 }
 
 // follow 跟随当前日期对应的日志文件追加内容。
@@ -211,6 +420,106 @@ func (h *Handler) follow(ctx context.Context, encoder *json.Encoder, flusher htt
 			}
 		}
 	}
+}
+
+// fileConfig 读取并校验当前文件日志配置。
+// 参数 c 表示 Gin 请求上下文。
+func (h *Handler) fileConfig(c *gin.Context) (appconfig.LoggerFileConfig, bool) {
+	cfg := h.manager.Current()
+	if cfg == nil {
+		response.Error(c, http.StatusInternalServerError, "日志配置未加载")
+		return appconfig.LoggerFileConfig{}, false
+	}
+	if !cfg.Logger.File.Enabled {
+		response.Error(c, http.StatusBadRequest, "当前未启用文件日志")
+		return appconfig.LoggerFileConfig{}, false
+	}
+	return cfg.Logger.File, true
+}
+
+// logDirectory 返回日志目录和当前正在写入的日志文件路径。
+// 参数 cfg 表示文件日志配置。
+func (h *Handler) logDirectory(cfg appconfig.LoggerFileConfig) (string, string, error) {
+	activePath, err := logger.LogFilePath(cfg, h.now())
+	if err != nil {
+		return "", "", err
+	}
+	dir, err := filepath.Abs(filepath.Dir(activePath))
+	if err != nil {
+		return "", "", fmt.Errorf("解析日志目录失败: %w", err)
+	}
+	activeAbs, err := filepath.Abs(activePath)
+	if err != nil {
+		return "", "", fmt.Errorf("解析当前日志文件失败: %w", err)
+	}
+	return filepath.Clean(dir), filepath.Clean(activeAbs), nil
+}
+
+// truncateLogFile 清空单个日志文件内容，文件不存在时返回跳过。
+// 参数 path 表示需要清空的日志文件路径。
+func truncateLogFile(path string) (bool, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("日志路径不是普通文件")
+	}
+
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+	if err := file.Truncate(0); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// resolveLogFilePath 将前端提交的相对路径解析为日志目录内的普通文件。
+// 参数 dir 表示日志目录绝对路径；参数 value 表示前端提交的相对文件路径。
+func resolveLogFilePath(dir string, value string) (string, string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", "", fmt.Errorf("日志文件路径不能为空")
+	}
+	if filepath.IsAbs(trimmed) {
+		return "", "", fmt.Errorf("日志文件路径必须为相对路径")
+	}
+
+	clean := filepath.Clean(filepath.FromSlash(trimmed))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
+		return "", "", fmt.Errorf("日志文件路径非法")
+	}
+	if strings.Contains(clean, string(os.PathSeparator)) {
+		return "", "", fmt.Errorf("仅支持删除日志目录顶层文件")
+	}
+
+	fullPath, err := filepath.Abs(filepath.Join(dir, clean))
+	if err != nil {
+		return "", "", fmt.Errorf("解析日志文件路径失败")
+	}
+	relPath, err := filepath.Rel(dir, fullPath)
+	if err != nil || relPath == ".." || strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) {
+		return "", "", fmt.Errorf("日志文件路径越界")
+	}
+
+	info, err := os.Lstat(fullPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", "", fmt.Errorf("日志文件不存在")
+		}
+		return "", "", fmt.Errorf("读取日志文件状态失败")
+	}
+	if !info.Mode().IsRegular() {
+		return "", "", fmt.Errorf("只能删除普通日志文件")
+	}
+
+	return filepath.Clean(fullPath), filepath.ToSlash(relPath), nil
 }
 
 // parseQuery 解析日志流查询参数。
@@ -530,6 +839,26 @@ func fileSize(path string) int64 {
 		return 0
 	}
 	return info.Size()
+}
+
+// sameFilePath 判断两个文件路径是否指向同一路径文本。
+// 参数 left 表示左侧文件路径；参数 right 表示右侧文件路径。
+func sameFilePath(left string, right string) bool {
+	leftAbs, leftErr := filepath.Abs(left)
+	rightAbs, rightErr := filepath.Abs(right)
+	if leftErr == nil {
+		left = leftAbs
+	}
+	if rightErr == nil {
+		right = rightAbs
+	}
+
+	left = filepath.Clean(left)
+	right = filepath.Clean(right)
+	if os.PathSeparator == '\\' {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
 }
 
 // writeEvent 写入并刷新单个日志流事件。
