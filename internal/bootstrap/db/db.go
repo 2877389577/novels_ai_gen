@@ -384,16 +384,12 @@ func mysqlDSN(cfg appconfig.DatabaseConnectionConfig) string {
 // postgresDSN 构造 PostgreSQL 数据库连接字符串。
 // 参数 cfg 表示 PostgreSQL 数据库连接配置。
 func postgresDSN(cfg appconfig.DatabaseConnectionConfig) string {
-	values := url.Values{}
-	values.Set("sslmode", "disable")
-	values.Set("TimeZone", "Asia/Shanghai")
-
 	dsn := url.URL{
 		Scheme:   "postgres",
 		User:     url.UserPassword(cfg.Username, cfg.Password),
 		Host:     net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
 		Path:     cfg.DBName,
-		RawQuery: values.Encode(),
+		RawQuery: "sslmode=disable&TimeZone=Asia/Shanghai",
 	}
 
 	return dsn.String()
