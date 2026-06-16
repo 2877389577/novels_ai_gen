@@ -115,6 +115,18 @@ export interface ConfigFileUpdateParams {
   content: string;
 }
 
+// SystemUpdateData 表示后端一键更新启动后的结果。
+export interface SystemUpdateData {
+  // branch 表示本次更新拉取的目标分支。
+  branch: string;
+  // commit_before 表示更新前当前仓库的 commit。
+  commit_before: string;
+  // commit_after 表示更新后当前仓库的 commit。
+  commit_after: string;
+  // restarting 表示是否已经启动后台重启脚本。
+  restarting: boolean;
+}
+
 // NovelStatus 表示小说状态，只允许连载中或已完结。
 export type NovelStatus = "连载中" | "已完结";
 
@@ -617,6 +629,33 @@ export async function updateConfigFile(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "配置文件保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// triggerSystemUpdate 请求后端从 GitHub 拉取最新代码并重启服务。
+export async function triggerSystemUpdate(): Promise<SystemUpdateData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/system/update", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+  });
+  const payload = await parseApiResponse<SystemUpdateData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "系统更新失败，请稍后再试");
   }
 
   return payload.data;

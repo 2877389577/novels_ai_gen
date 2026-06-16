@@ -11,6 +11,7 @@ import (
 	loghandler "novels_ai_gen/internal/api/handler/log"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	relationshiphandler "novels_ai_gen/internal/api/handler/relationship"
+	systemhandler "novels_ai_gen/internal/api/handler/system"
 	uploadhandler "novels_ai_gen/internal/api/handler/upload"
 	"novels_ai_gen/internal/api/router"
 	bizauth "novels_ai_gen/internal/biz/auth"
@@ -18,6 +19,7 @@ import (
 	bizcharacter "novels_ai_gen/internal/biz/character"
 	biznovel "novels_ai_gen/internal/biz/novel"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
+	bizsystem "novels_ai_gen/internal/biz/system"
 	bizupload "novels_ai_gen/internal/biz/upload"
 	"novels_ai_gen/internal/bootstrap/config"
 	"novels_ai_gen/internal/bootstrap/db"
@@ -63,6 +65,8 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		uploadhandler.NewHandler,
 		confighandler.NewHandler,
 		loghandler.NewHandler,
+		bizsystem.NewService,
+		systemhandler.NewHandler,
 		router.NewRouter,
 		server.NewHTTPServer,
 		server.NewApp,

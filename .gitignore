@@ -1,4 +1,5 @@
 config/config-dev.yaml
 .trae/
 *_test.go
+!internal/biz/system/service_test.go
 logs/
