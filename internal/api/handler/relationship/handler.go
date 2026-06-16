@@ -78,6 +78,8 @@ type ErrorBody struct {
 	Code int `json:"code" example:"400"`
 	// Message 表示用户可理解的错误提示。
 	Message string `json:"message" example:"请求参数错误"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 }
 
 // SuccessResponse 表示角色关系图接口 Swagger 成功响应结构。
@@ -86,6 +88,8 @@ type SuccessResponse struct {
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示角色关系图响应数据。
 	Data GraphData `json:"data"`
 }

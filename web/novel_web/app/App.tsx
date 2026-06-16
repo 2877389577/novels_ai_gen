@@ -12,6 +12,7 @@ import { ChapterEditorPage } from "./chapter-editor";
 import { clearAuthData, readAuthData } from "./api";
 import { AppFooter } from "./app-footer";
 import { LoginPage } from "./login";
+import { LogsPage } from "./logs";
 import { NovelDetailPage } from "./novel-detail";
 import { SettingsPage } from "./settings";
 
@@ -28,6 +29,10 @@ type AppRoute =
   | {
       // view 表示当前展示配置管理页。
       view: "settings";
+    }
+  | {
+      // view 表示当前展示日志预览页。
+      view: "logs";
     }
   | {
       // view 表示当前展示小说详情页。
@@ -61,6 +66,7 @@ interface GuardedRoute {
 const loginRoutePath = "/login";
 const bookshelfRoutePath = "/";
 const settingsRoutePath = "/settings";
+const logsRoutePath = "/logs";
 const novelDetailRoutePattern = /^\/novels\/([1-9]\d*)$/;
 const chapterCreateRoutePattern = /^\/novels\/([1-9]\d*)\/chapters\/new$/;
 const chapterEditRoutePattern =
@@ -150,6 +156,14 @@ export function App() {
     [],
   );
 
+  // handleOpenLogs 处理从书架头像菜单进入日志预览页。
+  const handleOpenLogs = useCallback(
+    function handleOpenLogs() {
+      navigateToRoute(setRoute, { view: "logs" }, logsRoutePath, "push");
+    },
+    [],
+  );
+
   // handleChapterCreate 处理进入章节创建页。
   const handleChapterCreate = useCallback(
     function handleChapterCreate(novelId: number) {
@@ -212,6 +226,7 @@ export function App() {
         onLoginSuccess: handleLoginSuccess,
         onNovelDeleted: handleNovelDeleted,
         onNovelSelect: handleNovelSelect,
+        onOpenLogs: handleOpenLogs,
         onOpenSettings: handleOpenSettings,
         onUnauthorized: handleUnauthorized,
       })}
@@ -238,6 +253,8 @@ interface RouteHandlers {
   onNovelSelect: (novelId: number) => void;
   // onOpenSettings 表示打开配置管理页时执行的回调。
   onOpenSettings: () => void;
+  // onOpenLogs 表示打开日志预览页时执行的回调。
+  onOpenLogs: () => void;
   // onUnauthorized 表示登录态失效时执行的回调。
   onUnauthorized: () => void;
 }
@@ -250,6 +267,7 @@ function renderRoute(route: AppRoute, handlers: RouteHandlers) {
       return (
         <BookshelfPage
           onNovelSelect={handlers.onNovelSelect}
+          onOpenLogs={handlers.onOpenLogs}
           onOpenSettings={handlers.onOpenSettings}
           onUnauthorized={handlers.onUnauthorized}
         />
@@ -257,6 +275,13 @@ function renderRoute(route: AppRoute, handlers: RouteHandlers) {
     case "settings":
       return (
         <SettingsPage
+          onBackToBookshelf={handlers.onBackToBookshelf}
+          onUnauthorized={handlers.onUnauthorized}
+        />
+      );
+    case "logs":
+      return (
+        <LogsPage
           onBackToBookshelf={handlers.onBackToBookshelf}
           onUnauthorized={handlers.onUnauthorized}
         />
@@ -337,6 +362,13 @@ function resolveGuardedRoute(
     };
   }
 
+  if (isLogsRoute(pathname)) {
+    return {
+      path: logsRoutePath,
+      route: { view: "logs" },
+    };
+  }
+
   const novelId = parseNovelDetailPath(pathname);
   if (novelId !== null) {
     return {
@@ -375,6 +407,12 @@ function isLoginRoute(pathname: string): boolean {
 // 参数 pathname 表示需要判断的浏览器路径。
 function isSettingsRoute(pathname: string): boolean {
   return normalizeRoutePath(pathname) === settingsRoutePath;
+}
+
+// isLogsRoute 判断指定路径是否为日志预览页路径。
+// 参数 pathname 表示需要判断的浏览器路径。
+function isLogsRoute(pathname: string): boolean {
+  return normalizeRoutePath(pathname) === logsRoutePath;
 }
 
 // normalizeRoutePath 标准化浏览器路径，避免空路径造成守卫判断偏差。

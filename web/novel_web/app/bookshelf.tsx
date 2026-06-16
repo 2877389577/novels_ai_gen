@@ -68,6 +68,8 @@ interface BookshelfPageProps {
   onNovelSelect: (novelId: number) => void;
   // onOpenSettings 表示用户进入配置管理页时执行的回调。
   onOpenSettings: () => void;
+  // onOpenLogs 表示用户进入日志预览页时执行的回调。
+  onOpenLogs: () => void;
 }
 
 // BookshelfState 表示书架首页的数据加载状态。
@@ -158,6 +160,7 @@ export function BookshelfPage(props: BookshelfPageProps) {
       <BookshelfHeader
         totalCount={totalCount}
         updatedCount={updatedCount}
+        onOpenLogs={props.onOpenLogs}
         onOpenSettings={props.onOpenSettings}
       />
 
@@ -202,6 +205,8 @@ interface BookshelfHeaderProps {
   updatedCount: number;
   // onOpenSettings 表示用户进入配置管理页时执行的回调。
   onOpenSettings: () => void;
+  // onOpenLogs 表示用户进入日志预览页时执行的回调。
+  onOpenLogs: () => void;
 }
 
 // BookshelfHeader 渲染书架首页顶部导航。
@@ -232,7 +237,10 @@ function BookshelfHeader(props: BookshelfHeaderProps) {
           <button type="button" aria-label="设置">
             ⚙
           </button>
-          <BookshelfUserMenu onOpenSettings={props.onOpenSettings} />
+          <BookshelfUserMenu
+            onOpenLogs={props.onOpenLogs}
+            onOpenSettings={props.onOpenSettings}
+          />
         </div>
       </div>
 
@@ -248,6 +256,8 @@ function BookshelfHeader(props: BookshelfHeaderProps) {
 interface BookshelfUserMenuProps {
   // onOpenSettings 表示用户进入配置管理页时执行的回调。
   onOpenSettings: () => void;
+  // onOpenLogs 表示用户进入日志预览页时执行的回调。
+  onOpenLogs: () => void;
 }
 
 // BookshelfUserMenu 渲染书架右上角头像和悬浮菜单。
@@ -273,6 +283,15 @@ function BookshelfUserMenu(props: BookshelfUserMenuProps) {
         >
           <span aria-hidden="true">⚙</span>
           <span>配置管理</span>
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="bookshelf-user-menu-item"
+          onClick={props.onOpenLogs}
+        >
+          <span aria-hidden="true">☰</span>
+          <span>日志</span>
         </button>
       </div>
     </div>

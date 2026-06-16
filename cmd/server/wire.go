@@ -8,6 +8,7 @@ import (
 	chapterhandler "novels_ai_gen/internal/api/handler/chapter"
 	characterhandler "novels_ai_gen/internal/api/handler/character"
 	confighandler "novels_ai_gen/internal/api/handler/config"
+	loghandler "novels_ai_gen/internal/api/handler/log"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	relationshiphandler "novels_ai_gen/internal/api/handler/relationship"
 	uploadhandler "novels_ai_gen/internal/api/handler/upload"
@@ -61,6 +62,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		relationshiphandler.NewHandler,
 		uploadhandler.NewHandler,
 		confighandler.NewHandler,
+		loghandler.NewHandler,
 		router.NewRouter,
 		server.NewHTTPServer,
 		server.NewApp,
