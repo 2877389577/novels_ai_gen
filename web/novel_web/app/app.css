@@ -3663,6 +3663,10 @@ input {
   box-shadow: -20px 0 42px rgba(27, 28, 28, 0.18);
 }
 
+.event-drawer-form {
+  width: min(100vw, max(920px, 50vw));
+}
+
 .event-drawer-header,
 .event-drawer-footer {
   display: flex;
