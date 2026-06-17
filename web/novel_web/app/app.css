@@ -3106,6 +3106,33 @@ input {
   color: var(--color-on-surface);
 }
 
+.relationship-flow .relationship-edge-path {
+  stroke: color-mix(in srgb, var(--color-outline) 64%, transparent);
+  stroke-width: 2.2;
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease,
+    stroke 180ms ease,
+    stroke-width 180ms ease;
+}
+
+.relationship-flow .relationship-edge-path-highlighted {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--color-secondary) 42%, transparent));
+  stroke: var(--color-secondary);
+  stroke-width: 4;
+}
+
+.relationship-flow .relationship-edge-path-dimmed {
+  opacity: 0.26;
+}
+
+.relationship-flow .react-flow__node-character.selected .relationship-node {
+  border-color: var(--color-secondary);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-secondary-container) 72%, transparent),
+    0 16px 32px rgba(56, 104, 80, 0.18);
+}
+
 .relationship-node {
   position: relative;
   display: grid;
@@ -3215,6 +3242,23 @@ input {
   background: color-mix(in srgb, var(--color-paper) 92%, white);
   box-shadow: 0 10px 20px rgba(89, 65, 62, 0.12);
   pointer-events: all;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.relationship-edge-label-highlighted {
+  border-color: color-mix(in srgb, var(--color-secondary) 58%, transparent);
+  background: color-mix(in srgb, var(--color-secondary-container) 54%, var(--color-paper));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-secondary-container) 45%, transparent),
+    0 14px 28px rgba(56, 104, 80, 0.18);
+}
+
+.relationship-edge-label-dimmed {
+  opacity: 0.48;
 }
 
 .relationship-edge-label button {
