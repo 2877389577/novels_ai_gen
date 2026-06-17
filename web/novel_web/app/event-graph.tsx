@@ -1013,7 +1013,7 @@ function EventDrawer(props: EventDrawerProps) {
   return (
     <div className="event-drawer-mask" role="presentation" onClick={props.onCancel}>
       <aside
-        className="event-drawer"
+        className={isFormMode ? "event-drawer event-drawer-form" : "event-drawer"}
         aria-label={title}
         onClick={(event) => event.stopPropagation()}
       >
