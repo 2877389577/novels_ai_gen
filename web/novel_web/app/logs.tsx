@@ -24,17 +24,15 @@ import {
 const allLogLevels: LogLevel[] = ["debug", "info", "warn", "error"];
 const maxLogEntries = 2000;
 
-// LogsPageProps 表示日志预览页需要的外部回调。
-interface LogsPageProps {
-  // onBackToBookshelf 表示返回书架页时执行的回调。
-  onBackToBookshelf: () => void;
+// LogsPanelProps 表示设置中心日志预览面板需要的外部回调。
+interface LogsPanelProps {
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
 
-// LogsPage 渲染文件日志实时预览页面。
-// 参数 props 表示日志预览页需要的外部回调。
-export function LogsPage(props: LogsPageProps) {
+// LogsPanel 渲染文件日志实时预览面板。
+// 参数 props 表示日志预览面板需要的外部回调。
+export function LogsPanel(props: LogsPanelProps) {
   const [date, setDate] = useState(getTodayText);
   const [keyword, setKeyword] = useState("");
   const [selectedLevels, setSelectedLevels] = useState<LogLevel[]>([]);
@@ -361,167 +359,146 @@ export function LogsPage(props: LogsPageProps) {
   const levelSummary = getLevelSummary(selectedLevels);
 
   return (
-    <main className="logs-page">
-      <header className="settings-nav logs-nav">
-        <button
-          type="button"
-          className="settings-brand"
-          onClick={props.onBackToBookshelf}
-        >
-          <span className="settings-seal" aria-hidden="true">
-            墨
-          </span>
-          <span>墨香墨苑</span>
-        </button>
-
-        <button
-          type="button"
-          className="settings-back-button"
-          onClick={props.onBackToBookshelf}
-        >
-          <span aria-hidden="true">←</span>
-          <span>返回书架</span>
-        </button>
-      </header>
-
-      <section className="logs-shell" aria-labelledby="logs-title">
-        <div className="logs-heading">
-          <div>
-            <p className="settings-kicker">Logs</p>
-            <h1 id="logs-title">日志预览</h1>
-          </div>
-          <div className="logs-status" title={meta?.path || ""}>
-            <span>{statusText}</span>
-            <span>{levelSummary}</span>
-          </div>
+    <section
+      className="logs-shell settings-logs-shell"
+      aria-labelledby="logs-title"
+    >
+      <div className="logs-heading">
+        <div>
+          <p className="settings-kicker">Logs</p>
+          <h1 id="logs-title">日志预览</h1>
         </div>
+        <div className="logs-status" title={meta?.path || ""}>
+          <span>{statusText}</span>
+          <span>{levelSummary}</span>
+        </div>
+      </div>
 
-        <section className="logs-filter-bar" aria-label="日志筛选">
-          <label>
-            <span>日期</span>
-            <input type="date" value={date} onChange={handleDateChange} />
-          </label>
-          <label className="logs-keyword-field">
-            <span>关键词</span>
-            <input
-              type="search"
-              value={keyword}
-              placeholder="消息、RequestID 或原始行"
-              onChange={handleKeywordChange}
-            />
-          </label>
-          <fieldset>
-            <legend>等级</legend>
-            <button
-              type="button"
-              className="logs-level-all"
-              aria-pressed={selectedLevels.length === 0}
-              onClick={handleAllLevelsClick}
-            >
-              全部
-            </button>
-            {allLogLevels.map((level) => (
-              <label key={level}>
-                <input
-                  type="checkbox"
-                  checked={isLevelChecked(level, selectedLevels)}
-                  onChange={() => handleLevelChange(level)}
-                />
-                <span>{level.toUpperCase()}</span>
-              </label>
-            ))}
-          </fieldset>
-          <div className="logs-actions">
-            <button type="button" onClick={handlePauseToggle}>
-              {paused ? "继续" : "暂停"}
-            </button>
-            <button type="button" onClick={handleClearScreenClick}>
-              清屏
-            </button>
-            <button
-              type="button"
-              className="logs-danger-action"
-              disabled={clearingToday}
-              onClick={handleClearTodayClick}
-            >
-              {clearingToday ? "清空中" : "清空今日日志"}
-            </button>
-            <button type="button" onClick={handleFileManagerToggle}>
-              {fileManagerOpen ? "收起文件" : "日志文件管理"}
-            </button>
-          </div>
-        </section>
-
-        {errorMessage ? (
-          <p className="logs-error-message" role="alert">
-            {errorMessage}
-          </p>
-        ) : null}
-
-        {fileManagerOpen ? (
-          <section className="logs-file-manager" aria-label="日志文件管理">
-            <div className="logs-file-manager-header">
-              <div>
-                <h2>日志文件</h2>
-                <p>{selectedFilePaths.length} 个已选择</p>
-              </div>
-              <div className="logs-file-manager-actions">
-                <button
-                  type="button"
-                  disabled={filesLoading}
-                  onClick={handleFilesRefreshClick}
-                >
-                  {filesLoading ? "刷新中" : "刷新"}
-                </button>
-                <button
-                  type="button"
-                  className="logs-danger-action"
-                  disabled={deletingFiles || selectedFilePaths.length === 0}
-                  onClick={handleDeleteFilesClick}
-                >
-                  {deletingFiles ? "删除中" : "删除所选"}
-                </button>
-              </div>
-            </div>
-            {filesErrorMessage ? (
-              <p className="logs-error-message" role="alert">
-                {filesErrorMessage}
-              </p>
-            ) : null}
-            <div className="logs-file-list">
-              {logFiles.length === 0 ? (
-                <div className="logs-file-empty">
-                  {filesLoading ? "正在读取日志文件..." : "暂无日志文件"}
-                </div>
-              ) : (
-                logFiles.map(function renderFile(file) {
-                  return renderLogFileItem(
-                    file,
-                    selectedFilePaths.includes(file.path),
-                    handleFileSelectionChange,
-                  );
-                })
-              )}
-            </div>
-          </section>
-        ) : null}
-
-        <div
-          ref={listRef}
-          className="logs-list"
-          aria-label="日志列表"
-          onScroll={handleListScroll}
-        >
-          {entries.length === 0 ? (
-            <div className="logs-empty">
-              {connecting ? "正在读取日志..." : "暂无匹配日志"}
-            </div>
-          ) : (
-            entries.map(renderLogEntry)
-          )}
+      <section className="logs-filter-bar" aria-label="日志筛选">
+        <label>
+          <span>日期</span>
+          <input type="date" value={date} onChange={handleDateChange} />
+        </label>
+        <label className="logs-keyword-field">
+          <span>关键词</span>
+          <input
+            type="search"
+            value={keyword}
+            placeholder="消息、RequestID 或原始行"
+            onChange={handleKeywordChange}
+          />
+        </label>
+        <fieldset>
+          <legend>等级</legend>
+          <button
+            type="button"
+            className="logs-level-all"
+            aria-pressed={selectedLevels.length === 0}
+            onClick={handleAllLevelsClick}
+          >
+            全部
+          </button>
+          {allLogLevels.map((level) => (
+            <label key={level}>
+              <input
+                type="checkbox"
+                checked={isLevelChecked(level, selectedLevels)}
+                onChange={() => handleLevelChange(level)}
+              />
+              <span>{level.toUpperCase()}</span>
+            </label>
+          ))}
+        </fieldset>
+        <div className="logs-actions">
+          <button type="button" onClick={handlePauseToggle}>
+            {paused ? "继续" : "暂停"}
+          </button>
+          <button type="button" onClick={handleClearScreenClick}>
+            清屏
+          </button>
+          <button
+            type="button"
+            className="logs-danger-action"
+            disabled={clearingToday}
+            onClick={handleClearTodayClick}
+          >
+            {clearingToday ? "清空中" : "清空今日日志"}
+          </button>
+          <button type="button" onClick={handleFileManagerToggle}>
+            {fileManagerOpen ? "收起文件" : "日志文件管理"}
+          </button>
         </div>
       </section>
-    </main>
+
+      {errorMessage ? (
+        <p className="logs-error-message" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+
+      {fileManagerOpen ? (
+        <section className="logs-file-manager" aria-label="日志文件管理">
+          <div className="logs-file-manager-header">
+            <div>
+              <h2>日志文件</h2>
+              <p>{selectedFilePaths.length} 个已选择</p>
+            </div>
+            <div className="logs-file-manager-actions">
+              <button
+                type="button"
+                disabled={filesLoading}
+                onClick={handleFilesRefreshClick}
+              >
+                {filesLoading ? "刷新中" : "刷新"}
+              </button>
+              <button
+                type="button"
+                className="logs-danger-action"
+                disabled={deletingFiles || selectedFilePaths.length === 0}
+                onClick={handleDeleteFilesClick}
+              >
+                {deletingFiles ? "删除中" : "删除所选"}
+              </button>
+            </div>
+          </div>
+          {filesErrorMessage ? (
+            <p className="logs-error-message" role="alert">
+              {filesErrorMessage}
+            </p>
+          ) : null}
+          <div className="logs-file-list">
+            {logFiles.length === 0 ? (
+              <div className="logs-file-empty">
+                {filesLoading ? "正在读取日志文件..." : "暂无日志文件"}
+              </div>
+            ) : (
+              logFiles.map(function renderFile(file) {
+                return renderLogFileItem(
+                  file,
+                  selectedFilePaths.includes(file.path),
+                  handleFileSelectionChange,
+                );
+              })
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      <div
+        ref={listRef}
+        className="logs-list"
+        aria-label="日志列表"
+        onScroll={handleListScroll}
+      >
+        {entries.length === 0 ? (
+          <div className="logs-empty">
+            {connecting ? "正在读取日志..." : "暂无匹配日志"}
+          </div>
+        ) : (
+          entries.map(renderLogEntry)
+        )}
+      </div>
+    </section>
   );
 }
 
