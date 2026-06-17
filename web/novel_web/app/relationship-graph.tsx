@@ -11,7 +11,7 @@ import {
   ReactFlowProvider,
   applyEdgeChanges,
   applyNodeChanges,
-  getSmoothStepPath,
+  getBezierPath,
   useReactFlow,
   type Edge,
   type EdgeChange,
@@ -75,6 +75,10 @@ interface RelationshipEdgeData extends Record<string, unknown> {
   characterBId: number;
   // note 表示关系线备注。
   note: string;
+  // isHighlighted 表示关系线是否连接当前选中的角色卡。
+  isHighlighted?: boolean;
+  // isDimmed 表示已有角色选中时，关系线是否需要弱化显示。
+  isDimmed?: boolean;
   // onEdit 表示请求编辑关系线备注时执行的回调。
   onEdit: (edgeId: string) => void;
   // onDelete 表示请求删除关系线时执行的回调。
@@ -176,15 +180,28 @@ function CharacterRelationshipNode(props: NodeProps<CharacterGraphNode>) {
 // RelationshipNoteEdge 渲染画布中的关系线和备注标签。
 // 参数 props 表示 React Flow 注入的关系线属性。
 function RelationshipNoteEdge(props: EdgeProps<RelationshipGraphEdge>) {
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX: props.sourceX,
     sourceY: props.sourceY,
     sourcePosition: props.sourcePosition,
     targetX: props.targetX,
     targetY: props.targetY,
     targetPosition: props.targetPosition,
+    curvature: 0.38,
   });
   const note = normalizeText(props.data?.note) || "添加关系备注";
+  const isHighlighted = props.data?.isHighlighted === true;
+  const isDimmed = props.data?.isDimmed === true;
+  const edgeClassName = isHighlighted
+    ? "relationship-edge-path relationship-edge-path-highlighted"
+    : isDimmed
+      ? "relationship-edge-path relationship-edge-path-dimmed"
+      : "relationship-edge-path";
+  const labelClassName = isHighlighted
+    ? "relationship-edge-label relationship-edge-label-highlighted nodrag nopan"
+    : isDimmed
+      ? "relationship-edge-label relationship-edge-label-dimmed nodrag nopan"
+      : "relationship-edge-label nodrag nopan";
 
   // handleEdit 处理关系线备注标签点击。
   // 参数 event 表示按钮点击事件。
@@ -203,6 +220,7 @@ function RelationshipNoteEdge(props: EdgeProps<RelationshipGraphEdge>) {
   return (
     <>
       <BaseEdge
+        className={edgeClassName}
         id={props.id}
         markerEnd={props.markerEnd}
         path={edgePath}
@@ -210,7 +228,7 @@ function RelationshipNoteEdge(props: EdgeProps<RelationshipGraphEdge>) {
       />
       <EdgeLabelRenderer>
         <div
-          className="relationship-edge-label nodrag nopan"
+          className={labelClassName}
           style={{
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
           }}
@@ -257,12 +275,19 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(null);
 
   const canvasCharacterIds = useMemo(
     function createCanvasCharacterIdSet() {
       return new Set(nodes.map((node) => node.data.character.id));
     },
     [nodes],
+  );
+  const displayEdges = useMemo(
+    function createDisplayedRelationshipEdges() {
+      return createDisplayRelationshipEdges(edges, selectedCharacterId);
+    },
+    [edges, selectedCharacterId],
   );
 
   // syncReactFlowRef 同步 React Flow 实例到 ref，避免加载 effect 因实例对象变化反复触发。
@@ -406,6 +431,9 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
           );
           setNodes(nextNodes);
           setEdges(nextEdges);
+          setSelectedCharacterId((currentValue) =>
+            currentValue === characterId ? null : currentValue,
+          );
           queueSave(nextNodes, nextEdges);
         },
       });
@@ -484,6 +512,7 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
         setPortraitURLs(portraitMap);
         setNodes(nextNodes);
         setEdges(nextEdges);
+        setSelectedCharacterId(null);
         setGraphUpdatedAt(graph.updated_at ?? null);
         setLoadState("ready");
         setSaveState("saved");
@@ -506,6 +535,7 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
         setCharacters([]);
         setNodes([]);
         setEdges([]);
+        setSelectedCharacterId(null);
         setLoadState("error");
         setMessage(getErrorMessage(error, "角色关系图加载失败，请稍后再试"));
       }
@@ -632,6 +662,23 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
   function handleMoveEnd(event: MouseEvent | TouchEvent | null, viewport: Viewport) {
     void event;
     queueSave(nodesRef.current, edgesRef.current, viewport);
+  }
+
+  // handleNodeClick 记录当前点选的角色卡，用于点亮相关关系线。
+  // 参数 event 表示 React Flow 节点点击事件；参数 node 表示被点选的角色节点。
+  function handleNodeClick(
+    event: ReactMouseEvent<Element>,
+    node: CharacterGraphNode,
+  ) {
+    void event;
+    setSelectedCharacterId(node.data.character.id);
+  }
+
+  // handlePaneClick 清除当前点选的角色卡，让关系线恢复默认显示。
+  // 参数 event 表示 React Flow 画布点击事件。
+  function handlePaneClick(event: ReactMouseEvent<Element>) {
+    void event;
+    setSelectedCharacterId(null);
   }
 
   // handleConnect 处理两个角色节点之间的新连线。
@@ -822,7 +869,7 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
               <ReactFlow<CharacterGraphNode, RelationshipGraphEdge>
                 className="relationship-flow"
                 deleteKeyCode={null}
-                edges={edges}
+                edges={displayEdges}
                 edgeTypes={relationshipEdgeTypes}
                 fitView={nodes.length > 0}
                 maxZoom={1.8}
@@ -834,8 +881,10 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
                 onDrop={handleDrop}
                 onEdgesChange={handleEdgesChange}
                 onMoveEnd={handleMoveEnd}
+                onNodeClick={handleNodeClick}
                 onNodeDragStop={handleNodeDragStop}
                 onNodesChange={handleNodesChange}
+                onPaneClick={handlePaneClick}
                 panOnScroll
                 proOptions={{ hideAttribution: true }}
               >
@@ -1042,6 +1091,47 @@ function createFlowEdge(
       onDelete,
     },
   };
+}
+
+// createDisplayRelationshipEdges 根据当前选中角色生成仅用于画布展示的关系线。
+// 参数 edges 表示基础关系线列表；参数 selectedCharacterId 表示当前点选的角色卡 ID，未选中时为空。
+function createDisplayRelationshipEdges(
+  edges: RelationshipGraphEdge[],
+  selectedCharacterId: number | null,
+): RelationshipGraphEdge[] {
+  if (!selectedCharacterId) {
+    return edges;
+  }
+
+  return edges.map(function markRelationshipEdge(edge) {
+    if (!edge.data) {
+      return edge;
+    }
+
+    const isHighlighted = relationshipEdgeIncludesCharacter(edge, selectedCharacterId);
+    return {
+      ...edge,
+      data: {
+        ...edge.data,
+        isHighlighted,
+        isDimmed: !isHighlighted,
+      },
+    };
+  });
+}
+
+// relationshipEdgeIncludesCharacter 判断关系线是否连接指定角色卡。
+// 参数 edge 表示需要判断的关系线；参数 characterId 表示当前点选的角色卡 ID。
+function relationshipEdgeIncludesCharacter(
+  edge: RelationshipGraphEdge,
+  characterId: number,
+): boolean {
+  return (
+    edge.data?.characterAId === characterId ||
+    edge.data?.characterBId === characterId ||
+    characterIDFromNodeID(edge.source) === characterId ||
+    characterIDFromNodeID(edge.target) === characterId
+  );
 }
 
 // buildGraphSnapshot 将 React Flow 状态转换成后端保存快照。
