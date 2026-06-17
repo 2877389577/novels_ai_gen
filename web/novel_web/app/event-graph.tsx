@@ -1095,6 +1095,15 @@ interface EventFormProps {
 // EventForm 渲染事件新增和编辑表单。
 // 参数 props 表示事件表单需要的数据。
 function EventForm(props: EventFormProps) {
+  const selectedParticipantIds = new Set(props.formValues.participant_ids);
+  const selectedCharacters: CharacterSummaryItem[] = [];
+
+  for (const character of props.characters) {
+    if (selectedParticipantIds.has(character.id)) {
+      selectedCharacters.push(character);
+    }
+  }
+
   return (
     <div className="event-form event-form-template">
       <header className="event-detail-hero event-form-hero">
@@ -1155,37 +1164,77 @@ function EventForm(props: EventFormProps) {
         </article>
         <aside>
           <h2 className="event-detail-sidebar-title">参与者</h2>
-          <div className="event-participant-picker" aria-label="选择事件参与者">
-            {props.characters.length > 0 ? (
-              props.characters.map((character) => (
-                <button
-                  type="button"
-                  className={
-                    props.formValues.participant_ids.includes(character.id)
-                      ? "event-participant-option event-participant-option-selected"
-                      : "event-participant-option"
-                  }
-                  disabled={props.submitting}
-                  key={character.id}
-                  onClick={() => props.onToggleParticipant(character.id)}
-                >
-                  <span className="event-participant-option-strip" aria-hidden="true" />
-                  <span className="event-participant-option-avatar">
-                    {props.characterPortraitURLs[character.id] ? (
-                      <img
-                        src={props.characterPortraitURLs[character.id]}
-                        alt={`${character.name}肖像`}
-                      />
-                    ) : (
-                      <span>{getCoverInitial(character.name)}</span>
-                    )}
-                  </span>
-                  <strong>{character.name}</strong>
-                </button>
-              ))
-            ) : (
-              <p className="event-participant-picker-empty">暂无角色卡</p>
-            )}
+          <div className="event-form-participant-stack">
+            <section
+              className="event-selected-participant-panel"
+              aria-label="已选事件参与者"
+            >
+              <h3 className="event-participant-section-title">已选参与者</h3>
+              <div className="event-selected-participant-list">
+                {selectedCharacters.length > 0 ? (
+                  selectedCharacters.map((character) => (
+                    <button
+                      type="button"
+                      className="event-selected-participant-card"
+                      disabled={props.submitting}
+                      key={character.id}
+                      onClick={() => props.onToggleParticipant(character.id)}
+                    >
+                      <span className="event-selected-participant-avatar">
+                        {props.characterPortraitURLs[character.id] ? (
+                          <img
+                            src={props.characterPortraitURLs[character.id]}
+                            alt={`${character.name}肖像`}
+                          />
+                        ) : (
+                          <span>{getCoverInitial(character.name)}</span>
+                        )}
+                      </span>
+                      <strong>{character.name}</strong>
+                    </button>
+                  ))
+                ) : (
+                  <p className="event-participant-picker-empty">暂无参与者</p>
+                )}
+              </div>
+            </section>
+
+            <section className="event-participant-catalog" aria-label="角色列表">
+              <h3 className="event-participant-section-title">角色列表</h3>
+              <div className="event-participant-picker" aria-label="选择事件参与者">
+                {props.characters.length > 0 ? (
+                  props.characters.map((character) => (
+                    <button
+                      type="button"
+                      aria-pressed={selectedParticipantIds.has(character.id)}
+                      className={
+                        selectedParticipantIds.has(character.id)
+                          ? "event-participant-option event-participant-option-selected"
+                          : "event-participant-option"
+                      }
+                      disabled={props.submitting}
+                      key={character.id}
+                      onClick={() => props.onToggleParticipant(character.id)}
+                    >
+                      <span className="event-participant-option-strip" aria-hidden="true" />
+                      <span className="event-participant-option-avatar">
+                        {props.characterPortraitURLs[character.id] ? (
+                          <img
+                            src={props.characterPortraitURLs[character.id]}
+                            alt={`${character.name}肖像`}
+                          />
+                        ) : (
+                          <span>{getCoverInitial(character.name)}</span>
+                        )}
+                      </span>
+                      <strong>{character.name}</strong>
+                    </button>
+                  ))
+                ) : (
+                  <p className="event-participant-picker-empty">暂无角色卡</p>
+                )}
+              </div>
+            </section>
           </div>
         </aside>
       </div>
