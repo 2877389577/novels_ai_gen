@@ -268,6 +268,8 @@ func toEdgeModels(novelID uint64, graphID uint64, edges []bizrelationship.EdgeRe
 			NovelID:      novelID,
 			CharacterAID: edge.CharacterAID,
 			CharacterBID: edge.CharacterBID,
+			SourceHandle: edge.SourceHandle,
+			TargetHandle: edge.TargetHandle,
 			Note:         edge.Note,
 		})
 	}
@@ -297,6 +299,8 @@ func toEdgeResponses(edges []bizrelationship.Edge) []bizrelationship.EdgeRespons
 			ID:           bizrelationship.EdgeID(edge.CharacterAID, edge.CharacterBID),
 			CharacterAID: edge.CharacterAID,
 			CharacterBID: edge.CharacterBID,
+			SourceHandle: edge.SourceHandle,
+			TargetHandle: edge.TargetHandle,
 			Note:         edge.Note,
 		})
 	}

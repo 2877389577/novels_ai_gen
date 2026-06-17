@@ -3,6 +3,7 @@ import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
 import {
   Background,
   BaseEdge,
+  ConnectionMode,
   Controls,
   EdgeLabelRenderer,
   Handle,
@@ -54,6 +55,8 @@ import {
 } from "./novel-utils";
 
 const characterDragMimeType = "application/reactflow-character-id";
+const relationshipHandleLeftId = "left";
+const relationshipHandleRightId = "right";
 const relationshipCharacterPageSize = 100;
 const relationshipSaveDelayMs = 800;
 
@@ -140,8 +143,9 @@ function CharacterRelationshipNode(props: NodeProps<CharacterGraphNode>) {
     <div className="relationship-node">
       <Handle
         className="relationship-node-handle relationship-node-handle-left"
+        id={relationshipHandleLeftId}
         position={Position.Left}
-        type="target"
+        type="source"
       />
       <div className="relationship-node-avatar">
         {props.data.portraitURL ? (
@@ -170,6 +174,7 @@ function CharacterRelationshipNode(props: NodeProps<CharacterGraphNode>) {
       </button>
       <Handle
         className="relationship-node-handle relationship-node-handle-right"
+        id={relationshipHandleRightId}
         position={Position.Right}
         type="source"
       />
@@ -698,6 +703,14 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
         sourceCharacterId,
         targetCharacterId,
       );
+      const characterAHandleId =
+        sourceCharacterId === characterAId
+          ? connection.sourceHandle
+          : connection.targetHandle;
+      const characterBHandleId =
+        sourceCharacterId === characterBId
+          ? connection.sourceHandle
+          : connection.targetHandle;
       const edgeId = relationshipEdgeID(characterAId, characterBId);
       if (edgesRef.current.some((edge) => edge.id === edgeId)) {
         Toast.info("这两个角色已经存在关系线");
@@ -713,6 +726,10 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
         },
         handleRequestEdgeEdit,
         handleRequestEdgeDelete,
+        nodeIDFromCharacterID(characterAId),
+        nodeIDFromCharacterID(characterBId),
+        characterAHandleId,
+        characterBHandleId,
       );
       const nextEdges = [...edgesRef.current, nextEdge];
       setEdges(nextEdges);
@@ -868,6 +885,7 @@ function RelationshipGraphPanelInner(props: RelationshipGraphPanelProps) {
             <div className="relationship-flow-wrap">
               <ReactFlow<CharacterGraphNode, RelationshipGraphEdge>
                 className="relationship-flow"
+                connectionMode={ConnectionMode.Loose}
                 deleteKeyCode={null}
                 edges={displayEdges}
                 edgeTypes={relationshipEdgeTypes}
@@ -1068,11 +1086,15 @@ function createFlowEdges(
 }
 
 // createFlowEdge 创建单条 React Flow 关系线。
-// 参数 edge 表示后端关系线数据；参数 onEdit 表示编辑备注回调；参数 onDelete 表示删除关系线回调。
+// 参数 edge 表示后端关系线数据；参数 onEdit 表示编辑备注回调；参数 onDelete 表示删除关系线回调；参数 sourceNodeId 表示关系线起点节点 ID；参数 targetNodeId 表示关系线终点节点 ID；参数 sourceHandleId 表示关系线起点连接点 ID；参数 targetHandleId 表示关系线终点连接点 ID。
 function createFlowEdge(
   edge: RelationshipGraphEdgeItem,
   onEdit: (edgeId: string) => void,
   onDelete: (edgeId: string) => void,
+  sourceNodeId = nodeIDFromCharacterID(edge.character_a_id),
+  targetNodeId = nodeIDFromCharacterID(edge.character_b_id),
+  sourceHandleId: string | null = edge.source_handle ?? relationshipHandleRightId,
+  targetHandleId: string | null = edge.target_handle ?? relationshipHandleLeftId,
 ): RelationshipGraphEdge {
   const [characterAId, characterBId] = normalizeRelationshipPair(
     edge.character_a_id,
@@ -1080,8 +1102,10 @@ function createFlowEdge(
   );
   return {
     id: relationshipEdgeID(characterAId, characterBId),
-    source: nodeIDFromCharacterID(characterAId),
-    target: nodeIDFromCharacterID(characterBId),
+    source: sourceNodeId,
+    sourceHandle: normalizeRelationshipHandleID(sourceHandleId, relationshipHandleRightId),
+    target: targetNodeId,
+    targetHandle: normalizeRelationshipHandleID(targetHandleId, relationshipHandleLeftId),
     type: "relationship",
     data: {
       characterAId,
@@ -1091,6 +1115,17 @@ function createFlowEdge(
       onDelete,
     },
   };
+}
+
+// normalizeRelationshipHandleID 归一化关系图连接点 ID，避免 React Flow 找不到指定连接点。
+// 参数 handleId 表示 React Flow 传入的连接点 ID；参数 fallback 表示缺省时使用的连接点 ID。
+function normalizeRelationshipHandleID(
+  handleId: string | null,
+  fallback: string,
+): string {
+  return handleId === relationshipHandleLeftId || handleId === relationshipHandleRightId
+    ? handleId
+    : fallback;
 }
 
 // createDisplayRelationshipEdges 根据当前选中角色生成仅用于画布展示的关系线。
@@ -1155,14 +1190,28 @@ function buildGraphSnapshot(
       };
     }),
     edges: edges.map(function toGraphEdge(edge) {
+      const sourceCharacterId = characterIDFromNodeID(edge.source) ?? 0;
+      const targetCharacterId = characterIDFromNodeID(edge.target) ?? 0;
       const [characterAId, characterBId] = normalizeRelationshipPair(
-        edge.data?.characterAId ?? characterIDFromNodeID(edge.source) ?? 0,
-        edge.data?.characterBId ?? characterIDFromNodeID(edge.target) ?? 0,
+        edge.data?.characterAId ?? sourceCharacterId,
+        edge.data?.characterBId ?? targetCharacterId,
       );
+      const characterAHandleId =
+        sourceCharacterId === characterAId ? edge.sourceHandle : edge.targetHandle;
+      const characterBHandleId =
+        sourceCharacterId === characterBId ? edge.sourceHandle : edge.targetHandle;
       return {
         id: relationshipEdgeID(characterAId, characterBId),
         character_a_id: characterAId,
         character_b_id: characterBId,
+        source_handle: normalizeRelationshipHandleID(
+          characterAHandleId ?? null,
+          relationshipHandleRightId,
+        ),
+        target_handle: normalizeRelationshipHandleID(
+          characterBHandleId ?? null,
+          relationshipHandleLeftId,
+        ),
         note: normalizeText(edge.data?.note),
       };
     }),
