@@ -8,6 +8,12 @@ import (
 	biznovel "novels_ai_gen/internal/biz/novel"
 )
 
+// 关系图连接点 ID 需与前端 React Flow handle ID 保持一致。
+const (
+	relationshipHandleLeft  = "left"
+	relationshipHandleRight = "right"
+)
+
 // Graph 表示小说角色关系图主表模型。
 type Graph struct {
 	// ID 表示角色关系图主键 ID。
@@ -84,6 +90,10 @@ type Edge struct {
 	CharacterBID uint64 `json:"character_b_id" gorm:"column:character_b_id;not null;uniqueIndex:idx_relationship_edges_novel_pair,priority:3;comment:无方向关系线中较大的角色卡ID" example:"2"`
 	// CharacterB 表示无方向关系线中较大角色卡关联。
 	CharacterB bizcharacter.Character `json:"-" gorm:"foreignKey:CharacterBID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;comment:无方向关系线中较大角色卡关联"`
+	// SourceHandle 表示较小角色卡端使用的连接点 ID。
+	SourceHandle string `json:"source_handle" gorm:"column:source_handle;type:varchar(32);not null;default:right;comment:较小角色卡端使用的连接点ID" example:"right"`
+	// TargetHandle 表示较大角色卡端使用的连接点 ID。
+	TargetHandle string `json:"target_handle" gorm:"column:target_handle;type:varchar(32);not null;default:left;comment:较大角色卡端使用的连接点ID" example:"left"`
 	// Note 表示关系线备注，用于描述两个角色之间的关系。
 	Note string `json:"note" gorm:"column:note;type:text;comment:关系线备注，用于描述两个角色之间的关系" example:"旧友"`
 	// CreatedAt 表示创建时间。
@@ -125,6 +135,10 @@ type EdgeRequest struct {
 	CharacterAID uint64 `json:"character_a_id" binding:"required" example:"1"`
 	// CharacterBID 表示关系线另一端的角色卡 ID。
 	CharacterBID uint64 `json:"character_b_id" binding:"required" example:"2"`
+	// SourceHandle 表示归一化后较小角色卡端使用的连接点 ID。
+	SourceHandle string `json:"source_handle" example:"right"`
+	// TargetHandle 表示归一化后较大角色卡端使用的连接点 ID。
+	TargetHandle string `json:"target_handle" example:"left"`
 	// Note 表示关系线备注，用于描述两个角色之间的关系。
 	Note string `json:"note" example:"旧友"`
 }
@@ -157,6 +171,10 @@ type EdgeResponse struct {
 	CharacterAID uint64 `json:"character_a_id" example:"1"`
 	// CharacterBID 表示无方向关系线中较大的角色卡 ID。
 	CharacterBID uint64 `json:"character_b_id" example:"2"`
+	// SourceHandle 表示较小角色卡端使用的连接点 ID。
+	SourceHandle string `json:"source_handle" example:"right"`
+	// TargetHandle 表示较大角色卡端使用的连接点 ID。
+	TargetHandle string `json:"target_handle" example:"left"`
 	// Note 表示关系线备注，用于描述两个角色之间的关系。
 	Note string `json:"note" example:"旧友"`
 }

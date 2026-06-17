@@ -112,12 +112,18 @@ func normalizeAndValidateSaveRequest(req SaveRequest) (SaveRequest, []uint64, er
 			return SaveRequest{}, nil, ErrSelfRelation
 		}
 
+		originalCharacterAID := edge.CharacterAID
 		edge.CharacterAID, edge.CharacterBID = normalizePair(edge.CharacterAID, edge.CharacterBID)
+		if originalCharacterAID != edge.CharacterAID {
+			edge.SourceHandle, edge.TargetHandle = edge.TargetHandle, edge.SourceHandle
+		}
 		if !nodeSet[edge.CharacterAID] || !nodeSet[edge.CharacterBID] {
 			return SaveRequest{}, nil, ErrRelationEndpointMissing
 		}
 
 		edge.ID = EdgeID(edge.CharacterAID, edge.CharacterBID)
+		edge.SourceHandle = normalizeRelationshipHandle(edge.SourceHandle, relationshipHandleRight)
+		edge.TargetHandle = normalizeRelationshipHandle(edge.TargetHandle, relationshipHandleLeft)
 		edge.Note = strings.TrimSpace(edge.Note)
 		if relationSet[edge.ID] {
 			return SaveRequest{}, nil, ErrDuplicateRelation
@@ -145,6 +151,15 @@ func normalizeAndValidateSaveRequest(req SaveRequest) (SaveRequest, []uint64, er
 // 参数 value 表示需要判断的浮点数。
 func isFiniteFloat(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+// normalizeRelationshipHandle 标准化关系图连接点 ID。
+// 参数 handle 表示前端提交的连接点 ID；参数 fallback 表示连接点缺失或非法时使用的默认值。
+func normalizeRelationshipHandle(handle string, fallback string) string {
+	if handle == relationshipHandleLeft || handle == relationshipHandleRight {
+		return handle
+	}
+	return fallback
 }
 
 // normalizePair 将无方向关系线两端角色 ID 归一为从小到大。

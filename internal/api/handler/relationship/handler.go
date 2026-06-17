@@ -44,6 +44,10 @@ type EdgeData struct {
 	CharacterAID uint64 `json:"character_a_id" example:"1"`
 	// CharacterBID 表示无方向关系线中较大的角色卡 ID。
 	CharacterBID uint64 `json:"character_b_id" example:"2"`
+	// SourceHandle 表示较小角色卡端使用的连接点 ID。
+	SourceHandle string `json:"source_handle" example:"right"`
+	// TargetHandle 表示较大角色卡端使用的连接点 ID。
+	TargetHandle string `json:"target_handle" example:"left"`
 	// Note 表示关系线备注，用于描述两个角色之间的关系。
 	Note string `json:"note" example:"旧友"`
 }

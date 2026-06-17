@@ -508,6 +508,10 @@ export interface RelationshipGraphEdgeItem {
   character_a_id: number;
   // character_b_id 表示无方向关系线中较大的角色卡 ID。
   character_b_id: number;
+  // source_handle 表示较小角色卡端使用的连接点 ID。
+  source_handle?: string;
+  // target_handle 表示较大角色卡端使用的连接点 ID。
+  target_handle?: string;
   // note 表示关系线备注，用于描述两个角色之间的关系。
   note: string;
 }
