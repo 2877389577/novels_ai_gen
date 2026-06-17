@@ -12,9 +12,8 @@ import { ChapterEditorPage } from "./chapter-editor";
 import { clearAuthData, readAuthData } from "./api";
 import { AppFooter } from "./app-footer";
 import { LoginPage } from "./login";
-import { LogsPage } from "./logs";
 import { NovelDetailPage } from "./novel-detail";
-import { SettingsPage } from "./settings";
+import { SettingsPage, type SettingsSection } from "./settings";
 
 // AppRoute 表示前端当前浏览器路径对应的页面状态。
 type AppRoute =
@@ -27,12 +26,10 @@ type AppRoute =
       view: "bookshelf";
     }
   | {
-      // view 表示当前展示配置管理页。
+      // view 表示当前展示设置中心。
       view: "settings";
-    }
-  | {
-      // view 表示当前展示日志预览页。
-      view: "logs";
+      // section 表示设置中心当前激活的功能分区。
+      section: SettingsSection;
     }
   | {
       // view 表示当前展示小说详情页。
@@ -65,7 +62,7 @@ interface GuardedRoute {
 
 const loginRoutePath = "/login";
 const bookshelfRoutePath = "/";
-const settingsRoutePath = "/settings";
+const settingsBaseRoutePath = "/settings";
 const logsRoutePath = "/logs";
 const novelDetailRoutePattern = /^\/novels\/([1-9]\d*)$/;
 const chapterCreateRoutePattern = /^\/novels\/([1-9]\d*)\/chapters\/new$/;
@@ -143,23 +140,29 @@ export function App() {
     [],
   );
 
-  // handleOpenSettings 处理从书架头像菜单进入配置管理页。
+  // handleOpenSettings 处理从书架入口进入设置中心。
   const handleOpenSettings = useCallback(
     function handleOpenSettings() {
       navigateToRoute(
         setRoute,
-        { view: "settings" },
-        settingsRoutePath,
+        { view: "settings", section: "config" },
+        settingsBaseRoutePath,
         "push",
       );
     },
     [],
   );
 
-  // handleOpenLogs 处理从书架头像菜单进入日志预览页。
-  const handleOpenLogs = useCallback(
-    function handleOpenLogs() {
-      navigateToRoute(setRoute, { view: "logs" }, logsRoutePath, "push");
+  // handleSettingsSectionChange 处理设置中心分区切换。
+  // 参数 section 表示用户要切换到的设置分区。
+  const handleSettingsSectionChange = useCallback(
+    function handleSettingsSectionChange(section: SettingsSection) {
+      navigateToRoute(
+        setRoute,
+        { view: "settings", section },
+        settingsSectionRoutePath(section),
+        "push",
+      );
     },
     [],
   );
@@ -226,8 +229,8 @@ export function App() {
         onLoginSuccess: handleLoginSuccess,
         onNovelDeleted: handleNovelDeleted,
         onNovelSelect: handleNovelSelect,
-        onOpenLogs: handleOpenLogs,
         onOpenSettings: handleOpenSettings,
+        onSettingsSectionChange: handleSettingsSectionChange,
         onUnauthorized: handleUnauthorized,
       })}
       <AppFooter />
@@ -251,10 +254,10 @@ interface RouteHandlers {
   onNovelDeleted: () => void;
   // onNovelSelect 表示书架页选择小说时执行的回调。
   onNovelSelect: (novelId: number) => void;
-  // onOpenSettings 表示打开配置管理页时执行的回调。
+  // onOpenSettings 表示打开设置中心时执行的回调。
   onOpenSettings: () => void;
-  // onOpenLogs 表示打开日志预览页时执行的回调。
-  onOpenLogs: () => void;
+  // onSettingsSectionChange 表示设置中心切换功能分区时执行的回调。
+  onSettingsSectionChange: (section: SettingsSection) => void;
   // onUnauthorized 表示登录态失效时执行的回调。
   onUnauthorized: () => void;
 }
@@ -267,7 +270,6 @@ function renderRoute(route: AppRoute, handlers: RouteHandlers) {
       return (
         <BookshelfPage
           onNovelSelect={handlers.onNovelSelect}
-          onOpenLogs={handlers.onOpenLogs}
           onOpenSettings={handlers.onOpenSettings}
           onUnauthorized={handlers.onUnauthorized}
         />
@@ -275,14 +277,9 @@ function renderRoute(route: AppRoute, handlers: RouteHandlers) {
     case "settings":
       return (
         <SettingsPage
+          section={route.section}
           onBackToBookshelf={handlers.onBackToBookshelf}
-          onUnauthorized={handlers.onUnauthorized}
-        />
-      );
-    case "logs":
-      return (
-        <LogsPage
-          onBackToBookshelf={handlers.onBackToBookshelf}
+          onSectionChange={handlers.onSettingsSectionChange}
           onUnauthorized={handlers.onUnauthorized}
         />
       );
@@ -357,15 +354,23 @@ function resolveGuardedRoute(
 
   if (isSettingsRoute(pathname)) {
     return {
-      path: settingsRoutePath,
-      route: { view: "settings" },
+      path: normalizeRoutePath(pathname),
+      route: { view: "settings", section: "config" },
+    };
+  }
+
+  const settingsSection = parseSettingsSectionPath(pathname);
+  if (settingsSection !== null) {
+    return {
+      path: settingsSectionRoutePath(settingsSection),
+      route: { view: "settings", section: settingsSection },
     };
   }
 
   if (isLogsRoute(pathname)) {
     return {
-      path: logsRoutePath,
-      route: { view: "logs" },
+      path: settingsSectionRoutePath("logs"),
+      route: { view: "settings", section: "logs" },
     };
   }
 
@@ -403,16 +408,31 @@ function isLoginRoute(pathname: string): boolean {
   return normalizeRoutePath(pathname) === loginRoutePath;
 }
 
-// isSettingsRoute 判断指定路径是否为配置管理页路径。
+// isSettingsRoute 判断指定路径是否为设置中心根路径。
 // 参数 pathname 表示需要判断的浏览器路径。
 function isSettingsRoute(pathname: string): boolean {
-  return normalizeRoutePath(pathname) === settingsRoutePath;
+  return normalizeRoutePath(pathname) === settingsBaseRoutePath;
 }
 
-// isLogsRoute 判断指定路径是否为日志预览页路径。
+// isLogsRoute 判断指定路径是否为旧日志预览入口路径。
 // 参数 pathname 表示需要判断的浏览器路径。
 function isLogsRoute(pathname: string): boolean {
   return normalizeRoutePath(pathname) === logsRoutePath;
+}
+
+// parseSettingsSectionPath 从浏览器路径中解析设置中心分区。
+// 参数 pathname 表示浏览器地址栏中的路径。
+function parseSettingsSectionPath(pathname: string): SettingsSection | null {
+  const normalizedPath = normalizeRoutePath(pathname);
+  if (!normalizedPath.startsWith(`${settingsBaseRoutePath}/`)) {
+    return null;
+  }
+
+  const section = normalizedPath.slice(settingsBaseRoutePath.length + 1);
+  if (section === "config" || section === "logs" || section === "system") {
+    return section;
+  }
+  return null;
 }
 
 // normalizeRoutePath 标准化浏览器路径，避免空路径造成守卫判断偏差。
@@ -477,6 +497,12 @@ function chapterCreateRoutePath(novelId: number): string {
 // 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID。
 function chapterEditRoutePath(novelId: number, chapterId: number): string {
   return `/novels/${novelId}/chapters/${chapterId}`;
+}
+
+// settingsSectionRoutePath 生成设置中心指定分区路径。
+// 参数 section 表示需要打开的设置中心分区。
+function settingsSectionRoutePath(section: SettingsSection): string {
+  return `${settingsBaseRoutePath}/${section}`;
 }
 
 // navigateToRoute 使用 React Transition 切换前端页面。
