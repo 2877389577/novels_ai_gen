@@ -1,4 +1,5 @@
-import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
+import { IconAIEditLevel1, IconClose } from "@douyinfe/semi-icons";
+import { AIChatDialogue, FloatButton, Toast } from "@douyinfe/semi-ui-19";
 import {
   useCallback,
   useEffect,
@@ -9,7 +10,12 @@ import {
   type ChangeEvent,
   type FocusEvent,
   type FormEvent,
+  type KeyboardEvent,
 } from "react";
+import type {
+  Message,
+  RoleConfig,
+} from "@douyinfe/semi-ui-19/lib/es/aiChatDialogue/interface";
 
 import {
   UnauthorizedError,
@@ -28,6 +34,34 @@ const chapterEditorScrollbarHiddenClass = "chapter-editor-scrollbar-hidden";
 const emptyChapterFormValues: ChapterFormValues = {
   title: "",
   content: "",
+};
+
+const chapterAiAssistantMessages: Message[] = [
+  {
+    id: "chapter-ai-assistant-welcome",
+    role: "assistant",
+    content:
+      "你好，我是章节写作助手。这里会作为写作时的 AI 对话区域，当前先展示界面占位，不会调用后端接口。",
+  },
+  {
+    id: "chapter-ai-assistant-suggestion",
+    role: "assistant",
+    content:
+      "你可以把正在打磨的段落、人物情绪或情节目标复制到这里，后续接入真实能力后可以继续扩写、润色和拆解节奏。",
+  },
+];
+
+const chapterAiAssistantRoleConfig: RoleConfig = {
+  assistant: {
+    name: "写作助手",
+    color: "var(--semi-color-primary)",
+  },
+  system: {
+    name: "系统",
+  },
+  user: {
+    name: "你",
+  },
 };
 
 // ChapterFormValues 表示章节编辑页中可由用户编辑的字段。
@@ -53,6 +87,12 @@ interface ChapterEditorPageProps {
 // ChapterEditorState 表示章节编辑页的数据加载状态。
 type ChapterEditorState = "loading" | "ready" | "error";
 
+// ChapterAiAssistantPanelProps 表示章节 AI 助手侧栏需要的回调。
+interface ChapterAiAssistantPanelProps {
+  // onClose 表示关闭章节 AI 助手侧栏时执行的回调。
+  onClose: () => void;
+}
+
 // ChapterEditorPage 渲染章节创建和编辑共用页面。
 // 参数 props 表示章节编辑页需要的外部参数和回调。
 export function ChapterEditorPage(props: ChapterEditorPageProps) {
@@ -68,6 +108,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   const [titleError, setTitleError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [contentSnapshotId, setContentSnapshotId] = useState(0);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLDivElement | null>(null);
   const onUnauthorized = props.onUnauthorized;
@@ -225,6 +266,27 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     void loadChapterDetail();
   }
 
+  // handleAiAssistantToggle 切换章节 AI 助手侧栏的展开状态。
+  function handleAiAssistantToggle() {
+    setAiPanelOpen(!aiPanelOpen);
+  }
+
+  // handleAiAssistantClose 关闭章节 AI 助手侧栏。
+  function handleAiAssistantClose() {
+    setAiPanelOpen(false);
+  }
+
+  // handleAiAssistantTriggerKeyDown 处理悬浮按钮键盘触发。
+  // 参数 event 表示悬浮按钮外层容器接收到的键盘事件。
+  function handleAiAssistantTriggerKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    handleAiAssistantToggle();
+  }
+
   // handleTitleChange 同步章节标题输入。
   // 参数 event 表示标题输入框变更事件。
   function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -342,7 +404,11 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   const displayedChapterNumber = formatChapterNumber(chapterNumber);
 
   return (
-    <main className="chapter-editor-page">
+    <main
+      className={`chapter-editor-page${
+        aiPanelOpen ? " chapter-editor-page-ai-open" : ""
+      }`}
+    >
       <header className="chapter-editor-nav">
         <button type="button" className="chapter-editor-back" onClick={handleBack}>
           <span aria-hidden="true">←</span>
@@ -354,83 +420,151 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         </div>
       </header>
 
-      <section className="chapter-editor-shell" aria-labelledby="chapter-editor-title">
-        {state === "loading" ? <ChapterEditorSkeleton /> : null}
-        {state === "error" ? (
-          <ChapterEditorError
-            message={message}
-            onBack={handleBack}
-            onRetry={handleRetry}
-          />
-        ) : null}
-        {state === "ready" ? (
-          <form className="chapter-editor-paper" onSubmit={handleSubmit}>
-            <span className="chapter-editor-corner chapter-editor-corner-top-left" />
-            <span className="chapter-editor-corner chapter-editor-corner-top-right" />
-            <span className="chapter-editor-corner chapter-editor-corner-bottom-left" />
-            <span className="chapter-editor-corner chapter-editor-corner-bottom-right" />
+      <div
+        className={`chapter-editor-workbench${
+          aiPanelOpen ? " chapter-editor-workbench-ai-open" : ""
+        }`}
+      >
+        <section className="chapter-editor-shell" aria-labelledby="chapter-editor-title">
+          {state === "loading" ? <ChapterEditorSkeleton /> : null}
+          {state === "error" ? (
+            <ChapterEditorError
+              message={message}
+              onBack={handleBack}
+              onRetry={handleRetry}
+            />
+          ) : null}
+          {state === "ready" ? (
+            <form className="chapter-editor-paper" onSubmit={handleSubmit}>
+              <span className="chapter-editor-corner chapter-editor-corner-top-left" />
+              <span className="chapter-editor-corner chapter-editor-corner-top-right" />
+              <span className="chapter-editor-corner chapter-editor-corner-bottom-left" />
+              <span className="chapter-editor-corner chapter-editor-corner-bottom-right" />
 
-            <header className="chapter-editor-paper-header">
-              <p className="chapter-editor-kicker" aria-label="章节号">
-                {displayedChapterNumber}
-              </p>
-              <input
-                ref={titleInputRef}
-                className="chapter-title-input"
-                id="chapter-editor-title"
-                value={titleValue}
-                placeholder={chapter?.title || "寒蝉凄切"}
-                aria-invalid={titleError ? "true" : "false"}
-                aria-describedby={titleError ? "chapter-title-error" : undefined}
-                aria-label="章节名"
-                onChange={handleTitleChange}
-              />
-              <span className="chapter-title-divider" aria-hidden="true" />
-              {titleError ? (
-                <p className="chapter-title-error" id="chapter-title-error">
-                  {titleError}
+              <header className="chapter-editor-paper-header">
+                <p className="chapter-editor-kicker" aria-label="章节号">
+                  {displayedChapterNumber}
                 </p>
-              ) : null}
-            </header>
+                <input
+                  ref={titleInputRef}
+                  className="chapter-title-input"
+                  id="chapter-editor-title"
+                  value={titleValue}
+                  placeholder={chapter?.title || "寒蝉凄切"}
+                  aria-invalid={titleError ? "true" : "false"}
+                  aria-describedby={titleError ? "chapter-title-error" : undefined}
+                  aria-label="章节名"
+                  onChange={handleTitleChange}
+                />
+                <span className="chapter-title-divider" aria-hidden="true" />
+                {titleError ? (
+                  <p className="chapter-title-error" id="chapter-title-error">
+                    {titleError}
+                  </p>
+                ) : null}
+              </header>
 
-            <div className="chapter-editor-writing-area">
-              <div className="chapter-editor-binding" aria-hidden="true">
-                <span />
-                <span />
-                <span />
+              <div className="chapter-editor-writing-area">
+                <div className="chapter-editor-binding" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <div
+                  ref={contentEditorRef}
+                  className="chapter-content-editor"
+                  contentEditable
+                  suppressContentEditableWarning
+                  role="textbox"
+                  aria-multiline="true"
+                  aria-label="章节正文"
+                  data-placeholder="在这里落下第一笔..."
+                  onBlur={handleContentBlur}
+                  onFocus={handleContentFocus}
+                  onInput={handleContentChange}
+                  onPaste={handleContentPaste}
+                />
               </div>
-              <div
-                ref={contentEditorRef}
-                className="chapter-content-editor"
-                contentEditable
-                suppressContentEditableWarning
-                role="textbox"
-                aria-multiline="true"
-                aria-label="章节正文"
-                data-placeholder="在这里落下第一笔..."
-                onBlur={handleContentBlur}
-                onFocus={handleContentFocus}
-                onInput={handleContentChange}
-                onPaste={handleContentPaste}
-              />
-            </div>
 
-            <footer className="chapter-editor-footer">
-              <span className="chapter-word-count" aria-live="polite">
-                字数: {liveWordCount.toLocaleString("zh-CN")}
-              </span>
-              <button
-                type="submit"
-                className="chapter-editor-save"
-                disabled={submitting}
-              >
-                {submitting ? "保存中..." : "保存"}
-              </button>
-            </footer>
-          </form>
+              <footer className="chapter-editor-footer">
+                <span className="chapter-word-count" aria-live="polite">
+                  字数: {liveWordCount.toLocaleString("zh-CN")}
+                </span>
+                <button
+                  type="submit"
+                  className="chapter-editor-save"
+                  disabled={submitting}
+                >
+                  {submitting ? "保存中..." : "保存"}
+                </button>
+              </footer>
+            </form>
+          ) : null}
+        </section>
+
+        {aiPanelOpen ? (
+          <ChapterAiAssistantPanel onClose={handleAiAssistantClose} />
         ) : null}
-      </section>
+      </div>
+
+      <div
+        aria-controls="chapter-ai-assistant-panel"
+        aria-expanded={aiPanelOpen}
+        aria-label={aiPanelOpen ? "收起 AI 写作助手" : "打开 AI 写作助手"}
+        className="chapter-ai-float-trigger"
+        onClick={handleAiAssistantToggle}
+        onKeyDown={handleAiAssistantTriggerKeyDown}
+        role="button"
+        tabIndex={0}
+        title={aiPanelOpen ? "收起 AI 写作助手" : "打开 AI 写作助手"}
+      >
+        <FloatButton
+          colorful
+          icon={<IconAIEditLevel1 />}
+          size="large"
+          style={{ position: "static" }}
+        />
+      </div>
     </main>
+  );
+}
+
+// ChapterAiAssistantPanel 渲染章节编辑页右侧 AI 对话侧栏。
+// 参数 props 表示章节 AI 助手侧栏需要的回调。
+function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
+  return (
+    <aside
+      aria-label="AI 写作助手"
+      className="chapter-ai-assistant-panel"
+      id="chapter-ai-assistant-panel"
+    >
+      <div className="chapter-ai-assistant-card">
+        <header className="chapter-ai-assistant-header">
+          <div>
+            <p>AI Assistant</p>
+            <h2>写作助手</h2>
+          </div>
+          <button
+            aria-label="关闭 AI 写作助手"
+            className="chapter-ai-assistant-close"
+            onClick={props.onClose}
+            type="button"
+          >
+            <IconClose aria-hidden="true" />
+          </button>
+        </header>
+        <div className="chapter-ai-dialogue-wrap">
+          <AIChatDialogue
+            align="leftRight"
+            chats={chapterAiAssistantMessages}
+            className="chapter-ai-dialogue"
+            mode="bubble"
+            roleConfig={chapterAiAssistantRoleConfig}
+            style={{ height: "100%" }}
+          />
+        </div>
+      </div>
+    </aside>
   );
 }
 
