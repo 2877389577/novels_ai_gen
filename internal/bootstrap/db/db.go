@@ -18,6 +18,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 	"gorm.io/gorm/utils"
 
+	bizaiprovider "novels_ai_gen/internal/biz/aiprovider"
 	bizchapter "novels_ai_gen/internal/biz/chapter"
 	bizcharacter "novels_ai_gen/internal/biz/character"
 	bizevent "novels_ai_gen/internal/biz/event"
@@ -45,6 +46,7 @@ var migrationModels = []any{
 	&biznovel.Novel{},
 	&bizchapter.Chapter{},
 	&bizcharacter.Character{},
+	&bizaiprovider.Provider{},
 	&bizrelationship.Graph{},
 	&bizrelationship.Node{},
 	&bizrelationship.Edge{},

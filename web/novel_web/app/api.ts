@@ -177,6 +177,98 @@ export interface SystemUpdateData {
   restarting: boolean;
 }
 
+// AIProviderType 表示前端允许提交的 AI 提供商类型。
+export type AIProviderType = "openai" | "claude" | "gemini";
+
+// AIProviderAPIType 表示前端允许提交的 AI 接口类型。
+export type AIProviderAPIType = "response" | "completions";
+
+// AIProviderItem 表示 AI 提供商列表和详情中的单条记录。
+export interface AIProviderItem {
+  // id 表示 AI 提供商主键 ID。
+  id: number;
+  // name 表示 AI 提供商名称。
+  name: string;
+  // provider_type 表示 AI 提供商类型。
+  provider_type: AIProviderType;
+  // masked_api_key 表示 API Key 掩码，不包含明文密钥。
+  masked_api_key: string;
+  // model 表示 AI 模型名称。
+  model: string;
+  // base_url 表示 AI 提供商接口基础地址。
+  base_url: string;
+  // api_type 表示 AI 接口类型。
+  api_type: AIProviderAPIType;
+  // max_tokens 表示最大输出 token 数。
+  max_tokens: number;
+  // temperature 表示采样温度。
+  temperature: number;
+  // top_p 表示 nucleus sampling 参数。
+  top_p: number;
+  // thinking_level 表示思考等级。
+  thinking_level: number;
+  // enabled 表示是否启用该 AI 提供商。
+  enabled: boolean;
+  // created_at 表示创建时间。
+  created_at: string;
+  // updated_at 表示更新时间。
+  updated_at: string;
+}
+
+// AIProviderListData 表示 AI 提供商分页列表数据。
+export interface AIProviderListData {
+  // items 表示当前页 AI 提供商列表。
+  items: AIProviderItem[];
+  // total 表示符合条件的 AI 提供商总数。
+  total: number;
+  // page 表示当前页码。
+  page: number;
+  // page_size 表示每页数量。
+  page_size: number;
+}
+
+// AIProviderListParams 表示查询 AI 提供商列表时使用的分页参数。
+export interface AIProviderListParams {
+  // page 表示当前页码，从 1 开始。
+  page: number;
+  // pageSize 表示每页数量。
+  pageSize: number;
+  // signal 表示用于取消请求的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// AIProviderUpsertParams 表示创建或更新 AI 提供商时提交的参数。
+export interface AIProviderUpsertParams {
+  // name 表示 AI 提供商名称。
+  name: string;
+  // provider_type 表示 AI 提供商类型。
+  provider_type: AIProviderType;
+  // api_key 表示 AI 提供商 API Key，更新时为空表示保留旧密钥。
+  api_key: string;
+  // model 表示 AI 模型名称。
+  model: string;
+  // base_url 表示 AI 提供商接口基础地址。
+  base_url: string;
+  // api_type 表示 AI 接口类型。
+  api_type: AIProviderAPIType;
+  // max_tokens 表示最大输出 token 数。
+  max_tokens: number;
+  // temperature 表示采样温度。
+  temperature: number;
+  // top_p 表示 nucleus sampling 参数。
+  top_p: number;
+  // thinking_level 表示思考等级。
+  thinking_level: number;
+  // enabled 表示是否启用该 AI 提供商。
+  enabled: boolean;
+}
+
+// AIProviderDeleteData 表示删除 AI 提供商接口返回的数据。
+export interface AIProviderDeleteData {
+  // deleted 表示 AI 提供商是否已删除。
+  deleted: boolean;
+}
+
 // NovelStatus 表示小说状态，只允许连载中或已完结。
 export type NovelStatus = "连载中" | "已完结";
 
@@ -889,6 +981,138 @@ export async function triggerSystemUpdate(): Promise<SystemUpdateData> {
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "系统更新失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchAIProviders 查询 AI 提供商分页列表。
+// 参数 params 表示 AI 提供商列表分页查询参数。
+export async function fetchAIProviders(
+  params: AIProviderListParams,
+): Promise<AIProviderListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    page_size: String(params.pageSize),
+  });
+  const response = await fetch(
+    `/api/v1/ai/providers?${searchParams.toString()}`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal: params.signal,
+    },
+  );
+  const payload = await parseApiResponse<AIProviderListData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 提供商加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// createAIProvider 调用后端接口创建 AI 提供商并返回新记录。
+// 参数 params 表示创建 AI 提供商时需要提交的表单数据。
+export async function createAIProvider(
+  params: AIProviderUpsertParams,
+): Promise<AIProviderItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/ai/providers", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<AIProviderItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 提供商创建失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateAIProvider 调用后端接口更新 AI 提供商并返回更新后的记录。
+// 参数 id 表示 AI 提供商主键 ID；参数 params 表示更新 AI 提供商时需要提交的表单数据。
+export async function updateAIProvider(
+  id: number,
+  params: AIProviderUpsertParams,
+): Promise<AIProviderItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/ai/providers/${id}`, {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<AIProviderItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 提供商更新失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteAIProvider 调用后端接口删除指定 AI 提供商。
+// 参数 id 表示 AI 提供商主键 ID。
+export async function deleteAIProvider(
+  id: number,
+): Promise<AIProviderDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/ai/providers/${id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+  });
+  const payload = await parseApiResponse<AIProviderDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 提供商删除失败，请稍后再试");
   }
 
   return payload.data;

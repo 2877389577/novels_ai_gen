@@ -25,6 +25,8 @@ type AppConfig struct {
 	Logger LoggerConfig `mapstructure:"logger"`
 	// Auth 表示登录鉴权相关配置。
 	Auth AuthConfig `mapstructure:"auth"`
+	// AI 表示 AI 功能相关配置。
+	AI AIConfig `mapstructure:"ai"`
 	// Storage 表示文件对象存储相关配置。
 	Storage StorageConfig `mapstructure:"storage"`
 }
@@ -63,6 +65,12 @@ type DatabaseConnectionConfig struct {
 type AuthConfig struct {
 	// Password 表示访问系统资源需要使用的登录密码。
 	Password string `mapstructure:"password"`
+}
+
+// AIConfig 表示 AI 功能相关配置。
+type AIConfig struct {
+	// ProviderSecretKey 表示 AI 提供商 API Key 应用层加密密钥，可填写任意非空字符串。
+	ProviderSecretKey string `mapstructure:"provider_secret_key"`
 }
 
 // StorageConfig 表示文件对象存储配置集合。
@@ -476,6 +484,7 @@ func setDefaults(loader *viper.Viper) {
 	loader.SetDefault("logger.file.filename", "app.log")
 	loader.SetDefault("logger.file.rotation", "daily")
 	loader.SetDefault("auth.password", "admin123")
+	loader.SetDefault("ai.provider_secret_key", "")
 	loader.SetDefault("storage.s3.bucket_lookup", "auto")
 	loader.SetDefault("storage.s3.preview_expire", "24h")
 	loader.SetDefault("storage.s3.max_upload_size_mb", 20)

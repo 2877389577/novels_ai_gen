@@ -4,21 +4,33 @@ import {
   useMemo,
   useState,
   type ChangeEvent,
+  type FormEvent,
 } from "react";
 import Modal from "@douyinfe/semi-ui-19/lib/es/modal";
 import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
 
 import {
+  createAIProvider,
+  deleteAIProvider,
+  fetchAIProviders,
   fetchConfigFile,
   triggerSystemUpdate,
+  updateAIProvider,
   updateConfigFile,
   UnauthorizedError,
+  type AIProviderAPIType,
+  type AIProviderItem,
+  type AIProviderType,
+  type AIProviderUpsertParams,
   type ConfigFileData,
 } from "./api";
 import { LogsPanel } from "./logs";
 
 // SettingsSection 表示设置中心支持切换的功能分区。
-export type SettingsSection = "config" | "logs" | "system";
+export type SettingsSection = "config" | "logs" | "system" | "ai-providers";
+
+// AIProviderFormMode 表示 AI 提供商表单当前处于创建或编辑模式。
+type AIProviderFormMode = "create" | "edit";
 
 // SettingsPageProps 表示设置中心页面需要的外部状态和回调。
 interface SettingsPageProps {
@@ -38,11 +50,71 @@ interface ConfigSettingsPanelProps {
   onUnauthorized: () => void;
 }
 
+// AIProviderSettingsPanelProps 表示 AI 提供商面板需要的外部回调。
+interface AIProviderSettingsPanelProps {
+  // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+  onUnauthorized: () => void;
+}
+
 // SystemSettingsPanelProps 表示系统更新面板需要的外部回调。
 interface SystemSettingsPanelProps {
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
+
+// AIProviderFormState 表示 AI 提供商表单中各字段的前端输入状态。
+interface AIProviderFormState {
+  // name 表示 AI 提供商名称。
+  name: string;
+  // providerType 表示 AI 提供商类型。
+  providerType: string;
+  // apiKey 表示 AI 提供商 API Key。
+  apiKey: string;
+  // model 表示 AI 模型名称。
+  model: string;
+  // baseURL 表示 AI 提供商接口基础地址。
+  baseURL: string;
+  // apiType 表示 AI 接口类型。
+  apiType: string;
+  // maxTokens 表示最大输出 token 数输入值。
+  maxTokens: string;
+  // temperature 表示采样温度输入值。
+  temperature: string;
+  // topP 表示 nucleus sampling 参数输入值。
+  topP: string;
+  // thinkingLevel 表示思考等级输入值。
+  thinkingLevel: string;
+  // enabled 表示是否启用该 AI 提供商。
+  enabled: boolean;
+}
+
+const aiProviderDefaultPage = 1;
+const aiProviderPageSize = 20;
+const aiProviderTypeOptions: { value: AIProviderType; label: string }[] = [
+  { value: "openai", label: "OpenAI" },
+  { value: "claude", label: "Claude" },
+  { value: "gemini", label: "Gemini" },
+];
+const aiProviderAPITypeOptions: {
+  value: AIProviderAPIType;
+  label: string;
+}[] = [
+  { value: "response", label: "response" },
+  { value: "completions", label: "completions" },
+];
+const defaultAIProviderFormState: AIProviderFormState = {
+  name: "",
+  providerType: "openai",
+  apiKey: "",
+  model: "gpt-5",
+  baseURL: "",
+  apiType: "response",
+  maxTokens: "1024",
+  temperature: "0.5",
+  topP: "0.5",
+  thinkingLevel: "0",
+  enabled: true,
+};
 
 // SettingsPage 渲染聚合配置、日志和系统更新的设置中心。
 // 参数 props 表示设置中心页面需要的外部状态和回调。
@@ -60,6 +132,11 @@ export function SettingsPage(props: SettingsPageProps) {
   // handleSystemSectionClick 切换到系统更新分区。
   function handleSystemSectionClick() {
     props.onSectionChange("system");
+  }
+
+  // handleAIProvidersSectionClick 切换到 AI 提供商分区。
+  function handleAIProvidersSectionClick() {
+    props.onSectionChange("ai-providers");
   }
 
   return (
@@ -120,6 +197,17 @@ export function SettingsPage(props: SettingsPageProps) {
               <span aria-hidden="true">↻</span>
               <span>系统更新</span>
             </button>
+            <button
+              type="button"
+              className="settings-sidebar-button"
+              aria-current={
+                props.section === "ai-providers" ? "page" : undefined
+              }
+              onClick={handleAIProvidersSectionClick}
+            >
+              <span aria-hidden="true">AI</span>
+              <span>AI 提供商</span>
+            </button>
           </nav>
         </aside>
 
@@ -132,6 +220,9 @@ export function SettingsPage(props: SettingsPageProps) {
           ) : null}
           {props.section === "system" ? (
             <SystemSettingsPanel onUnauthorized={props.onUnauthorized} />
+          ) : null}
+          {props.section === "ai-providers" ? (
+            <AIProviderSettingsPanel onUnauthorized={props.onUnauthorized} />
           ) : null}
         </div>
       </section>
@@ -342,6 +433,609 @@ function ConfigSettingsPanel(props: ConfigSettingsPanelProps) {
   );
 }
 
+// AIProviderSettingsPanel 渲染 AI 提供商管理面板。
+// 参数 props 表示 AI 提供商面板需要的外部回调。
+function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
+  const [providers, setProviders] = useState<AIProviderItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(aiProviderDefaultPage);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingID, setDeletingID] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [formMode, setFormMode] = useState<AIProviderFormMode>("create");
+  const [editingProvider, setEditingProvider] =
+    useState<AIProviderItem | null>(null);
+  const [form, setForm] = useState<AIProviderFormState>(
+    createDefaultAIProviderFormState,
+  );
+
+  const totalPages = Math.max(1, Math.ceil(total / aiProviderPageSize));
+  const pageSummary =
+    total > 0 ? `${page} / ${totalPages} 页，共 ${total} 条` : "暂无记录";
+
+  const loadProviders = useCallback(
+    // loadProviders 读取 AI 提供商分页列表。
+    // 参数 signal 表示用于取消请求的浏览器 AbortSignal；参数 pageNumber 表示需要读取的页码；参数 showSuccess 表示刷新成功时是否展示提示。
+    async function loadProviders(
+      signal?: AbortSignal,
+      pageNumber = page,
+      showSuccess = false,
+    ) {
+      setLoading(true);
+      setErrorMessage("");
+
+      try {
+        const data = await fetchAIProviders({
+          page: pageNumber,
+          pageSize: aiProviderPageSize,
+          signal,
+        });
+        setProviders(data.items);
+        setTotal(data.total);
+        setPage(data.page || pageNumber);
+        if (showSuccess) {
+          Toast.success("AI 提供商列表已刷新");
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+        if (error instanceof UnauthorizedError) {
+          props.onUnauthorized();
+          return;
+        }
+        const message = getErrorMessage(error, "AI 提供商加载失败，请稍后再试");
+        setErrorMessage(message);
+        Toast.error(message);
+      } finally {
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [page, props.onUnauthorized],
+  );
+
+  useEffect(
+    function loadAIProvidersOnPageChange() {
+      const controller = new AbortController();
+      void loadProviders(controller.signal, page);
+
+      // cancelAIProviderLoad 取消卸载中的 AI 提供商列表请求。
+      return function cancelAIProviderLoad() {
+        controller.abort();
+      };
+    },
+    [loadProviders, page],
+  );
+
+  // handleReloadClick 处理刷新 AI 提供商列表按钮点击。
+  function handleReloadClick() {
+    void loadProviders(undefined, page, true);
+  }
+
+  // handleCreateClick 切换为创建 AI 提供商表单。
+  function handleCreateClick() {
+    setFormMode("create");
+    setEditingProvider(null);
+    setForm(createDefaultAIProviderFormState());
+    setErrorMessage("");
+  }
+
+  // handleEditClick 切换为编辑指定 AI 提供商表单。
+  // 参数 provider 表示需要编辑的 AI 提供商。
+  function handleEditClick(provider: AIProviderItem) {
+    setFormMode("edit");
+    setEditingProvider(provider);
+    setForm(providerToAIProviderFormState(provider));
+    setErrorMessage("");
+  }
+
+  // handleCancelEditClick 取消编辑并恢复创建表单。
+  function handleCancelEditClick() {
+    handleCreateClick();
+  }
+
+  // handleFormInputChange 处理 AI 提供商文本或数字字段输入变化。
+  // 参数 event 表示输入框变化事件。
+  function handleFormInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const { name, value } = event.target;
+    setForm(function updateForm(current) {
+      switch (name) {
+        case "name":
+          return { ...current, name: value };
+        case "providerType":
+          return { ...current, providerType: value };
+        case "apiKey":
+          return { ...current, apiKey: value };
+        case "model":
+          return { ...current, model: value };
+        case "baseURL":
+          return { ...current, baseURL: value };
+        case "apiType":
+          return { ...current, apiType: value };
+        case "maxTokens":
+          return { ...current, maxTokens: value };
+        case "temperature":
+          return { ...current, temperature: value };
+        case "topP":
+          return { ...current, topP: value };
+        case "thinkingLevel":
+          return { ...current, thinkingLevel: value };
+        default:
+          return current;
+      }
+    });
+  }
+
+  // handleEnabledChange 处理 AI 提供商启用状态变化。
+  // 参数 event 表示复选框变化事件。
+  function handleEnabledChange(event: ChangeEvent<HTMLInputElement>) {
+    setForm(function updateEnabled(current) {
+      return { ...current, enabled: event.target.checked };
+    });
+  }
+
+  // handleFormSubmit 处理 AI 提供商表单提交。
+  // 参数 event 表示表单提交事件。
+  function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void saveProvider();
+  }
+
+  // handlePreviousPageClick 切换到上一页 AI 提供商列表。
+  function handlePreviousPageClick() {
+    if (page > 1) {
+      setPage(page - 1);
+    }
+  }
+
+  // handleNextPageClick 切换到下一页 AI 提供商列表。
+  function handleNextPageClick() {
+    if (page < totalPages) {
+      setPage(page + 1);
+    }
+  }
+
+  // handleDeleteClick 打开删除 AI 提供商确认框。
+  // 参数 provider 表示需要删除的 AI 提供商。
+  function handleDeleteClick(provider: AIProviderItem) {
+    Modal.confirm({
+      title: "删除 AI 提供商",
+      content: `确认删除「${provider.name}」吗？删除后无法从前端恢复。`,
+      okText: "删除",
+      cancelText: "取消",
+      className: "settings-confirm-modal",
+      onOk: function confirmDelete() {
+        void removeProvider(provider);
+      },
+    });
+  }
+
+  // saveProvider 创建或更新 AI 提供商。
+  async function saveProvider() {
+    const validationMessage = validateAIProviderForm(form, formMode);
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      Toast.error(validationMessage);
+      return;
+    }
+    if (formMode === "edit" && editingProvider === null) {
+      const message = "请选择需要编辑的 AI 提供商";
+      setErrorMessage(message);
+      Toast.error(message);
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMessage("");
+
+    try {
+      const params = toAIProviderUpsertParams(form);
+      if (formMode === "edit" && editingProvider) {
+        await updateAIProvider(editingProvider.id, params);
+        Toast.success("AI 提供商已更新");
+      } else {
+        await createAIProvider(params);
+        Toast.success("AI 提供商已创建");
+      }
+
+      setFormMode("create");
+      setEditingProvider(null);
+      setForm(createDefaultAIProviderFormState());
+
+      const nextPage =
+        formMode === "create" ? aiProviderDefaultPage : page;
+      if (nextPage !== page) {
+        setPage(nextPage);
+      } else {
+        await loadProviders(undefined, nextPage);
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        props.onUnauthorized();
+        return;
+      }
+      const message = getErrorMessage(error, "AI 提供商保存失败，请稍后再试");
+      setErrorMessage(message);
+      Toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // removeProvider 删除指定 AI 提供商并刷新列表。
+  // 参数 provider 表示需要删除的 AI 提供商。
+  async function removeProvider(provider: AIProviderItem) {
+    setDeletingID(provider.id);
+    setErrorMessage("");
+
+    try {
+      await deleteAIProvider(provider.id);
+      Toast.success("AI 提供商已删除");
+      if (providers.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        await loadProviders(undefined, page);
+      }
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        props.onUnauthorized();
+        return;
+      }
+      const message = getErrorMessage(error, "AI 提供商删除失败，请稍后再试");
+      setErrorMessage(message);
+      Toast.error(message);
+    } finally {
+      setDeletingID(null);
+    }
+  }
+
+  return (
+    <article
+      className="settings-panel ai-provider-panel"
+      aria-labelledby="settings-ai-provider-title"
+    >
+      <div className="settings-corner settings-corner-left-top" />
+      <div className="settings-corner settings-corner-right-top" />
+      <div className="settings-corner settings-corner-left-bottom" />
+      <div className="settings-corner settings-corner-right-bottom" />
+
+      <div className="settings-editor-heading ai-provider-heading">
+        <div>
+          <p className="settings-kicker">AI Providers</p>
+          <h1 id="settings-ai-provider-title">AI 提供商</h1>
+        </div>
+        <div className="settings-editor-actions">
+          <button
+            type="button"
+            className="settings-secondary-button"
+            disabled={loading || submitting}
+            onClick={handleReloadClick}
+          >
+            刷新列表
+          </button>
+          <button
+            type="button"
+            className="settings-primary-button"
+            disabled={submitting}
+            onClick={handleCreateClick}
+          >
+            新增提供商
+          </button>
+        </div>
+      </div>
+
+      {errorMessage ? (
+        <p className="settings-error-message" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+
+      <div className="ai-provider-layout">
+        <section
+          className="ai-provider-list-section"
+          aria-labelledby="ai-provider-list-title"
+        >
+          <div className="ai-provider-section-heading">
+            <div>
+              <h2 id="ai-provider-list-title">提供商列表</h2>
+              <p>{pageSummary}</p>
+            </div>
+            <div className="ai-provider-page-actions">
+              <button
+                type="button"
+                className="settings-secondary-button"
+                disabled={loading || page <= 1}
+                onClick={handlePreviousPageClick}
+              >
+                上一页
+              </button>
+              <button
+                type="button"
+                className="settings-secondary-button"
+                disabled={loading || page >= totalPages}
+                onClick={handleNextPageClick}
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+
+          <div className="ai-provider-list" aria-label="AI 提供商列表">
+            {loading ? (
+              <p className="ai-provider-empty">正在加载 AI 提供商...</p>
+            ) : null}
+            {!loading && providers.length === 0 ? (
+              <p className="ai-provider-empty">还没有 AI 提供商。</p>
+            ) : null}
+            {!loading
+              ? providers.map((provider) => (
+                  <article
+                    className="ai-provider-card"
+                    key={provider.id}
+                    aria-label={provider.name}
+                  >
+                    <div className="ai-provider-card-heading">
+                      <div>
+                        <h3>{provider.name}</h3>
+                        <p>
+                          {provider.provider_type} / {provider.model}
+                        </p>
+                      </div>
+                      <span
+                        className={
+                          provider.enabled
+                            ? "ai-provider-status ai-provider-status-enabled"
+                            : "ai-provider-status"
+                        }
+                      >
+                        {provider.enabled ? "启用" : "停用"}
+                      </span>
+                    </div>
+
+                    <dl className="ai-provider-card-meta">
+                      <div>
+                        <dt>API 类型</dt>
+                        <dd>{provider.api_type || "未设置"}</dd>
+                      </div>
+                      <div>
+                        <dt>Key</dt>
+                        <dd>{provider.masked_api_key || "未设置"}</dd>
+                      </div>
+                      <div>
+                        <dt>Base URL</dt>
+                        <dd title={provider.base_url}>
+                          {formatOptionalText(provider.base_url)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>参数</dt>
+                        <dd>
+                          {provider.max_tokens} tokens / temp{" "}
+                          {provider.temperature} / top_p {provider.top_p}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>思考等级</dt>
+                        <dd>{provider.thinking_level}</dd>
+                      </div>
+                      <div>
+                        <dt>更新</dt>
+                        <dd>{formatTime(provider.updated_at)}</dd>
+                      </div>
+                    </dl>
+
+                    <div className="ai-provider-card-actions">
+                      <button
+                        type="button"
+                        className="settings-secondary-button"
+                        disabled={submitting || deletingID !== null}
+                        onClick={function handleProviderEditClick() {
+                          handleEditClick(provider);
+                        }}
+                      >
+                        编辑
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-secondary-button ai-provider-danger-button"
+                        disabled={submitting || deletingID !== null}
+                        onClick={function handleProviderDeleteClick() {
+                          handleDeleteClick(provider);
+                        }}
+                      >
+                        {deletingID === provider.id ? "删除中..." : "删除"}
+                      </button>
+                    </div>
+                  </article>
+                ))
+              : null}
+          </div>
+        </section>
+
+        <form className="ai-provider-form" onSubmit={handleFormSubmit}>
+          <div className="ai-provider-form-heading">
+            <div>
+              <h2>{formMode === "edit" ? "编辑提供商" : "新增提供商"}</h2>
+              <p>
+                {formMode === "edit" && editingProvider
+                  ? `正在编辑：${editingProvider.name}`
+                  : "创建新的 AI 调用配置"}
+              </p>
+            </div>
+            {formMode === "edit" ? (
+              <button
+                type="button"
+                className="settings-secondary-button"
+                disabled={submitting}
+                onClick={handleCancelEditClick}
+              >
+                取消编辑
+              </button>
+            ) : null}
+          </div>
+
+          <div className="ai-provider-form-grid">
+            <label className="ai-provider-field">
+              <span>名称</span>
+              <input
+                name="name"
+                value={form.name}
+                disabled={submitting}
+                placeholder="默认 OpenAI"
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <fieldset className="ai-provider-choice-field">
+              <legend>提供商类型</legend>
+              <div className="ai-provider-choice-list">
+                {aiProviderTypeOptions.map((option) => (
+                  <label className="ai-provider-choice" key={option.value}>
+                    <input
+                      type="radio"
+                      name="providerType"
+                      value={option.value}
+                      checked={form.providerType === option.value}
+                      disabled={submitting}
+                      onChange={handleFormInputChange}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label className="ai-provider-field">
+              <span>API Key</span>
+              <input
+                name="apiKey"
+                type="password"
+                value={form.apiKey}
+                disabled={submitting}
+                placeholder={
+                  formMode === "edit" ? "留空保留旧密钥" : "sk-..."
+                }
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <label className="ai-provider-field">
+              <span>模型</span>
+              <input
+                name="model"
+                value={form.model}
+                disabled={submitting}
+                placeholder="gpt-5"
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <label className="ai-provider-field ai-provider-field-wide">
+              <span>Base URL</span>
+              <input
+                name="baseURL"
+                value={form.baseURL}
+                disabled={submitting}
+                placeholder="https://api.openai.com/v1"
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <fieldset className="ai-provider-choice-field">
+              <legend>API 类型</legend>
+              <div className="ai-provider-choice-list">
+                {aiProviderAPITypeOptions.map((option) => (
+                  <label className="ai-provider-choice" key={option.value}>
+                    <input
+                      type="radio"
+                      name="apiType"
+                      value={option.value}
+                      checked={form.apiType === option.value}
+                      disabled={submitting}
+                      onChange={handleFormInputChange}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label className="ai-provider-field">
+              <span>max tokens</span>
+              <input
+                name="maxTokens"
+                type="number"
+                min="1"
+                step="1"
+                value={form.maxTokens}
+                disabled={submitting}
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <label className="ai-provider-field">
+              <span>temperature</span>
+              <input
+                name="temperature"
+                type="number"
+                min="0"
+                step="0.1"
+                value={form.temperature}
+                disabled={submitting}
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <label className="ai-provider-field">
+              <span>top_p</span>
+              <input
+                name="topP"
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                value={form.topP}
+                disabled={submitting}
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <label className="ai-provider-field">
+              <span>思考等级</span>
+              <input
+                name="thinkingLevel"
+                type="number"
+                min="0"
+                step="1"
+                value={form.thinkingLevel}
+                disabled={submitting}
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <label className="ai-provider-toggle-field">
+              <input
+                type="checkbox"
+                checked={form.enabled}
+                disabled={submitting}
+                onChange={handleEnabledChange}
+              />
+              <span>启用该提供商</span>
+            </label>
+          </div>
+
+          <div className="ai-provider-form-actions">
+            <button
+              type="submit"
+              className="settings-primary-button"
+              disabled={loading || submitting}
+            >
+              {submitting
+                ? "保存中..."
+                : formMode === "edit"
+                  ? "保存修改"
+                  : "创建提供商"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </article>
+  );
+}
+
 // SystemSettingsPanel 渲染系统更新面板。
 // 参数 props 表示系统更新面板需要的外部回调。
 function SystemSettingsPanel(props: SystemSettingsPanelProps) {
@@ -422,6 +1116,130 @@ function SystemSettingsPanel(props: SystemSettingsPanelProps) {
   );
 }
 
+// createDefaultAIProviderFormState 创建 AI 提供商默认表单状态。
+function createDefaultAIProviderFormState(): AIProviderFormState {
+  return { ...defaultAIProviderFormState };
+}
+
+// providerToAIProviderFormState 将 AI 提供商接口数据转换为表单状态。
+// 参数 provider 表示需要编辑的 AI 提供商。
+function providerToAIProviderFormState(
+  provider: AIProviderItem,
+): AIProviderFormState {
+  return {
+    name: provider.name,
+    providerType: provider.provider_type,
+    apiKey: "",
+    model: provider.model,
+    baseURL: provider.base_url,
+    apiType: provider.api_type,
+    maxTokens: String(provider.max_tokens),
+    temperature: String(provider.temperature),
+    topP: String(provider.top_p),
+    thinkingLevel: String(provider.thinking_level),
+    enabled: provider.enabled,
+  };
+}
+
+// validateAIProviderForm 校验 AI 提供商表单输入。
+// 参数 form 表示 AI 提供商表单状态；参数 mode 表示当前表单模式。
+function validateAIProviderForm(
+  form: AIProviderFormState,
+  mode: AIProviderFormMode,
+): string {
+  if (!form.name.trim()) {
+    return "AI 提供商名称不能为空";
+  }
+  if (!form.providerType.trim()) {
+    return "AI 提供商类型不能为空";
+  }
+  if (!isAIProviderType(form.providerType)) {
+    return "AI 提供商类型只能是 openai、claude 或 gemini";
+  }
+  if (mode === "create" && !form.apiKey.trim()) {
+    return "AI 提供商 API Key 不能为空";
+  }
+  if (!form.model.trim()) {
+    return "AI 模型名称不能为空";
+  }
+  if (!isAIProviderAPIType(form.apiType)) {
+    return "AI 接口类型只能是 response 或 completions";
+  }
+
+  const maxTokens = Number(form.maxTokens.trim());
+  if (
+    !form.maxTokens.trim() ||
+    !Number.isInteger(maxTokens) ||
+    maxTokens <= 0
+  ) {
+    return "最大输出 token 数必须是大于 0 的整数";
+  }
+
+  const temperature = Number(form.temperature.trim());
+  if (!form.temperature.trim() || Number.isNaN(temperature) || temperature < 0) {
+    return "temperature 不能小于 0";
+  }
+
+  const topP = Number(form.topP.trim());
+  if (!form.topP.trim() || Number.isNaN(topP) || topP < 0 || topP > 1) {
+    return "top_p 必须在 0 到 1 之间";
+  }
+
+  const thinkingLevel = Number(form.thinkingLevel.trim());
+  if (
+    !form.thinkingLevel.trim() ||
+    !Number.isInteger(thinkingLevel) ||
+    thinkingLevel < 0
+  ) {
+    return "思考等级必须是大于等于 0 的整数";
+  }
+
+  return "";
+}
+
+// toAIProviderUpsertParams 将表单状态转换为后端创建或更新参数。
+// 参数 form 表示 AI 提供商表单状态。
+function toAIProviderUpsertParams(
+  form: AIProviderFormState,
+): AIProviderUpsertParams {
+  const providerType = form.providerType.trim() as AIProviderType;
+  const apiType = form.apiType.trim() as AIProviderAPIType;
+
+  return {
+    name: form.name.trim(),
+    provider_type: providerType,
+    api_key: form.apiKey.trim(),
+    model: form.model.trim(),
+    base_url: form.baseURL.trim(),
+    api_type: apiType,
+    max_tokens: Number(form.maxTokens.trim()),
+    temperature: Number(form.temperature.trim()),
+    top_p: Number(form.topP.trim()),
+    thinking_level: Number(form.thinkingLevel.trim()),
+    enabled: form.enabled,
+  };
+}
+
+// isAIProviderType 判断前端表单中的 AI 提供商类型是否为允许值。
+// 参数 value 表示需要校验的 AI 提供商类型文本。
+function isAIProviderType(value: string): value is AIProviderType {
+  return aiProviderTypeOptions.some(
+    function matchAIProviderType(option) {
+      return option.value === value;
+    },
+  );
+}
+
+// isAIProviderAPIType 判断前端表单中的 AI 接口类型是否为允许值。
+// 参数 value 表示需要校验的 AI 接口类型文本。
+function isAIProviderAPIType(value: string): value is AIProviderAPIType {
+  return aiProviderAPITypeOptions.some(
+    function matchAIProviderAPIType(option) {
+      return option.value === value;
+    },
+  );
+}
+
 // formatTime 将接口返回的时间文本转换为本地展示文本。
 // 参数 value 表示接口返回的 ISO 时间文本。
 function formatTime(value?: string): string {
@@ -434,6 +1252,13 @@ function formatTime(value?: string): string {
     return "未知";
   }
   return time.toLocaleString();
+}
+
+// formatOptionalText 格式化可能为空的文本字段。
+// 参数 value 表示需要展示的可选文本。
+function formatOptionalText(value?: string): string {
+  const text = value?.trim();
+  return text ? text : "未设置";
 }
 
 // getErrorMessage 从未知错误中提取用户提示。
