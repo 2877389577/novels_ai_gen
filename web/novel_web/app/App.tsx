@@ -2,6 +2,7 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -14,6 +15,13 @@ import { AppFooter } from "./app-footer";
 import { LoginPage } from "./login";
 import { NovelDetailPage } from "./novel-detail";
 import { SettingsPage, type SettingsSection } from "./settings";
+import {
+  applyAppTheme,
+  getNextAppTheme,
+  persistAppTheme,
+  readStoredAppTheme,
+  type AppTheme,
+} from "./theme";
 
 // AppRoute 表示前端当前浏览器路径对应的页面状态。
 type AppRoute =
@@ -72,6 +80,16 @@ const chapterEditRoutePattern =
 // App 渲染小说创作应用的前端页面。
 export function App() {
   const [route, setRoute] = useState<AppRoute>(getInitialAppRoute);
+  const [theme, setTheme] = useState<AppTheme>(() => readStoredAppTheme());
+
+  // syncAppTheme 将当前主题同步到页面根节点和浏览器本地存储。
+  useLayoutEffect(
+    function syncAppTheme() {
+      applyAppTheme(theme);
+      persistAppTheme(theme);
+    },
+    [theme],
+  );
 
   // installRouteGuard 安装浏览器路由守卫，拦截未登录用户访问受保护路径。
   useEffect(
@@ -153,6 +171,13 @@ export function App() {
     [],
   );
 
+  // handleToggleTheme 处理全站黑白主题切换。
+  const handleToggleTheme = useCallback(function handleToggleTheme() {
+    setTheme(function toggleTheme(currentTheme) {
+      return getNextAppTheme(currentTheme);
+    });
+  }, []);
+
   // handleSettingsSectionChange 处理设置中心分区切换。
   // 参数 section 表示用户要切换到的设置分区。
   const handleSettingsSectionChange = useCallback(
@@ -220,8 +245,9 @@ export function App() {
   );
 
   return (
-    <div className="app-root" data-view={route.view}>
+    <div className="app-root" data-theme={theme} data-view={route.view}>
       {renderRoute(route, {
+        currentTheme: theme,
         onBackToBookshelf: handleBackToBookshelf,
         onBackToNovelDetail: handleBackToNovelDetail,
         onChapterCreate: handleChapterCreate,
@@ -231,6 +257,7 @@ export function App() {
         onNovelSelect: handleNovelSelect,
         onOpenSettings: handleOpenSettings,
         onSettingsSectionChange: handleSettingsSectionChange,
+        onToggleTheme: handleToggleTheme,
         onUnauthorized: handleUnauthorized,
       })}
       <AppFooter />
@@ -240,6 +267,8 @@ export function App() {
 
 // RouteHandlers 表示不同页面之间跳转需要的回调集合。
 interface RouteHandlers {
+  // currentTheme 表示全站当前使用的黑白主题。
+  currentTheme: AppTheme;
   // onBackToBookshelf 表示详情页返回书架时执行的回调。
   onBackToBookshelf: () => void;
   // onBackToNovelDetail 表示章节编辑页返回小说详情时执行的回调。
@@ -258,6 +287,8 @@ interface RouteHandlers {
   onOpenSettings: () => void;
   // onSettingsSectionChange 表示设置中心切换功能分区时执行的回调。
   onSettingsSectionChange: (section: SettingsSection) => void;
+  // onToggleTheme 表示用户切换全站黑白主题时执行的回调。
+  onToggleTheme: () => void;
   // onUnauthorized 表示登录态失效时执行的回调。
   onUnauthorized: () => void;
 }
@@ -269,8 +300,10 @@ function renderRoute(route: AppRoute, handlers: RouteHandlers) {
     case "bookshelf":
       return (
         <BookshelfPage
+          currentTheme={handlers.currentTheme}
           onNovelSelect={handlers.onNovelSelect}
           onOpenSettings={handlers.onOpenSettings}
+          onToggleTheme={handlers.onToggleTheme}
           onUnauthorized={handlers.onUnauthorized}
         />
       );

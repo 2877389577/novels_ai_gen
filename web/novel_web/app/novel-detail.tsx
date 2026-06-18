@@ -1594,13 +1594,6 @@ function NovelDetailHero(props: NovelDetailHeroProps) {
             <span aria-hidden="true">×</span>
             <span>删除作品</span>
           </button>
-          <button
-            type="button"
-            className="detail-link-button"
-            onClick={props.onBackToBookshelf}
-          >
-            返回书架
-          </button>
         </div>
       </article>
 
@@ -1962,7 +1955,6 @@ function ChapterListPanel(props: ChapterListPanelProps) {
           className="chapter-create-button"
           onClick={handleCreateChapter}
         >
-          <span aria-hidden="true">＋</span>
           <span>新增章节</span>
         </button>
       </div>
