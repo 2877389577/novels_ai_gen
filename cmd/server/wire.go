@@ -4,6 +4,7 @@ package main
 
 import (
 	"github.com/google/wire"
+	aiproviderhandler "novels_ai_gen/internal/api/handler/aiprovider"
 	authhandler "novels_ai_gen/internal/api/handler/auth"
 	chapterhandler "novels_ai_gen/internal/api/handler/chapter"
 	characterhandler "novels_ai_gen/internal/api/handler/character"
@@ -15,6 +16,7 @@ import (
 	systemhandler "novels_ai_gen/internal/api/handler/system"
 	uploadhandler "novels_ai_gen/internal/api/handler/upload"
 	"novels_ai_gen/internal/api/router"
+	bizaiprovider "novels_ai_gen/internal/biz/aiprovider"
 	bizauth "novels_ai_gen/internal/biz/auth"
 	bizchapter "novels_ai_gen/internal/biz/chapter"
 	bizcharacter "novels_ai_gen/internal/biz/character"
@@ -26,6 +28,7 @@ import (
 	"novels_ai_gen/internal/bootstrap/config"
 	"novels_ai_gen/internal/bootstrap/db"
 	"novels_ai_gen/internal/bootstrap/logger"
+	dataaiprovider "novels_ai_gen/internal/data/aiprovider"
 	datachapter "novels_ai_gen/internal/data/chapter"
 	datacharacter "novels_ai_gen/internal/data/character"
 	dataevent "novels_ai_gen/internal/data/event"
@@ -45,6 +48,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		db.Provider,
 		wire.Bind(new(bizauth.PasswordProvider), new(*config.ConfigManager)),
 		bizauth.NewService,
+		bizaiprovider.NewCipher,
 		datanovel.NewRepository,
 		wire.Bind(new(biznovel.Repository), new(*datanovel.Repository)),
 		biznovel.NewService,
@@ -60,6 +64,9 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		dataevent.NewRepository,
 		wire.Bind(new(bizevent.Repository), new(*dataevent.Repository)),
 		bizevent.NewService,
+		dataaiprovider.NewRepository,
+		wire.Bind(new(bizaiprovider.Repository), new(*dataaiprovider.Repository)),
+		bizaiprovider.NewService,
 		objectstore.NewClient,
 		wire.Bind(new(bizupload.ObjectStorage), new(*objectstore.Client)),
 		bizupload.NewService,
@@ -69,6 +76,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		characterhandler.NewHandler,
 		relationshiphandler.NewHandler,
 		eventhandler.NewHandler,
+		aiproviderhandler.NewHandler,
 		uploadhandler.NewHandler,
 		confighandler.NewHandler,
 		loghandler.NewHandler,

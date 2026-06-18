@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	aiproviderhandler "novels_ai_gen/internal/api/handler/aiprovider"
 	authhandler "novels_ai_gen/internal/api/handler/auth"
 	chapterhandler "novels_ai_gen/internal/api/handler/chapter"
 	characterhandler "novels_ai_gen/internal/api/handler/character"
@@ -27,8 +28,8 @@ import (
 const indexHTML = "index.html"
 
 // NewRouter 创建 Gin 路由引擎并注册系统接口。
-// 参数 authHandler 表示登录鉴权 HTTP 处理器；参数 novelHandler 表示小说 HTTP 处理器；参数 chapterHandler 表示章节 HTTP 处理器；参数 characterHandler 表示角色卡 HTTP 处理器；参数 relationshipHandler 表示角色关系图 HTTP 处理器；参数 eventHandler 表示小说事件 HTTP 处理器；参数 uploadHandler 表示图片上传 HTTP 处理器；参数 configHandler 表示配置文件管理 HTTP 处理器；参数 logHandler 表示文件日志预览 HTTP 处理器；参数 systemHandler 表示系统维护 HTTP 处理器；参数 authService 表示登录鉴权业务服务。
-func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Handler, chapterHandler *chapterhandler.Handler, characterHandler *characterhandler.Handler, relationshipHandler *relationshiphandler.Handler, eventHandler *eventhandler.Handler, uploadHandler *uploadhandler.Handler, configHandler *confighandler.Handler, logHandler *loghandler.Handler, systemHandler *systemhandler.Handler, authService *bizauth.Service) *gin.Engine {
+// 参数 authHandler 表示登录鉴权 HTTP 处理器；参数 novelHandler 表示小说 HTTP 处理器；参数 chapterHandler 表示章节 HTTP 处理器；参数 characterHandler 表示角色卡 HTTP 处理器；参数 relationshipHandler 表示角色关系图 HTTP 处理器；参数 eventHandler 表示小说事件 HTTP 处理器；参数 aiProviderHandler 表示 AI 提供商 HTTP 处理器；参数 uploadHandler 表示图片上传 HTTP 处理器；参数 configHandler 表示配置文件管理 HTTP 处理器；参数 logHandler 表示文件日志预览 HTTP 处理器；参数 systemHandler 表示系统维护 HTTP 处理器；参数 authService 表示登录鉴权业务服务。
+func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Handler, chapterHandler *chapterhandler.Handler, characterHandler *characterhandler.Handler, relationshipHandler *relationshiphandler.Handler, eventHandler *eventhandler.Handler, aiProviderHandler *aiproviderhandler.Handler, uploadHandler *uploadhandler.Handler, configHandler *confighandler.Handler, logHandler *loghandler.Handler, systemHandler *systemhandler.Handler, authService *bizauth.Service) *gin.Engine {
 	engine := gin.New()
 	engine.Use(middleware.RequestID(), middleware.RequestLogger(), gin.Recovery())
 
@@ -68,6 +69,11 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.POST("/novels/:id/event-relations", eventHandler.CreateRelation)
 	protected.PUT("/novels/:id/event-relations/:relation_id", eventHandler.UpdateRelation)
 	protected.DELETE("/novels/:id/event-relations/:relation_id", eventHandler.DeleteRelation)
+	protected.POST("/ai/providers", aiProviderHandler.Create)
+	protected.GET("/ai/providers", aiProviderHandler.List)
+	protected.GET("/ai/providers/:id", aiProviderHandler.Get)
+	protected.PUT("/ai/providers/:id", aiProviderHandler.Update)
+	protected.DELETE("/ai/providers/:id", aiProviderHandler.Delete)
 	protected.POST("/uploads/images", uploadHandler.UploadImage)
 	protected.GET("/uploads/preview", uploadHandler.Preview)
 	protected.GET("/config/file", configHandler.GetFile)

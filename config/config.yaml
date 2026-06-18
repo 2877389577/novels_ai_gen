@@ -89,3 +89,7 @@ database:
     # PostgreSQL 数据库名称。
     dbname: 
   
+ai:
+  # AI 提供商 API Key 的应用层加密密钥；可填写任意非空字符串。
+  # 可通过环境变量 AI_PROVIDER_SECRET_KEY 覆盖；修改后旧密钥加密的数据将无法解密。
+  provider_secret_key: "46468"

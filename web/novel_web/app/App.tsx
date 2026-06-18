@@ -462,7 +462,12 @@ function parseSettingsSectionPath(pathname: string): SettingsSection | null {
   }
 
   const section = normalizedPath.slice(settingsBaseRoutePath.length + 1);
-  if (section === "config" || section === "logs" || section === "system") {
+  if (
+    section === "config" ||
+    section === "logs" ||
+    section === "system" ||
+    section === "ai-providers"
+  ) {
     return section;
   }
   return null;
