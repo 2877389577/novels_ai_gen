@@ -36,6 +36,7 @@ import {
   splitNovelTagInputValue,
   splitNovelTags,
 } from "./novel-utils";
+import type { AppTheme } from "./theme";
 
 const bookshelfPageSize = 20;
 const coverUploadMaxSizeKB = 20 * 1024;
@@ -62,12 +63,16 @@ type CreateNovelFormValues = Omit<NovelCreateParams, "tags"> & {
 
 // BookshelfPageProps 表示书架首页需要的外部回调。
 interface BookshelfPageProps {
+  // currentTheme 表示全站当前使用的黑白主题。
+  currentTheme: AppTheme;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
   // onNovelSelect 表示用户选择某本小说后进入详情页的回调。
   onNovelSelect: (novelId: number) => void;
   // onOpenSettings 表示用户进入设置中心时执行的回调。
   onOpenSettings: () => void;
+  // onToggleTheme 表示用户切换全站黑白主题时执行的回调。
+  onToggleTheme: () => void;
 }
 
 // BookshelfState 表示书架首页的数据加载状态。
@@ -156,9 +161,11 @@ export function BookshelfPage(props: BookshelfPageProps) {
   return (
     <main className="bookshelf-page">
       <BookshelfHeader
+        currentTheme={props.currentTheme}
         totalCount={totalCount}
         updatedCount={updatedCount}
         onOpenSettings={props.onOpenSettings}
+        onToggleTheme={props.onToggleTheme}
       />
 
       <section className="bookshelf-content" aria-labelledby="bookshelf-title">
@@ -196,12 +203,16 @@ export function BookshelfPage(props: BookshelfPageProps) {
 
 // BookshelfHeaderProps 表示书架顶部导航需要的统计数据。
 interface BookshelfHeaderProps {
+  // currentTheme 表示全站当前使用的黑白主题。
+  currentTheme: AppTheme;
   // totalCount 表示当前书架中的小说总数。
   totalCount: number;
   // updatedCount 表示最近有更新的小说数量。
   updatedCount: number;
   // onOpenSettings 表示用户进入设置中心时执行的回调。
   onOpenSettings: () => void;
+  // onToggleTheme 表示用户切换全站黑白主题时执行的回调。
+  onToggleTheme: () => void;
 }
 
 // BookshelfHeader 渲染书架首页顶部导航。
@@ -231,10 +242,12 @@ function BookshelfHeader(props: BookshelfHeaderProps) {
           </button>
           <button
             type="button"
-            aria-label="设置"
-            onClick={props.onOpenSettings}
+            aria-label={props.currentTheme === "dark" ? "切换白色主题" : "切换黑色主题"}
+            aria-pressed={props.currentTheme === "dark"}
+            title={props.currentTheme === "dark" ? "切换白色主题" : "切换黑色主题"}
+            onClick={props.onToggleTheme}
           >
-            ⚙
+            {props.currentTheme === "dark" ? "☾" : "☼"}
           </button>
           <BookshelfUserMenu onOpenSettings={props.onOpenSettings} />
         </div>
