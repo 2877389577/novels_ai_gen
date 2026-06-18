@@ -1,4 +1,4 @@
-import { IconAIEditLevel1, IconClose } from "@douyinfe/semi-icons";
+import { IconAIEditLevel1, IconClose, IconSend } from "@douyinfe/semi-icons";
 import { AIChatDialogue, FloatButton, Toast } from "@douyinfe/semi-ui-19";
 import {
   useCallback,
@@ -22,8 +22,12 @@ import {
   UnauthorizedError,
   createChapter,
   fetchChapterDetail,
+  fetchAIProviderModelsByProviderID,
+  fetchAIProviders,
   fetchNextChapterNumber,
   updateChapter,
+  type AIProviderItem,
+  type AIProviderModelItem,
   type ChapterCreateParams,
   type ChapterDetailItem,
   type ChapterUpdateParams,
@@ -31,6 +35,7 @@ import {
 import { normalizeText } from "./novel-utils";
 
 const chapterEditorScrollbarHiddenClass = "chapter-editor-scrollbar-hidden";
+const chapterAiProviderPageSize = 100;
 
 const emptyChapterFormValues: ChapterFormValues = {
   title: "",
@@ -42,7 +47,7 @@ const chapterAiAssistantMessages: Message[] = [
     id: "chapter-ai-assistant-welcome",
     role: "assistant",
     content:
-      "你好，我是章节写作助手。这里会作为写作时的 AI 对话区域，当前先展示界面占位，不会调用后端接口。",
+      "你好，我是章节写作助手。这里会作为写作时的 AI 对话区域，当前可选择模型并记录对话，真实生成接口待接入。",
   },
   {
     id: "chapter-ai-assistant-suggestion",
@@ -92,6 +97,8 @@ type ChapterEditorState = "loading" | "ready" | "error";
 interface ChapterAiAssistantPanelProps {
   // onClose 表示关闭章节 AI 助手侧栏时执行的回调。
   onClose: () => void;
+  // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+  onUnauthorized: () => void;
 }
 
 // ChapterEditorPage 渲染章节创建和编辑共用页面。
@@ -531,7 +538,10 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         </section>
 
         {aiPanelOpen ? (
-          <ChapterAiAssistantPanel onClose={handleAiAssistantClose} />
+          <ChapterAiAssistantPanel
+            onClose={handleAiAssistantClose}
+            onUnauthorized={props.onUnauthorized}
+          />
         ) : null}
       </div>
 
@@ -560,6 +570,226 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
 // ChapterAiAssistantPanel 渲染章节编辑页右侧 AI 对话侧栏。
 // 参数 props 表示章节 AI 助手侧栏需要的回调。
 function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
+  const [chats, setChats] = useState<Message[]>(chapterAiAssistantMessages);
+  const [providers, setProviders] = useState<AIProviderItem[]>([]);
+  const [models, setModels] = useState<AIProviderModelItem[]>([]);
+  const [selectedProviderID, setSelectedProviderID] = useState("");
+  const [selectedModelID, setSelectedModelID] = useState("");
+  const [inputValue, setInputValue] = useState("");
+  const [providerLoading, setProviderLoading] = useState(true);
+  const [modelLoading, setModelLoading] = useState(false);
+  const onUnauthorized = props.onUnauthorized;
+
+  const selectedProvider = useMemo(
+    function findSelectedProvider() {
+      return providers.find(function matchProvider(provider) {
+        return String(provider.id) === selectedProviderID;
+      });
+    },
+    [providers, selectedProviderID],
+  );
+  const selectedModel = useMemo(
+    function findSelectedModel() {
+      return models.find(function matchModel(model) {
+        return model.id === selectedModelID;
+      });
+    },
+    [models, selectedModelID],
+  );
+  const providerSelectPlaceholder = providerLoading
+    ? "加载中..."
+    : providers.length === 0
+      ? "暂无提供商"
+      : "选择提供商";
+  const modelSelectPlaceholder = modelLoading
+    ? "加载中..."
+    : models.length === 0
+      ? "暂无模型"
+      : "选择模型";
+
+  useEffect(
+    function loadEnabledProviders() {
+      const controller = new AbortController();
+      setProviderLoading(true);
+
+      async function loadProviders() {
+        try {
+          const data = await fetchAIProviders({
+            page: 1,
+            pageSize: chapterAiProviderPageSize,
+            signal: controller.signal,
+          });
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          const enabledProviders = data.items.filter(function onlyEnabled(provider) {
+            return provider.enabled;
+          });
+          setProviders(enabledProviders);
+          setSelectedProviderID(function keepExistingProvider(currentValue) {
+            if (
+              currentValue &&
+              enabledProviders.some(function matchProvider(provider) {
+                return String(provider.id) === currentValue;
+              })
+            ) {
+              return currentValue;
+            }
+            return enabledProviders[0] ? String(enabledProviders[0].id) : "";
+          });
+        } catch (error) {
+          if (controller.signal.aborted) {
+            return;
+          }
+          if (error instanceof UnauthorizedError) {
+            onUnauthorized();
+            return;
+          }
+          Toast.error(getErrorMessage(error, "AI 提供商加载失败，请稍后再试"));
+        } finally {
+          if (!controller.signal.aborted) {
+            setProviderLoading(false);
+          }
+        }
+      }
+
+      void loadProviders();
+      return function cancelProviderLoad() {
+        controller.abort();
+      };
+    },
+    [onUnauthorized],
+  );
+
+  useEffect(
+    function loadProviderModels() {
+      if (!selectedProviderID) {
+        setModels([]);
+        setSelectedModelID("");
+        return;
+      }
+
+      const controller = new AbortController();
+      setModelLoading(true);
+      setModels([]);
+      setSelectedModelID("");
+
+      async function loadModels() {
+        try {
+          const data = await fetchAIProviderModelsByProviderID(
+            Number(selectedProviderID),
+            controller.signal,
+          );
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          setModels(data.items);
+          setSelectedModelID(data.items[0]?.id ?? "");
+        } catch (error) {
+          if (controller.signal.aborted) {
+            return;
+          }
+          if (error instanceof UnauthorizedError) {
+            onUnauthorized();
+            return;
+          }
+          Toast.error(getErrorMessage(error, "AI 模型列表获取失败，请稍后再试"));
+        } finally {
+          if (!controller.signal.aborted) {
+            setModelLoading(false);
+          }
+        }
+      }
+
+      void loadModels();
+      return function cancelModelLoad() {
+        controller.abort();
+      };
+    },
+    [onUnauthorized, selectedProviderID],
+  );
+
+  // handleProviderChange 切换当前用于查询模型的 AI 提供商。
+  // 参数 event 表示提供商选择框变更事件。
+  function handleProviderChange(event: ChangeEvent<HTMLSelectElement>) {
+    setSelectedProviderID(event.target.value);
+  }
+
+  // handleModelChange 切换当前对话选择的 AI 模型。
+  // 参数 event 表示模型选择框变更事件。
+  function handleModelChange(event: ChangeEvent<HTMLSelectElement>) {
+    setSelectedModelID(event.target.value);
+  }
+
+  // handleAssistantInputChange 同步 AI 对话输入框内容。
+  // 参数 event 表示输入框变更事件。
+  function handleAssistantInputChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    setInputValue(event.target.value);
+  }
+
+  // handleAssistantInputKeyDown 处理 AI 对话输入框键盘提交。
+  // 参数 event 表示输入框键盘事件。
+  function handleAssistantInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      submitAssistantMessage();
+    }
+  }
+
+  // handleAssistantSubmit 处理 AI 对话输入区提交。
+  // 参数 event 表示输入区表单提交事件。
+  function handleAssistantSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    submitAssistantMessage();
+  }
+
+  // submitAssistantMessage 将用户输入追加到本地 AI 对话消息中。
+  function submitAssistantMessage() {
+    const normalizedInput = inputValue.trim();
+    if (providers.length === 0) {
+      Toast.warning("请先在设置中启用 AI 提供商");
+      return;
+    }
+    if (!selectedProviderID) {
+      Toast.warning("请选择 AI 提供商");
+      return;
+    }
+    if (modelLoading) {
+      Toast.info("模型列表正在加载");
+      return;
+    }
+    if (!selectedModelID) {
+      Toast.warning("请选择 AI 模型");
+      return;
+    }
+    if (!normalizedInput) {
+      Toast.warning("请输入要发送给 AI 的内容");
+      return;
+    }
+
+    const providerName = selectedProvider?.name ?? "当前提供商";
+    const modelName = formatAIModelName(selectedModel);
+    setChats(function appendAssistantMessages(currentChats) {
+      const createdAt = Date.now();
+      return [
+        ...currentChats,
+        {
+          id: createChapterAiMessageID("user", createdAt),
+          role: "user",
+          content: normalizedInput,
+        },
+        {
+          id: createChapterAiMessageID("assistant", createdAt),
+          role: "assistant",
+          content: `已选择 ${providerName} / ${modelName}。真实生成接口待接入，当前先记录你的提问。`,
+        },
+      ];
+    });
+    setInputValue("");
+  }
+
   return (
     <aside
       aria-label="AI 写作助手"
@@ -584,16 +814,100 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         <div className="chapter-ai-dialogue-wrap">
           <AIChatDialogue
             align="leftRight"
-            chats={chapterAiAssistantMessages}
+            chats={chats}
             className="chapter-ai-dialogue"
             mode="bubble"
             roleConfig={chapterAiAssistantRoleConfig}
             style={{ height: "100%" }}
           />
         </div>
+        <form className="chapter-ai-composer" onSubmit={handleAssistantSubmit}>
+          <div className="chapter-ai-model-picker">
+            <label className="chapter-ai-select-field">
+              <span>提供商</span>
+              <select
+                aria-label="AI 提供商"
+                disabled={providerLoading || providers.length === 0}
+                onChange={handleProviderChange}
+                value={selectedProviderID}
+              >
+                <option value="">{providerSelectPlaceholder}</option>
+                {providers.map(function renderProviderOption(provider) {
+                  return (
+                    <option key={provider.id} value={String(provider.id)}>
+                      {provider.name}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label className="chapter-ai-select-field">
+              <span>模型</span>
+              <select
+                aria-label="AI 模型"
+                disabled={!selectedProviderID || modelLoading || models.length === 0}
+                onChange={handleModelChange}
+                value={selectedModelID}
+              >
+                <option value="">{modelSelectPlaceholder}</option>
+                {models.map(function renderModelOption(model) {
+                  return (
+                    <option key={model.id} value={model.id}>
+                      {formatAIModelOption(model)}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          </div>
+          <div className="chapter-ai-input-row">
+            <textarea
+              aria-label="AI 对话输入"
+              className="chapter-ai-input"
+              onChange={handleAssistantInputChange}
+              onKeyDown={handleAssistantInputKeyDown}
+              placeholder="输入你的问题或写作目标..."
+              rows={2}
+              value={inputValue}
+            />
+            <button
+              aria-label="发送给 AI 写作助手"
+              className="chapter-ai-send"
+              disabled={modelLoading}
+              title="发送"
+              type="submit"
+            >
+              <IconSend aria-hidden="true" />
+            </button>
+          </div>
+        </form>
       </div>
     </aside>
   );
+}
+
+// createChapterAiMessageID 创建章节 AI 对话本地消息 ID。
+// 参数 role 表示消息角色；参数 createdAt 表示消息创建时间戳。
+function createChapterAiMessageID(role: string, createdAt: number): string {
+  return `chapter-ai-${role}-${createdAt}`;
+}
+
+// formatAIModelName 返回 AI 模型在对话提示中的展示名。
+// 参数 model 表示当前选择的 AI 模型，可以为空。
+function formatAIModelName(model?: AIProviderModelItem): string {
+  if (!model) {
+    return "当前模型";
+  }
+  return model.display_name || model.id;
+}
+
+// formatAIModelOption 返回 AI 模型下拉选项展示文本。
+// 参数 model 表示需要渲染的 AI 模型。
+function formatAIModelOption(model: AIProviderModelItem): string {
+  if (!model.display_name || model.display_name === model.id) {
+    return model.id;
+  }
+  return `${model.display_name} (${model.id})`;
 }
 
 // ChapterEditorSkeleton 渲染章节编辑页加载中的占位内容。

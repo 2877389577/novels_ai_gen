@@ -1130,6 +1130,38 @@ export async function fetchAIProviderModels(
   return payload.data;
 }
 
+// fetchAIProviderModelsByProviderID 使用已保存 AI 提供商配置查询官方模型列表。
+// 参数 providerId 表示 AI 提供商主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchAIProviderModelsByProviderID(
+  providerId: number,
+  signal?: AbortSignal,
+): Promise<AIProviderModelListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/ai/providers/${providerId}/models`, {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<AIProviderModelListData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 模型列表获取失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
 // deleteAIProvider 调用后端接口删除指定 AI 提供商。
 // 参数 id 表示 AI 提供商主键 ID。
 export async function deleteAIProvider(

@@ -7574,6 +7574,14 @@ html[data-theme="dark"] .chapter-editor-page {
   margin: 0;
 }
 
+.chapter-editor-page-ai-open {
+  display: flex;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+
 .chapter-editor-workbench {
   display: grid;
   width: 100%;
@@ -7583,12 +7591,18 @@ html[data-theme="dark"] .chapter-editor-page {
 }
 
 .chapter-editor-workbench-ai-open {
+  flex: 1 1 auto;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 0;
+  align-items: stretch;
 }
 
 .chapter-editor-workbench-ai-open .chapter-editor-shell {
+  height: 100%;
   width: 100%;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
   margin: 0;
   padding-inline: clamp(28px, 3vw, 56px);
 }
@@ -7608,11 +7622,12 @@ html[data-theme="dark"] .chapter-editor-page {
 }
 
 .chapter-ai-assistant-panel {
-  position: sticky;
-  top: 24px;
+  position: relative;
   min-width: 0;
-  height: calc(100vh - 48px);
-  margin: 24px 24px 96px 0;
+  height: calc(100% - 48px);
+  max-height: calc(100% - 48px);
+  margin: 24px 24px 24px 0;
+  overflow: hidden;
   animation: chapter-ai-slide-in 240ms ease-out both;
 }
 
@@ -7697,14 +7712,22 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
 .chapter-ai-dialogue-wrap {
   min-height: 0;
   flex: 1 1 auto;
+  overflow: hidden;
   padding: 18px 10px 18px 0;
 }
 
 .chapter-ai-dialogue {
+  height: 100%;
+  min-height: 0;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue {
   min-height: 0;
 }
 
 .chapter-ai-dialogue .semi-ai-chat-dialogue-list {
+  min-height: 0;
+  overflow-y: auto;
   scrollbar-width: thin;
 }
 
@@ -7717,6 +7740,122 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
   border-radius: 8px;
   background: color-mix(in srgb, var(--color-surface-container-low) 76%, var(--color-paper));
   color: var(--color-on-surface);
+}
+
+.chapter-ai-composer {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(150px, 180px) minmax(0, 1fr);
+  gap: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--color-outline-variant) 48%, transparent);
+  padding: 14px 16px 16px;
+  background: color-mix(in srgb, var(--color-surface-container-low) 54%, var(--color-paper));
+}
+
+.chapter-ai-model-picker {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.chapter-ai-select-field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.chapter-ai-select-field span {
+  color: var(--color-on-surface-variant);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.chapter-ai-select-field select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 76%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-paper) 92%, var(--color-surface));
+  color: var(--color-on-surface);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  padding: 0 10px;
+}
+
+.chapter-ai-select-field select:focus {
+  border-color: var(--color-primary);
+  outline: 3px solid color-mix(in srgb, var(--color-primary-container) 46%, transparent);
+}
+
+.chapter-ai-select-field select:disabled {
+  color: color-mix(in srgb, var(--color-on-surface-variant) 64%, transparent);
+  cursor: not-allowed;
+}
+
+.chapter-ai-input-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: end;
+  gap: 10px;
+}
+
+.chapter-ai-input {
+  width: 100%;
+  min-width: 0;
+  height: 80px;
+  resize: none;
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 76%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-paper) 94%, var(--color-surface));
+  color: var(--color-on-surface);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  padding: 10px 12px;
+}
+
+.chapter-ai-input::placeholder {
+  color: color-mix(in srgb, var(--color-on-surface-variant) 72%, transparent);
+}
+
+.chapter-ai-input:focus {
+  border-color: var(--color-primary);
+  outline: 3px solid color-mix(in srgb, var(--color-primary-container) 46%, transparent);
+}
+
+.chapter-ai-send {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 42%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-primary-container) 68%, var(--color-paper));
+  color: var(--color-primary);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.chapter-ai-send:not(:disabled):hover,
+.chapter-ai-send:not(:disabled):focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.chapter-ai-send:disabled {
+  opacity: 0.56;
+  cursor: wait;
 }
 
 .chapter-ai-float-trigger {
@@ -8139,6 +8278,7 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
     inset: 0 0 0 auto;
     width: min(100vw, 440px);
     height: 100vh;
+    max-height: 100vh;
     margin: 0;
   }
 
@@ -8325,6 +8465,19 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
 
   .chapter-ai-dialogue-wrap {
     padding: 14px 6px 14px 0;
+  }
+
+  .chapter-ai-composer {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px 14px 14px;
+  }
+
+  .chapter-ai-model-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chapter-ai-input {
+    height: 72px;
   }
 
   .chapter-ai-float-trigger {

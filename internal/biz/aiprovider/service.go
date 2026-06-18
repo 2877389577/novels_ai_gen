@@ -196,6 +196,26 @@ func (s *Service) ListModels(ctx context.Context, req ModelListRequest) (ModelLi
 	return s.modelFetcher.ListModels(ctx, req)
 }
 
+// ListModelsByProviderID 使用已保存 AI 提供商配置查询官方模型列表。
+// 参数 ctx 表示请求上下文；参数 id 表示 AI 提供商主键 ID。
+func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64) (ModelListResponse, error) {
+	item, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return ModelListResponse{}, fmt.Errorf("查询 AI 提供商失败: %w", err)
+	}
+
+	apiKey, err := s.cipher.Decrypt(item.APIKeyCiphertext)
+	if err != nil {
+		return ModelListResponse{}, fmt.Errorf("解密 AI 提供商 API Key 失败: %w", err)
+	}
+
+	return s.ListModels(ctx, ModelListRequest{
+		ProviderType: item.ProviderType,
+		APIKey:       apiKey,
+		BaseURL:      item.BaseURL,
+	})
+}
+
 // apiTypeFromCreateRequest 返回创建请求中的 AI 接口类型默认值。
 // 参数 req 表示已经标准化的创建 AI 提供商请求参数。
 func apiTypeFromCreateRequest(req CreateRequest) string {

@@ -268,6 +268,38 @@ func (h *Handler) ListModels(c *gin.Context) {
 	response.OK(c, data)
 }
 
+// ListModelsByProviderID 处理使用已保存 AI 提供商配置查询官方模型列表请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 根据已保存 AI 提供商查询官方模型列表
+// @Description 根据 AI 提供商 ID 读取本地加密密钥并在后端按官方协议查询模型列表，API Key 不会回显到前端。
+// @Tags ai-providers
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "AI 提供商 ID"
+// @Success 200 {object} ModelListSuccessResponse "查询成功"
+// @Failure 400 {object} response.ErrorBody "请求参数错误"
+// @Failure 401 {object} response.ErrorBody "未登录或登录已过期"
+// @Failure 404 {object} response.ErrorBody "AI 提供商不存在"
+// @Failure 502 {object} response.ErrorBody "官方模型列表接口不可用"
+// @Failure 500 {object} response.ErrorBody "服务器内部错误"
+// @Router /ai/providers/{id}/models [post]
+func (h *Handler) ListModelsByProviderID(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+
+	data, err := h.service.ListModelsByProviderID(c.Request.Context(), id)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+
+	response.OK(c, data)
+}
+
 // Get 处理 AI 提供商详情查询请求。
 // 参数 c 表示 Gin 请求上下文。
 //

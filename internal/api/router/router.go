@@ -72,6 +72,7 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.POST("/ai/providers", aiProviderHandler.Create)
 	protected.GET("/ai/providers", aiProviderHandler.List)
 	protected.POST("/ai/providers/models", aiProviderHandler.ListModels)
+	protected.POST("/ai/providers/:id/models", aiProviderHandler.ListModelsByProviderID)
 	protected.GET("/ai/providers/:id", aiProviderHandler.Get)
 	protected.PUT("/ai/providers/:id", aiProviderHandler.Update)
 	protected.DELETE("/ai/providers/:id", aiProviderHandler.Delete)
