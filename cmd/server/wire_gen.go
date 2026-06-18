@@ -15,6 +15,7 @@ import (
 	event3 "novels_ai_gen/internal/api/handler/event"
 	"novels_ai_gen/internal/api/handler/log"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
+	novelagent2 "novels_ai_gen/internal/api/handler/novelagent"
 	relationship3 "novels_ai_gen/internal/api/handler/relationship"
 	system2 "novels_ai_gen/internal/api/handler/system"
 	upload2 "novels_ai_gen/internal/api/handler/upload"
@@ -25,6 +26,7 @@ import (
 	character2 "novels_ai_gen/internal/biz/character"
 	event2 "novels_ai_gen/internal/biz/event"
 	novel2 "novels_ai_gen/internal/biz/novel"
+	"novels_ai_gen/internal/biz/novelagent"
 	relationship2 "novels_ai_gen/internal/biz/relationship"
 	"novels_ai_gen/internal/biz/system"
 	"novels_ai_gen/internal/biz/upload"
@@ -94,6 +96,9 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	modelClient := aiprovider2.NewModelClient()
 	aiproviderService := aiprovider2.NewService(aiproviderRepository, cipher, modelClient)
 	aiproviderHandler := aiprovider3.NewHandler(aiproviderService)
+	einoAgentRuntimeFactory := novelagent.NewEinoAgentRuntimeFactory()
+	novelagentService := novelagent.NewService(aiproviderRepository, cipher, configManager, einoAgentRuntimeFactory)
+	novelagentHandler := novelagent2.NewHandler(novelagentService)
 	client, err := objectstore.NewClient(appConfig)
 	if err != nil {
 		cleanup3()
@@ -107,7 +112,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	logHandler := log.NewHandler(configManager)
 	systemService := system.NewService()
 	systemHandler := system2.NewHandler(systemService)
-	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, eventHandler, aiproviderHandler, uploadHandler, configHandler, logHandler, systemHandler, service)
+	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, eventHandler, aiproviderHandler, novelagentHandler, uploadHandler, configHandler, logHandler, systemHandler, service)
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {

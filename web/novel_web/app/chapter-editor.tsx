@@ -25,6 +25,7 @@ import {
   fetchAIProviderModelsByProviderID,
   fetchAIProviders,
   fetchNextChapterNumber,
+  streamNovelAgentChat,
   updateChapter,
   type AIProviderItem,
   type AIProviderModelItem,
@@ -47,13 +48,13 @@ const chapterAiAssistantMessages: Message[] = [
     id: "chapter-ai-assistant-welcome",
     role: "assistant",
     content:
-      "你好，我是章节写作助手。这里会作为写作时的 AI 对话区域，当前可选择模型并记录对话，真实生成接口待接入。",
+      "你好，我是章节写作助手。你可以选择提供商和模型，把润色需求发给我，我会结合当前章节正文给出修改建议。",
   },
   {
     id: "chapter-ai-assistant-suggestion",
     role: "assistant",
     content:
-      "你可以把正在打磨的段落、人物情绪或情节目标复制到这里，后续接入真实能力后可以继续扩写、润色和拆解节奏。",
+      "当前首版会优先处理润色任务。你可以描述想要的语气、节奏或氛围，我会尽量让文字更贴近你的目标。",
   },
 ];
 
@@ -95,6 +96,8 @@ type ChapterEditorState = "loading" | "ready" | "error";
 
 // ChapterAiAssistantPanelProps 表示章节 AI 助手侧栏需要的回调。
 interface ChapterAiAssistantPanelProps {
+  // chapterContent 表示当前章节编辑器中的正文内容。
+  chapterContent: string;
   // onClose 表示关闭章节 AI 助手侧栏时执行的回调。
   onClose: () => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
@@ -539,6 +542,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
 
         {aiPanelOpen ? (
           <ChapterAiAssistantPanel
+            chapterContent={contentValue}
             onClose={handleAiAssistantClose}
             onUnauthorized={props.onUnauthorized}
           />
@@ -578,6 +582,8 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const [inputValue, setInputValue] = useState("");
   const [providerLoading, setProviderLoading] = useState(true);
   const [modelLoading, setModelLoading] = useState(false);
+  const [assistantSending, setAssistantSending] = useState(false);
+  const streamControllerRef = useRef<AbortController | null>(null);
   const onUnauthorized = props.onUnauthorized;
 
   const selectedProvider = useMemo(
@@ -663,6 +669,15 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   );
 
   useEffect(
+    function cancelAssistantStreamOnUnmount() {
+      return function cancelAssistantStream() {
+        streamControllerRef.current?.abort();
+      };
+    },
+    [],
+  );
+
+  useEffect(
     function loadProviderModels() {
       if (!selectedProviderID) {
         setModels([]);
@@ -734,7 +749,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   function handleAssistantInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
       event.preventDefault();
-      submitAssistantMessage();
+      void submitAssistantMessage();
     }
   }
 
@@ -742,12 +757,22 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   // 参数 event 表示输入区表单提交事件。
   function handleAssistantSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    submitAssistantMessage();
+    void submitAssistantMessage();
   }
 
-  // submitAssistantMessage 将用户输入追加到本地 AI 对话消息中。
-  function submitAssistantMessage() {
+  // handleAssistantClose 关闭 AI 侧栏并取消仍在进行的流式请求。
+  function handleAssistantClose() {
+    streamControllerRef.current?.abort();
+    props.onClose();
+  }
+
+  // submitAssistantMessage 将用户输入发送给后端小说写作 Agent。
+  async function submitAssistantMessage() {
     const normalizedInput = inputValue.trim();
+    if (assistantSending) {
+      Toast.info("AI 正在回复，请稍后再发送");
+      return;
+    }
     if (providers.length === 0) {
       Toast.warning("请先在设置中启用 AI 提供商");
       return;
@@ -771,8 +796,9 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
 
     const providerName = selectedProvider?.name ?? "当前提供商";
     const modelName = formatAIModelName(selectedModel);
+    const createdAt = Date.now();
+    const assistantMessageID = createChapterAiMessageID("assistant", createdAt);
     setChats(function appendAssistantMessages(currentChats) {
-      const createdAt = Date.now();
       return [
         ...currentChats,
         {
@@ -781,13 +807,91 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           content: normalizedInput,
         },
         {
-          id: createChapterAiMessageID("assistant", createdAt),
+          id: assistantMessageID,
           role: "assistant",
-          content: `已选择 ${providerName} / ${modelName}。真实生成接口待接入，当前先记录你的提问。`,
+          content: "",
         },
       ];
     });
     setInputValue("");
+
+    const controller = new AbortController();
+    streamControllerRef.current?.abort();
+    streamControllerRef.current = controller;
+    setAssistantSending(true);
+
+    let assistantContent = "";
+    try {
+      await streamNovelAgentChat(
+        {
+          providerId: Number(selectedProviderID),
+          model: selectedModelID,
+          message: normalizedInput,
+          promptParams: {
+            text: props.chapterContent.trim(),
+            userMsg: normalizedInput,
+          },
+          signal: controller.signal,
+        },
+        {
+          onEvent(event) {
+            if (event.type === "delta") {
+              assistantContent += event.content ?? "";
+              updateAssistantMessage(assistantMessageID, assistantContent);
+              return;
+            }
+            if (event.type === "done") {
+              assistantContent = event.content || assistantContent;
+              updateAssistantMessage(assistantMessageID, assistantContent);
+              return;
+            }
+            if (event.type === "error") {
+              const baseErrorMessage =
+                event.message || `${providerName} / ${modelName} 生成失败，请稍后再试`;
+              const requestID = event.request_id?.trim();
+              const errorMessage = requestID
+                ? `${baseErrorMessage}（请求ID：${requestID}）`
+                : baseErrorMessage;
+              updateAssistantMessage(assistantMessageID, errorMessage);
+              Toast.error(errorMessage);
+            }
+          },
+        },
+      );
+    } catch (error) {
+      if (controller.signal.aborted) {
+        updateAssistantMessage(assistantMessageID, "本次 AI 回复已取消。");
+        return;
+      }
+      if (error instanceof UnauthorizedError) {
+        onUnauthorized();
+        return;
+      }
+      const errorMessage = getErrorMessage(error, "AI 写作助手生成失败，请稍后再试");
+      updateAssistantMessage(assistantMessageID, errorMessage);
+      Toast.error(errorMessage);
+    } finally {
+      if (streamControllerRef.current === controller) {
+        streamControllerRef.current = null;
+      }
+      setAssistantSending(false);
+    }
+  }
+
+  // updateAssistantMessage 更新指定 AI 助手消息内容。
+  // 参数 messageID 表示需要更新的消息 ID；参数 content 表示新的消息内容。
+  function updateAssistantMessage(messageID: string, content: string) {
+    setChats(function updateMessage(currentChats) {
+      return currentChats.map(function updateChat(chat) {
+        if (chat.id !== messageID) {
+          return chat;
+        }
+        return {
+          ...chat,
+          content,
+        };
+      });
+    });
   }
 
   return (
@@ -805,7 +909,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           <button
             aria-label="关闭 AI 写作助手"
             className="chapter-ai-assistant-close"
-            onClick={props.onClose}
+            onClick={handleAssistantClose}
             type="button"
           >
             <IconClose aria-hidden="true" />
@@ -864,6 +968,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             <textarea
               aria-label="AI 对话输入"
               className="chapter-ai-input"
+              disabled={assistantSending}
               onChange={handleAssistantInputChange}
               onKeyDown={handleAssistantInputKeyDown}
               placeholder="输入你的问题或写作目标..."
@@ -873,7 +978,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             <button
               aria-label="发送给 AI 写作助手"
               className="chapter-ai-send"
-              disabled={modelLoading}
+              disabled={modelLoading || assistantSending}
               title="发送"
               type="submit"
             >

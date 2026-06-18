@@ -71,6 +71,14 @@ type AuthConfig struct {
 type AIConfig struct {
 	// ProviderSecretKey 表示 AI 提供商 API Key 应用层加密密钥，可填写任意非空字符串。
 	ProviderSecretKey string `mapstructure:"provider_secret_key"`
+	// Prompt 表示 AI 智能体提示词模板配置，键为任务名称。
+	Prompt map[string]PromptTemplate `mapstructure:"prompt"`
+}
+
+// PromptTemplate 表示单个 AI 智能体提示词模板。
+type PromptTemplate struct {
+	// Prompt 表示实际发送给模型的提示词模板，支持 {变量名} 占位符。
+	Prompt string `mapstructure:"prompt"`
 }
 
 // StorageConfig 表示文件对象存储配置集合。

@@ -12,6 +12,7 @@ import (
 	eventhandler "novels_ai_gen/internal/api/handler/event"
 	loghandler "novels_ai_gen/internal/api/handler/log"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
+	novelagenthandler "novels_ai_gen/internal/api/handler/novelagent"
 	relationshiphandler "novels_ai_gen/internal/api/handler/relationship"
 	systemhandler "novels_ai_gen/internal/api/handler/system"
 	uploadhandler "novels_ai_gen/internal/api/handler/upload"
@@ -22,6 +23,7 @@ import (
 	bizcharacter "novels_ai_gen/internal/biz/character"
 	bizevent "novels_ai_gen/internal/biz/event"
 	biznovel "novels_ai_gen/internal/biz/novel"
+	biznovelagent "novels_ai_gen/internal/biz/novelagent"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	bizsystem "novels_ai_gen/internal/biz/system"
 	bizupload "novels_ai_gen/internal/biz/upload"
@@ -66,9 +68,15 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		bizevent.NewService,
 		dataaiprovider.NewRepository,
 		wire.Bind(new(bizaiprovider.Repository), new(*dataaiprovider.Repository)),
+		wire.Bind(new(biznovelagent.Repository), new(*dataaiprovider.Repository)),
 		bizaiprovider.NewModelClient,
 		wire.Bind(new(bizaiprovider.ModelFetcher), new(*bizaiprovider.ModelClient)),
 		bizaiprovider.NewService,
+		wire.Bind(new(biznovelagent.Cipher), new(*bizaiprovider.Cipher)),
+		wire.Bind(new(biznovelagent.PromptProvider), new(*config.ConfigManager)),
+		biznovelagent.NewEinoAgentRuntimeFactory,
+		wire.Bind(new(biznovelagent.AgentRuntimeFactory), new(*biznovelagent.EinoAgentRuntimeFactory)),
+		biznovelagent.NewService,
 		objectstore.NewClient,
 		wire.Bind(new(bizupload.ObjectStorage), new(*objectstore.Client)),
 		bizupload.NewService,
@@ -79,6 +87,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		relationshiphandler.NewHandler,
 		eventhandler.NewHandler,
 		aiproviderhandler.NewHandler,
+		novelagenthandler.NewHandler,
 		uploadhandler.NewHandler,
 		confighandler.NewHandler,
 		loghandler.NewHandler,

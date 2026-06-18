@@ -15,7 +15,7 @@ const (
 	providerTypeGemini = "gemini"
 	apiTypeResponse    = "response"
 	apiTypeCompletions = "completions"
-	defaultAPIType     = apiTypeResponse
+	defaultAPIType     = apiTypeCompletions
 )
 
 // Repository 表示 AI 提供商数据仓储接口。
@@ -83,7 +83,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (ProviderRespon
 		APIKeyCiphertext: ciphertext,
 		APIKeyMask:       maskAPIKey(req.APIKey),
 		BaseURL:          req.BaseURL,
-		APIType:          apiTypeFromCreateRequest(req),
+		APIType:          providerAPIType(req.ProviderType, req.APIType),
 		Enabled:          enabledFromCreateRequest(req),
 	}
 	if err := s.repo.Create(ctx, item); err != nil {
@@ -161,7 +161,9 @@ func applyUpdateRequest(cipher *Cipher, item *Provider, req UpdateRequest) error
 	item.Name = req.Name
 	item.ProviderType = req.ProviderType
 	item.BaseURL = req.BaseURL
-	if req.APIType != "" {
+	if item.ProviderType == providerTypeOpenAI {
+		item.APIType = apiTypeCompletions
+	} else if req.APIType != "" {
 		item.APIType = req.APIType
 	}
 	if req.Enabled != nil {
@@ -216,13 +218,16 @@ func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64) (ModelL
 	})
 }
 
-// apiTypeFromCreateRequest 返回创建请求中的 AI 接口类型默认值。
-// 参数 req 表示已经标准化的创建 AI 提供商请求参数。
-func apiTypeFromCreateRequest(req CreateRequest) string {
-	if req.APIType == "" {
+// providerAPIType 根据 AI 提供商协议返回最终保存的接口类型。
+// 参数 providerType 表示 AI 提供商协议类型；参数 apiType 表示请求传入的接口类型。
+func providerAPIType(providerType string, apiType string) string {
+	if providerType == providerTypeOpenAI {
+		return apiTypeCompletions
+	}
+	if apiType == "" {
 		return defaultAPIType
 	}
-	return req.APIType
+	return apiType
 }
 
 // enabledFromCreateRequest 返回创建请求中的启用状态默认值。
@@ -295,7 +300,7 @@ func validateCreateRequest(req CreateRequest) error {
 	if req.APIKey == "" {
 		return ErrAPIKeyRequired
 	}
-	if !isAllowedAPIType(apiTypeFromCreateRequest(req)) {
+	if req.APIType != "" && !isAllowedAPIType(req.APIType) {
 		return ErrInvalidAPIType
 	}
 	return nil

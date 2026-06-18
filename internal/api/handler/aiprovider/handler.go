@@ -26,8 +26,8 @@ type CreateRequest struct {
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
-	// APIType 表示 AI 接口类型，只能是 response 或 completions，未传时默认 response。
-	APIType string `json:"api_type" example:"response"`
+	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
+	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时默认 true。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -43,7 +43,7 @@ type UpdateRequest struct {
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
-	APIType string `json:"api_type" example:"response"`
+	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时保留原值。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -61,7 +61,7 @@ type ProviderData struct {
 	// BaseURL 表示 AI 提供商接口基础地址。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// APIType 表示 AI 接口类型。
-	APIType string `json:"api_type" example:"response"`
+	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。
 	Enabled bool `json:"enabled" example:"true"`
 	// CreatedAt 表示创建时间。

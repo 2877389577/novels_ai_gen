@@ -89,15 +89,15 @@ const aiProviderAPITypeOptions: {
   value: AIProviderAPIType;
   label: string;
 }[] = [
-  { value: "response", label: "response" },
   { value: "completions", label: "completions" },
+  { value: "response", label: "response" },
 ];
 const defaultAIProviderFormState: AIProviderFormState = {
   name: "",
   providerType: "openai",
   apiKey: "",
   baseURL: "",
-  apiType: "response",
+  apiType: "completions",
   enabled: true,
 };
 
@@ -531,6 +531,9 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
         case "name":
           return { ...current, name: value };
         case "providerType":
+          if (value === "openai") {
+            return { ...current, providerType: value, apiType: "completions" };
+          }
           return { ...current, providerType: value };
         case "apiKey":
           return { ...current, apiKey: value };
@@ -901,7 +904,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                       name="apiType"
                       value={option.value}
                       checked={form.apiType === option.value}
-                      disabled={submitting}
+                      disabled={submitting || form.providerType === "openai"}
                       onChange={handleFormInputChange}
                     />
                     <span>{option.label}</span>
@@ -1034,7 +1037,7 @@ function providerToAIProviderFormState(
     providerType: provider.provider_type,
     apiKey: "",
     baseURL: provider.base_url,
-    apiType: provider.api_type,
+    apiType: provider.provider_type === "openai" ? "completions" : provider.api_type,
     enabled: provider.enabled,
   };
 }
@@ -1069,7 +1072,10 @@ function toAIProviderUpsertParams(
   form: AIProviderFormState,
 ): AIProviderUpsertParams {
   const providerType = form.providerType.trim() as AIProviderType;
-  const apiType = form.apiType.trim() as AIProviderAPIType;
+  const apiType =
+    providerType === "openai"
+      ? "completions"
+      : (form.apiType.trim() as AIProviderAPIType);
 
   return {
     name: form.name.trim(),

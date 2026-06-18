@@ -77,6 +77,77 @@ export type LogStreamEvent =
   | LogStreamEntryEvent
   | LogStreamErrorEvent;
 
+// NovelAgentStreamMetaEvent 表示小说写作 Agent 流开始或阶段变化事件。
+export interface NovelAgentStreamMetaEvent {
+  // type 表示小说写作 Agent 流事件类型。
+  type: "meta";
+  // stage 表示当前处理阶段。
+  stage?: string;
+  // task 表示顶层 Agent 选择的任务类型。
+  task?: string;
+  // message 表示状态说明。
+  message?: string;
+}
+
+// NovelAgentStreamDeltaEvent 表示小说写作 Agent 返回的增量文本事件。
+export interface NovelAgentStreamDeltaEvent {
+  // type 表示小说写作 Agent 流事件类型。
+  type: "delta";
+  // task 表示顶层 Agent 选择的任务类型。
+  task?: string;
+  // content 表示模型生成的增量文本。
+  content?: string;
+}
+
+// NovelAgentStreamDoneEvent 表示小说写作 Agent 流式生成完成事件。
+export interface NovelAgentStreamDoneEvent {
+  // type 表示小说写作 Agent 流事件类型。
+  type: "done";
+  // task 表示顶层 Agent 选择的任务类型。
+  task?: string;
+  // content 表示完整生成文本。
+  content?: string;
+  // message 表示完成说明。
+  message?: string;
+}
+
+// NovelAgentStreamErrorEvent 表示小说写作 Agent 流开始后的错误事件。
+export interface NovelAgentStreamErrorEvent {
+  // type 表示小说写作 Agent 流事件类型。
+  type: "error";
+  // request_id 表示本次流式请求的追踪标识，用于和后端日志关联。
+  request_id?: string;
+  // message 表示可展示给用户的错误提示。
+  message?: string;
+}
+
+// NovelAgentStreamEvent 表示小说写作 Agent NDJSON 流事件集合。
+export type NovelAgentStreamEvent =
+  | NovelAgentStreamMetaEvent
+  | NovelAgentStreamDeltaEvent
+  | NovelAgentStreamDoneEvent
+  | NovelAgentStreamErrorEvent;
+
+// NovelAgentChatParams 表示小说写作 Agent 流式对话请求参数。
+export interface NovelAgentChatParams {
+  // providerId 表示本次对话使用的 AI 提供商 ID。
+  providerId: number;
+  // model 表示本次对话使用的模型标识。
+  model: string;
+  // message 表示用户输入的写作需求或问题。
+  message: string;
+  // promptParams 表示提交给后端用于渲染提示词模板的变量集合。
+  promptParams: Record<string, string>;
+  // signal 表示用于取消 AI 流式请求的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// NovelAgentStreamHandlers 表示小说写作 Agent 流读取过程中的回调集合。
+export interface NovelAgentStreamHandlers {
+  // onEvent 表示收到单个 Agent 流事件时执行的回调。
+  onEvent: (event: NovelAgentStreamEvent) => void;
+}
+
 // LogStreamParams 表示日志流查询参数。
 export interface LogStreamParams {
   // date 表示需要筛选的单日日期，格式为 YYYY-MM-DD。
@@ -1235,6 +1306,50 @@ export async function streamLogs(
   }
 
   await readLogStream(response.body, handlers);
+}
+
+// streamNovelAgentChat 连接小说写作 Agent 流式对话接口。
+// 参数 params 表示 Agent 流式对话参数；参数 handlers 表示流事件回调集合。
+export async function streamNovelAgentChat(
+  params: NovelAgentChatParams,
+  handlers: NovelAgentStreamHandlers,
+): Promise<void> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/ai/agents/chat/stream", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      provider_id: params.providerId,
+      model: params.model,
+      message: params.message,
+      prompt_params: params.promptParams,
+    }),
+    signal: params.signal,
+  });
+
+  if (response.status === 401) {
+    const payload = await parseApiResponse<unknown>(response);
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok) {
+    const payload = await parseApiResponse<unknown>(response);
+    throw new Error(payload?.message || "AI 写作助手连接失败，请稍后再试");
+  }
+
+  if (!response.body) {
+    throw new Error("当前浏览器不支持 AI 流式读取");
+  }
+
+  await readNovelAgentStream(response.body, handlers);
 }
 
 // fetchLogFiles 查询后端日志目录中的普通日志文件。
@@ -2441,6 +2556,78 @@ function parseLogStreamEvent(line: string): LogStreamEvent | null {
       return event;
     }
     if (event.type === "entry" && event.entry) {
+      return event;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+// readNovelAgentStream 从浏览器 ReadableStream 中按行读取 Agent 事件。
+// 参数 body 表示 fetch 返回的响应体流；参数 handlers 表示 Agent 流事件回调集合。
+async function readNovelAgentStream(
+  body: ReadableStream<Uint8Array>,
+  handlers: NovelAgentStreamHandlers,
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) {
+        break;
+      }
+
+      buffer += decoder.decode(result.value, { stream: true });
+      buffer = consumeNovelAgentStreamBuffer(buffer, handlers);
+    }
+
+    buffer += decoder.decode();
+    consumeNovelAgentStreamBuffer(`${buffer}\n`, handlers);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// consumeNovelAgentStreamBuffer 消费缓冲区中的完整 Agent NDJSON 行并返回剩余半行。
+// 参数 buffer 表示当前缓冲文本；参数 handlers 表示 Agent 流事件回调集合。
+function consumeNovelAgentStreamBuffer(
+  buffer: string,
+  handlers: NovelAgentStreamHandlers,
+): string {
+  const lines = buffer.split(/\r?\n/);
+  const rest = lines.pop() ?? "";
+
+  for (const line of lines) {
+    const event = parseNovelAgentStreamEvent(line);
+    if (event) {
+      handlers.onEvent(event);
+    }
+  }
+
+  return rest;
+}
+
+// parseNovelAgentStreamEvent 将单行 NDJSON 文本解析为 Agent 流事件。
+// 参数 line 表示后端返回的一行 NDJSON 文本。
+function parseNovelAgentStreamEvent(line: string): NovelAgentStreamEvent | null {
+  const trimmedLine = line.trim();
+  if (!trimmedLine) {
+    return null;
+  }
+
+  try {
+    const event = JSON.parse(trimmedLine) as NovelAgentStreamEvent;
+    if (
+      event.type === "meta" ||
+      event.type === "delta" ||
+      event.type === "done" ||
+      event.type === "error"
+    ) {
       return event;
     }
   } catch {
