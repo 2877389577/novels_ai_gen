@@ -66,6 +66,8 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		bizevent.NewService,
 		dataaiprovider.NewRepository,
 		wire.Bind(new(bizaiprovider.Repository), new(*dataaiprovider.Repository)),
+		bizaiprovider.NewModelClient,
+		wire.Bind(new(bizaiprovider.ModelFetcher), new(*bizaiprovider.ModelClient)),
 		bizaiprovider.NewService,
 		objectstore.NewClient,
 		wire.Bind(new(bizupload.ObjectStorage), new(*objectstore.Client)),

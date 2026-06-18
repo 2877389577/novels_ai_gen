@@ -56,6 +56,15 @@ var migrationModels = []any{
 	&bizevent.Relation{},
 }
 
+// obsoleteAIProviderColumns 表示需要从旧版 AI 提供商表中物理删除的历史配置字段。
+var obsoleteAIProviderColumns = []string{
+	"model",
+	"max_tokens",
+	"temperature",
+	"top_p",
+	"thinking_level",
+}
+
 // Provider 根据完整应用配置初始化全局数据库连接，并返回 Wire 清理函数。
 // 参数 cfg 表示应用完整配置。
 func Provider(cfg *appconfig.AppConfig) (*gorm.DB, func(), error) {
@@ -142,6 +151,14 @@ func migrate(conn *gorm.DB) error {
 		)
 		return fmt.Errorf("自动迁移数据库表失败: %w", err)
 	}
+	if err := dropObsoleteAIProviderColumns(conn); err != nil {
+		slog.Error(
+			"数据库历史字段清理失败",
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"error", err,
+		)
+		return err
+	}
 
 	slog.Info(
 		"数据库自动迁移完成",
@@ -150,6 +167,25 @@ func migrate(conn *gorm.DB) error {
 		"missing_models", missingModels,
 		"duration_ms", time.Since(startedAt).Milliseconds(),
 	)
+	return nil
+}
+
+// dropObsoleteAIProviderColumns 删除旧版 AI 提供商表中已经废弃的提供商级配置字段。
+// 参数 conn 表示已经完成自动迁移的 GORM 数据库连接。
+func dropObsoleteAIProviderColumns(conn *gorm.DB) error {
+	migrator := conn.Migrator()
+	if !migrator.HasTable(&bizaiprovider.Provider{}) {
+		return nil
+	}
+
+	for _, column := range obsoleteAIProviderColumns {
+		if !migrator.HasColumn(&bizaiprovider.Provider{}, column) {
+			continue
+		}
+		if err := migrator.DropColumn(&bizaiprovider.Provider{}, column); err != nil {
+			return fmt.Errorf("删除 AI 提供商历史字段 %s 失败: %w", column, err)
+		}
+	}
 	return nil
 }
 

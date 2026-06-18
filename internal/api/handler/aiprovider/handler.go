@@ -24,20 +24,10 @@ type CreateRequest struct {
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示 AI 提供商 API Key，创建时不能为空。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
-	// Model 表示 AI 模型名称，不能为空。
-	Model string `json:"model" binding:"required" example:"gpt-5"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions，未传时默认 response。
 	APIType string `json:"api_type" example:"response"`
-	// MaxTokens 表示最大输出 token 数；未传时默认 1024。
-	MaxTokens *int `json:"max_tokens" example:"1024"`
-	// Temperature 表示采样温度；未传时默认 0.5。
-	Temperature *float64 `json:"temperature" example:"0.5"`
-	// TopP 表示 nucleus sampling 参数；未传时默认 0.5。
-	TopP *float64 `json:"top_p" example:"0.5"`
-	// ThinkingLevel 表示思考等级；未传时默认 0。
-	ThinkingLevel *int `json:"thinking_level" example:"0"`
 	// Enabled 表示是否启用该 AI 提供商；未传时默认 true。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -50,20 +40,10 @@ type UpdateRequest struct {
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。
 	APIKey string `json:"api_key" example:"sk-xxx"`
-	// Model 表示 AI 模型名称，不能为空。
-	Model string `json:"model" binding:"required" example:"gpt-5"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
 	APIType string `json:"api_type" example:"response"`
-	// MaxTokens 表示最大输出 token 数；未传时保留原值。
-	MaxTokens *int `json:"max_tokens" example:"1024"`
-	// Temperature 表示采样温度；未传时保留原值。
-	Temperature *float64 `json:"temperature" example:"0.5"`
-	// TopP 表示 nucleus sampling 参数；未传时保留原值。
-	TopP *float64 `json:"top_p" example:"0.5"`
-	// ThinkingLevel 表示思考等级；未传时保留原值。
-	ThinkingLevel *int `json:"thinking_level" example:"0"`
 	// Enabled 表示是否启用该 AI 提供商；未传时保留原值。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -78,20 +58,10 @@ type ProviderData struct {
 	ProviderType string `json:"provider_type" example:"openai"`
 	// MaskedAPIKey 表示 API Key 掩码。
 	MaskedAPIKey string `json:"masked_api_key" example:"sk-p...abcd"`
-	// Model 表示 AI 模型名称。
-	Model string `json:"model" example:"gpt-5"`
 	// BaseURL 表示 AI 提供商接口基础地址。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// APIType 表示 AI 接口类型。
 	APIType string `json:"api_type" example:"response"`
-	// MaxTokens 表示最大输出 token 数。
-	MaxTokens int `json:"max_tokens" example:"1024"`
-	// Temperature 表示采样温度。
-	Temperature float64 `json:"temperature" example:"0.5"`
-	// TopP 表示 nucleus sampling 参数。
-	TopP float64 `json:"top_p" example:"0.5"`
-	// ThinkingLevel 表示思考等级。
-	ThinkingLevel int `json:"thinking_level" example:"0"`
 	// Enabled 表示是否启用该 AI 提供商。
 	Enabled bool `json:"enabled" example:"true"`
 	// CreatedAt 表示创建时间。
@@ -152,6 +122,48 @@ type ProviderDeleteSuccessResponse struct {
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示删除结果。
 	Data ProviderDeleteData `json:"data"`
+}
+
+// ModelListRequest 表示 Swagger 文档中的 AI 提供商模型列表查询请求参数。
+type ModelListRequest struct {
+	// ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
+	// APIKey 表示用于请求官方模型列表接口的 API Key。
+	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
+	// BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。
+	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+}
+
+// ModelData 表示 Swagger 文档中的 AI 模型数据。
+type ModelData struct {
+	// ID 表示模型标识。
+	ID string `json:"id" example:"gpt-5"`
+	// DisplayName 表示模型展示名称。
+	DisplayName string `json:"display_name" example:"GPT-5"`
+	// OwnedBy 表示模型归属方。
+	OwnedBy string `json:"owned_by" example:"openai"`
+	// CreatedAt 表示模型创建时间。
+	CreatedAt string `json:"created_at" example:"2026-06-18T12:00:00Z"`
+	// SupportedGenerationMethods 表示模型支持的生成能力。
+	SupportedGenerationMethods []string `json:"supported_generation_methods"`
+}
+
+// ModelListData 表示 AI 提供商模型列表接口响应数据。
+type ModelListData struct {
+	// Items 表示模型列表。
+	Items []ModelData `json:"items"`
+}
+
+// ModelListSuccessResponse 表示 AI 提供商模型列表接口 Swagger 成功响应结构。
+type ModelListSuccessResponse struct {
+	// Code 表示业务响应码，成功固定为 0。
+	Code int `json:"code" example:"0"`
+	// Message 表示响应提示信息。
+	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
+	// Data 表示模型列表响应数据。
+	Data ModelListData `json:"data"`
 }
 
 // NewHandler 创建 AI 提供商 HTTP 处理器。
@@ -216,6 +228,38 @@ func (h *Handler) List(c *gin.Context) {
 	}
 
 	data, err := h.service.List(c.Request.Context(), req)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+
+	response.OK(c, data)
+}
+
+// ListModels 处理 AI 提供商官方模型列表查询请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 查询 AI 提供商官方模型列表
+// @Description 根据 provider_type、api_key 和 base_url 直接请求对应 AI 提供商官方模型列表接口，不读取本地数据库。
+// @Tags ai-providers
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body ModelListRequest true "模型列表查询请求"
+// @Success 200 {object} ModelListSuccessResponse "查询成功"
+// @Failure 400 {object} response.ErrorBody "请求参数错误"
+// @Failure 401 {object} response.ErrorBody "未登录或登录已过期"
+// @Failure 502 {object} response.ErrorBody "官方模型列表接口不可用"
+// @Failure 500 {object} response.ErrorBody "服务器内部错误"
+// @Router /ai/providers/models [post]
+func (h *Handler) ListModels(c *gin.Context) {
+	var req bizaiprovider.ModelListRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "请求参数错误")
+		return
+	}
+
+	data, err := h.service.ListModels(c.Request.Context(), req)
 	if err != nil {
 		writeServiceError(c, err)
 		return
@@ -347,18 +391,14 @@ func writeServiceError(c *gin.Context, err error) {
 		response.Error(c, http.StatusBadRequest, "AI 提供商类型只能是 openai、claude 或 gemini")
 	case errors.Is(err, bizaiprovider.ErrAPIKeyRequired):
 		response.Error(c, http.StatusBadRequest, "AI 提供商 API Key 不能为空")
-	case errors.Is(err, bizaiprovider.ErrModelRequired):
-		response.Error(c, http.StatusBadRequest, "AI 模型名称不能为空")
 	case errors.Is(err, bizaiprovider.ErrInvalidAPIType):
 		response.Error(c, http.StatusBadRequest, "AI 接口类型只能是 response 或 completions")
-	case errors.Is(err, bizaiprovider.ErrInvalidMaxTokens):
-		response.Error(c, http.StatusBadRequest, "最大输出 token 数必须大于 0")
-	case errors.Is(err, bizaiprovider.ErrInvalidTemperature):
-		response.Error(c, http.StatusBadRequest, "temperature 不能小于 0")
-	case errors.Is(err, bizaiprovider.ErrInvalidTopP):
-		response.Error(c, http.StatusBadRequest, "top_p 必须在 0 到 1 之间")
-	case errors.Is(err, bizaiprovider.ErrInvalidThinkingLevel):
-		response.Error(c, http.StatusBadRequest, "思考等级不能小于 0")
+	case errors.Is(err, bizaiprovider.ErrInvalidBaseURL):
+		response.Error(c, http.StatusBadRequest, "AI 提供商 Base URL 格式无效")
+	case errors.Is(err, bizaiprovider.ErrModelListUnavailable):
+		response.Error(c, http.StatusBadGateway, "官方模型列表接口暂时不可用")
+	case errors.Is(err, bizaiprovider.ErrModelListInvalid):
+		response.Error(c, http.StatusBadGateway, "官方模型列表响应格式无效")
 	case errors.Is(err, bizaiprovider.ErrNameConflict):
 		response.Error(c, http.StatusConflict, "AI 提供商名称已存在")
 	case errors.Is(err, bizaiprovider.ErrNotFound):

@@ -71,6 +71,7 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.DELETE("/novels/:id/event-relations/:relation_id", eventHandler.DeleteRelation)
 	protected.POST("/ai/providers", aiProviderHandler.Create)
 	protected.GET("/ai/providers", aiProviderHandler.List)
+	protected.POST("/ai/providers/models", aiProviderHandler.ListModels)
 	protected.GET("/ai/providers/:id", aiProviderHandler.Get)
 	protected.PUT("/ai/providers/:id", aiProviderHandler.Update)
 	protected.DELETE("/ai/providers/:id", aiProviderHandler.Delete)

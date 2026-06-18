@@ -91,7 +91,8 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	aiproviderService := aiprovider2.NewService(aiproviderRepository, cipher)
+	modelClient := aiprovider2.NewModelClient()
+	aiproviderService := aiprovider2.NewService(aiproviderRepository, cipher, modelClient)
 	aiproviderHandler := aiprovider3.NewHandler(aiproviderService)
 	client, err := objectstore.NewClient(appConfig)
 	if err != nil {

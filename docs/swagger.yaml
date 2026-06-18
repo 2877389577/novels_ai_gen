@@ -1,58 +1,57 @@
 basePath: /api/v1
 definitions:
-  internal_api_handler_aiprovider.CreateRequest:
+  aiprovider.ModelData:
     properties:
-      api_key:
-        description: APIKey 表示 AI 提供商 API Key，创建时不能为空。
-        example: sk-xxx
+      created_at:
+        description: CreatedAt 表示模型创建时间。
+        example: "2026-06-18T12:00:00Z"
         type: string
-      api_type:
-        description: APIType 表示 AI 接口类型，未传时默认 response。
-        example: response
+      display_name:
+        description: DisplayName 表示模型展示名称。
+        example: GPT-5
         type: string
-      base_url:
-        description: BaseURL 表示 AI 提供商接口基础地址，可以为空。
-        example: https://api.openai.com/v1
-        type: string
-      enabled:
-        description: Enabled 表示是否启用该 AI 提供商；未传时默认 true。
-        example: true
-        type: boolean
-      max_tokens:
-        description: MaxTokens 表示最大输出 token 数；未传时默认 1024。
-        example: 1024
-        type: integer
-      model:
-        description: Model 表示 AI 模型名称，不能为空。
+      id:
+        description: ID 表示模型标识。
         example: gpt-5
         type: string
-      name:
-        description: Name 表示 AI 提供商名称，不能为空且唯一。
-        example: 默认 OpenAI
-        type: string
-      provider_type:
-        description: ProviderType 表示 AI 提供商类型，例如 openai。
+      owned_by:
+        description: OwnedBy 表示模型归属方。
         example: openai
         type: string
-      temperature:
-        description: Temperature 表示采样温度；未传时默认 0.5。
-        example: 0.5
-        type: number
-      thinking_level:
-        description: ThinkingLevel 表示思考等级；未传时默认 0。
+      supported_generation_methods:
+        description: SupportedGenerationMethods 表示模型支持的生成能力。
+        items:
+          type: string
+        type: array
+    type: object
+  aiprovider.ModelListData:
+    properties:
+      items:
+        description: Items 表示模型列表。
+        items:
+          $ref: '#/definitions/aiprovider.ModelData'
+        type: array
+    type: object
+  aiprovider.ModelListSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
         example: 0
         type: integer
-      top_p:
-        description: TopP 表示 nucleus sampling 参数；未传时默认 0.5。
-        example: 0.5
-        type: number
-    required:
-    - api_key
-    - model
-    - name
-    - provider_type
+      data:
+        allOf:
+        - $ref: '#/definitions/aiprovider.ModelListData'
+        description: Data 表示模型列表响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
     type: object
-  internal_api_handler_aiprovider.ProviderData:
+  aiprovider.ProviderData:
     properties:
       api_type:
         description: APIType 表示 AI 接口类型。
@@ -78,14 +77,6 @@ definitions:
         description: MaskedAPIKey 表示 API Key 掩码。
         example: sk-p...abcd
         type: string
-      max_tokens:
-        description: MaxTokens 表示最大输出 token 数。
-        example: 1024
-        type: integer
-      model:
-        description: Model 表示 AI 模型名称。
-        example: gpt-5
-        type: string
       name:
         description: Name 表示 AI 提供商名称。
         example: 默认 OpenAI
@@ -94,31 +85,19 @@ definitions:
         description: ProviderType 表示 AI 提供商类型。
         example: openai
         type: string
-      temperature:
-        description: Temperature 表示采样温度。
-        example: 0.5
-        type: number
-      thinking_level:
-        description: ThinkingLevel 表示思考等级。
-        example: 0
-        type: integer
-      top_p:
-        description: TopP 表示 nucleus sampling 参数。
-        example: 0.5
-        type: number
       updated_at:
         description: UpdatedAt 表示更新时间。
         example: "2026-06-18T12:00:00+08:00"
         type: string
     type: object
-  internal_api_handler_aiprovider.ProviderDeleteData:
+  aiprovider.ProviderDeleteData:
     properties:
       deleted:
         description: Deleted 表示是否已经删除。
         example: true
         type: boolean
     type: object
-  internal_api_handler_aiprovider.ProviderDeleteSuccessResponse:
+  aiprovider.ProviderDeleteSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -126,7 +105,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_aiprovider.ProviderDeleteData'
+        - $ref: '#/definitions/aiprovider.ProviderDeleteData'
         description: Data 表示删除结果。
       message:
         description: Message 表示响应提示信息。
@@ -137,12 +116,12 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_aiprovider.ProviderListData:
+  aiprovider.ProviderListData:
     properties:
       items:
         description: Items 表示当前页 AI 提供商列表。
         items:
-          $ref: '#/definitions/internal_api_handler_aiprovider.ProviderData'
+          $ref: '#/definitions/aiprovider.ProviderData'
         type: array
       page:
         description: Page 表示当前页码。
@@ -157,7 +136,7 @@ definitions:
         example: 1
         type: integer
     type: object
-  internal_api_handler_aiprovider.ProviderListSuccessResponse:
+  aiprovider.ProviderListSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -165,7 +144,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_aiprovider.ProviderListData'
+        - $ref: '#/definitions/aiprovider.ProviderListData'
         description: Data 表示 AI 提供商分页列表响应数据。
       message:
         description: Message 表示响应提示信息。
@@ -176,7 +155,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_aiprovider.ProviderSuccessResponse:
+  aiprovider.ProviderSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -184,7 +163,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_aiprovider.ProviderData'
+        - $ref: '#/definitions/aiprovider.ProviderData'
         description: Data 表示 AI 提供商响应数据。
       message:
         description: Message 表示响应提示信息。
@@ -195,58 +174,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_aiprovider.UpdateRequest:
-    properties:
-      api_key:
-        description: APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。
-        example: sk-xxx
-        type: string
-      api_type:
-        description: APIType 表示 AI 接口类型；为空时保留原值。
-        example: response
-        type: string
-      base_url:
-        description: BaseURL 表示 AI 提供商接口基础地址，可以为空。
-        example: https://api.openai.com/v1
-        type: string
-      enabled:
-        description: Enabled 表示是否启用该 AI 提供商；未传时保留原值。
-        example: true
-        type: boolean
-      max_tokens:
-        description: MaxTokens 表示最大输出 token 数；未传时保留原值。
-        example: 1024
-        type: integer
-      model:
-        description: Model 表示 AI 模型名称，不能为空。
-        example: gpt-5
-        type: string
-      name:
-        description: Name 表示 AI 提供商名称，不能为空且唯一。
-        example: 默认 OpenAI
-        type: string
-      provider_type:
-        description: ProviderType 表示 AI 提供商类型，例如 openai。
-        example: openai
-        type: string
-      temperature:
-        description: Temperature 表示采样温度；未传时保留原值。
-        example: 0.5
-        type: number
-      thinking_level:
-        description: ThinkingLevel 表示思考等级；未传时保留原值。
-        example: 0
-        type: integer
-      top_p:
-        description: TopP 表示 nucleus sampling 参数；未传时保留原值。
-        example: 0.5
-        type: number
-    required:
-    - model
-    - name
-    - provider_type
-    type: object
-  internal_api_handler_auth.ErrorBody:
+  auth.ErrorBody:
     properties:
       code:
         description: Code 表示错误响应码，使用 HTTP 状态码。
@@ -261,7 +189,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_auth.LoginData:
+  auth.LoginData:
     properties:
       expires_at:
         description: ExpiresAt 表示令牌过期时间。
@@ -276,16 +204,7 @@ definitions:
         example: Bearer
         type: string
     type: object
-  internal_api_handler_auth.LoginRequest:
-    properties:
-      password:
-        description: Password 表示系统登录密码。
-        example: admin123
-        type: string
-    required:
-    - password
-    type: object
-  internal_api_handler_auth.LoginSuccessResponse:
+  auth.LoginSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -293,7 +212,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_auth.LoginData'
+        - $ref: '#/definitions/auth.LoginData'
         description: Data 表示登录成功后的令牌数据。
       message:
         description: Message 表示响应提示信息。
@@ -304,7 +223,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_chapter.ChapterData:
+  chapter.ChapterData:
     properties:
       chapter_number:
         description: ChapterNumber 表示章节号，即“第 x 章”中的 x。
@@ -339,7 +258,7 @@ definitions:
         example: 8
         type: integer
     type: object
-  internal_api_handler_chapter.ChapterSummaryData:
+  chapter.ChapterSummaryData:
     properties:
       chapter_number:
         description: ChapterNumber 表示章节号，即“第 x 章”中的 x。
@@ -370,33 +289,14 @@ definitions:
         example: 8
         type: integer
     type: object
-  internal_api_handler_chapter.CreateRequest:
-    properties:
-      chapter_number:
-        description: ChapterNumber 表示章节号，必须由客户端传入且大于 0。
-        example: 1
-        minimum: 1
-        type: integer
-      content:
-        description: Content 表示章节正文，可以为空。
-        example: 夜色像墨一样铺开。
-        type: string
-      title:
-        description: Title 表示章节名，不能为空。
-        example: 初入长夜
-        type: string
-    required:
-    - chapter_number
-    - title
-    type: object
-  internal_api_handler_chapter.DeleteData:
+  chapter.DeleteData:
     properties:
       deleted:
         description: Deleted 表示是否已经删除。
         example: true
         type: boolean
     type: object
-  internal_api_handler_chapter.DeleteSuccessResponse:
+  chapter.DeleteSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -404,7 +304,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_chapter.DeleteData'
+        - $ref: '#/definitions/chapter.DeleteData'
         description: Data 表示删除结果。
       message:
         description: Message 表示响应提示信息。
@@ -415,7 +315,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_chapter.ErrorBody:
+  chapter.ErrorBody:
     properties:
       code:
         description: Code 表示错误响应码，使用 HTTP 状态码。
@@ -430,12 +330,12 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_chapter.ListData:
+  chapter.ListData:
     properties:
       items:
         description: Items 表示当前页章节摘要列表。
         items:
-          $ref: '#/definitions/internal_api_handler_chapter.ChapterSummaryData'
+          $ref: '#/definitions/chapter.ChapterSummaryData'
         type: array
       page:
         description: Page 表示当前页码。
@@ -450,7 +350,7 @@ definitions:
         example: 1
         type: integer
     type: object
-  internal_api_handler_chapter.ListSuccessResponse:
+  chapter.ListSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -458,7 +358,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_chapter.ListData'
+        - $ref: '#/definitions/chapter.ListData'
         description: Data 表示章节分页列表响应数据。
       message:
         description: Message 表示响应提示信息。
@@ -469,7 +369,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_chapter.NextChapterNumberData:
+  chapter.NextChapterNumberData:
     properties:
       next_chapter_number:
         description: NextChapterNumber 表示建议创建下一章时使用的章节号。
@@ -480,7 +380,7 @@ definitions:
         example: 1
         type: integer
     type: object
-  internal_api_handler_chapter.NextChapterNumberSuccessResponse:
+  chapter.NextChapterNumberSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -488,7 +388,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_chapter.NextChapterNumberData'
+        - $ref: '#/definitions/chapter.NextChapterNumberData'
         description: Data 表示下一章节号响应数据。
       message:
         description: Message 表示响应提示信息。
@@ -499,7 +399,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_chapter.SuccessResponse:
+  chapter.SuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -507,7 +407,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_chapter.ChapterData'
+        - $ref: '#/definitions/chapter.ChapterData'
         description: Data 表示章节响应数据。
       message:
         description: Message 表示响应提示信息。
@@ -518,20 +418,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_chapter.UpdateRequest:
-    properties:
-      content:
-        description: Content 表示章节正文，可以为空。
-        example: 夜色像墨一样铺开。
-        type: string
-      title:
-        description: Title 表示章节名，不能为空。
-        example: 初入长夜
-        type: string
-    required:
-    - title
-    type: object
-  internal_api_handler_chapter.WordCountData:
+  chapter.WordCountData:
     properties:
       novel_id:
         description: NovelID 表示小说主键 ID。
@@ -542,7 +429,7 @@ definitions:
         example: 12345
         type: integer
     type: object
-  internal_api_handler_chapter.WordCountSuccessResponse:
+  chapter.WordCountSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -550,7 +437,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_chapter.WordCountData'
+        - $ref: '#/definitions/chapter.WordCountData'
         description: Data 表示小说总字数响应数据。
       message:
         description: Message 表示响应提示信息。
@@ -561,7 +448,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_character.CharacterData:
+  character.CharacterData:
     properties:
       ability:
         description: Ability 表示角色能力。
@@ -612,7 +499,7 @@ definitions:
         example: "2026-06-14T22:00:00+08:00"
         type: string
     type: object
-  internal_api_handler_character.CharacterSummaryData:
+  character.CharacterSummaryData:
     properties:
       created_at:
         description: CreatedAt 表示创建时间。
@@ -647,51 +534,14 @@ definitions:
         example: "2026-06-14T22:00:00+08:00"
         type: string
     type: object
-  internal_api_handler_character.CreateRequest:
-    properties:
-      ability:
-        description: Ability 表示角色能力，可以为空。
-        example: 擅长御剑与阵法。
-        type: string
-      background:
-        description: Background 表示角色背景，可以为空。
-        example: 出身边城旧族。
-        type: string
-      gender:
-        description: Gender 表示角色性别，可以为空。
-        example: 女
-        type: string
-      goal:
-        description: Goal 表示角色目的，可以为空。
-        example: 寻找失踪的兄长。
-        type: string
-      name:
-        description: Name 表示角色姓名，不能为空。
-        example: 林知夏
-        type: string
-      personality:
-        description: Personality 表示角色性格，可以为空。
-        example: 冷静克制，重诺。
-        type: string
-      portrait_url:
-        description: PortraitURL 表示肖像图链接或对象存储 key，可以为空。
-        example: covers/character-a.webp
-        type: string
-      tags:
-        description: Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。
-        example: 主角,剑修
-        type: string
-    required:
-    - name
-    type: object
-  internal_api_handler_character.DeleteData:
+  character.DeleteData:
     properties:
       deleted:
         description: Deleted 表示是否已经删除。
         example: true
         type: boolean
     type: object
-  internal_api_handler_character.DeleteSuccessResponse:
+  character.DeleteSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -699,7 +549,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_character.DeleteData'
+        - $ref: '#/definitions/character.DeleteData'
         description: Data 表示删除结果。
       message:
         description: Message 表示响应提示信息。
@@ -710,7 +560,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_character.ErrorBody:
+  character.ErrorBody:
     properties:
       code:
         description: Code 表示错误响应码，使用 HTTP 状态码。
@@ -725,12 +575,12 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_character.ListData:
+  character.ListData:
     properties:
       items:
         description: Items 表示当前页角色卡摘要列表。
         items:
-          $ref: '#/definitions/internal_api_handler_character.CharacterSummaryData'
+          $ref: '#/definitions/character.CharacterSummaryData'
         type: array
       page:
         description: Page 表示当前页码。
@@ -745,7 +595,7 @@ definitions:
         example: 1
         type: integer
     type: object
-  internal_api_handler_character.ListSuccessResponse:
+  character.ListSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -753,7 +603,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_character.ListData'
+        - $ref: '#/definitions/character.ListData'
         description: Data 表示角色卡分页列表响应数据。
       message:
         description: Message 表示响应提示信息。
@@ -764,7 +614,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_character.SuccessResponse:
+  character.SuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -772,7 +622,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_character.CharacterData'
+        - $ref: '#/definitions/character.CharacterData'
         description: Data 表示角色卡响应数据。
       message:
         description: Message 表示响应提示信息。
@@ -783,44 +633,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_character.UpdateRequest:
-    properties:
-      ability:
-        description: Ability 表示角色能力，可以为空。
-        example: 擅长御剑与阵法。
-        type: string
-      background:
-        description: Background 表示角色背景，可以为空。
-        example: 出身边城旧族。
-        type: string
-      gender:
-        description: Gender 表示角色性别，可以为空。
-        example: 女
-        type: string
-      goal:
-        description: Goal 表示角色目的，可以为空。
-        example: 寻找失踪的兄长。
-        type: string
-      name:
-        description: Name 表示角色姓名，不能为空。
-        example: 林知夏
-        type: string
-      personality:
-        description: Personality 表示角色性格，可以为空。
-        example: 冷静克制，重诺。
-        type: string
-      portrait_url:
-        description: PortraitURL 表示肖像图链接或对象存储 key，可以为空。
-        example: covers/character-a.webp
-        type: string
-      tags:
-        description: Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。
-        example: 主角,剑修
-        type: string
-    required:
-    - name
-    type: object
-  internal_api_handler_config.FileData:
+  config.FileData:
     properties:
       config_file:
         description: ConfigFile 表示启动 -f 参数指定的实际配置文件绝对路径。
@@ -841,7 +654,7 @@ definitions:
         example: "2026-06-14T22:00:00+08:00"
         type: string
     type: object
-  internal_api_handler_config.FileSuccessResponse:
+  config.FileSuccessResponse:
     properties:
       code:
         description: Code 表示业务响应码，成功固定为 0。
@@ -849,7 +662,7 @@ definitions:
         type: integer
       data:
         allOf:
-        - $ref: '#/definitions/internal_api_handler_config.FileData'
+        - $ref: '#/definitions/config.FileData'
         description: Data 表示配置文件文本和加载状态。
       message:
         description: Message 表示响应提示信息。
@@ -860,7 +673,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_config.UpdateFileRequest:
+  config.UpdateFileRequest:
     properties:
       content:
         description: Content 表示需要写入配置文件的完整 YAML 文本。
@@ -869,7 +682,7 @@ definitions:
             password: admin123
         type: string
     type: object
-  internal_api_handler_event.ErrorBody:
+  event.ErrorBody:
     properties:
       code:
         description: Code 表示错误响应码，使用 HTTP 状态码。
@@ -884,555 +697,7 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  internal_api_handler_event.RelationDeleteData:
-    properties:
-      deleted:
-        description: Deleted 表示后端是否已经删除该事件关系线。
-        example: true
-        type: boolean
-    type: object
-  internal_api_handler_log.DeleteFilesRequest:
-    properties:
-      paths:
-        description: Paths 表示需要删除的日志文件相对路径列表。
-        items:
-          type: string
-        type: array
-    required:
-    - paths
-    type: object
-  internal_api_handler_log.LogEntry:
-    properties:
-      attrs:
-        additionalProperties: {}
-        description: Attrs 表示除标准字段外的结构化日志属性。
-        type: object
-      level:
-        description: Level 表示日志等级。
-        type: string
-      message:
-        description: Message 表示日志消息。
-        type: string
-      raw:
-        description: Raw 表示原始日志文本。
-        type: string
-      request_id:
-        description: RequestID 表示日志关联的请求追踪标识。
-        type: string
-      source:
-        description: Source 表示日志来源位置。
-        type: string
-      time:
-        description: Time 表示日志记录时间。
-        type: string
-    type: object
-  internal_api_handler_log.streamEvent:
-    properties:
-      entry:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler_log.LogEntry'
-        description: Entry 表示日志条目事件中的日志内容。
-      follow:
-        description: Follow 表示日志流是否会继续跟随文件追加。
-        type: boolean
-      message:
-        description: Message 表示错误事件中的用户可读提示。
-        type: string
-      path:
-        description: Path 表示当前跟随的日志文件路径。
-        type: string
-      request_id:
-        description: RequestID 表示本次日志流请求的追踪标识。
-        type: string
-      type:
-        description: Type 表示事件类型，支持 meta、entry、error。
-        type: string
-    type: object
-  internal_api_handler_novel.CreateRequest:
-    properties:
-      author_name:
-        description: AuthorName 表示作者名，可以为空。
-        example: 爱潜水的乌贼
-        type: string
-      cover_url:
-        description: CoverURL 表示封面链接，可以为空。
-        example: https://example.com/cover.jpg
-        type: string
-      description:
-        description: Description 表示简介，可以为空。
-        example: 一部关于废土冒险的小说
-        type: string
-      name:
-        description: Name 表示小说名，不能为空。
-        example: 长夜余火
-        type: string
-      status:
-        description: Status 表示小说状态，只允许连载中或已完结，未传时默认连载中。
-        enum:
-        - 连载中
-        - 已完结
-        example: 连载中
-        type: string
-      tags:
-        description: Tags 表示标签，可以为空，多个标签使用英文逗号分隔。
-        example: 玄幻,冒险
-        type: string
-    required:
-    - name
-    type: object
-  internal_api_handler_novel.DeleteData:
-    properties:
-      deleted:
-        description: Deleted 表示是否已经删除。
-        example: true
-        type: boolean
-    type: object
-  internal_api_handler_novel.DeleteSuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler_novel.DeleteData'
-        description: Data 表示删除结果。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  internal_api_handler_novel.ErrorBody:
-    properties:
-      code:
-        description: Code 表示错误响应码，使用 HTTP 状态码。
-        example: 400
-        type: integer
-      message:
-        description: Message 表示用户可理解的错误提示。
-        example: 请求参数错误
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  internal_api_handler_novel.ListData:
-    properties:
-      items:
-        description: Items 表示当前页小说列表。
-        items:
-          $ref: '#/definitions/internal_api_handler_novel.NovelData'
-        type: array
-      page:
-        description: Page 表示当前页码。
-        example: 1
-        type: integer
-      page_size:
-        description: PageSize 表示每页数量。
-        example: 20
-        type: integer
-      total:
-        description: Total 表示符合条件的小说总数。
-        example: 1
-        type: integer
-    type: object
-  internal_api_handler_novel.ListSuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler_novel.ListData'
-        description: Data 表示小说分页列表响应数据。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  internal_api_handler_novel.NovelData:
-    properties:
-      author_name:
-        description: AuthorName 表示作者名。
-        example: 爱潜水的乌贼
-        type: string
-      cover_url:
-        description: CoverURL 表示封面链接。
-        example: https://example.com/cover.jpg
-        type: string
-      created_at:
-        description: CreatedAt 表示创建时间。
-        example: "2026-06-13T22:00:00+08:00"
-        type: string
-      description:
-        description: Description 表示简介。
-        example: 一部关于废土冒险的小说
-        type: string
-      id:
-        description: ID 表示小说主键 ID。
-        example: 1
-        type: integer
-      name:
-        description: Name 表示小说名。
-        example: 长夜余火
-        type: string
-      status:
-        description: Status 表示小说状态，只允许连载中或已完结。
-        enum:
-        - 连载中
-        - 已完结
-        example: 连载中
-        type: string
-      tags:
-        description: Tags 表示标签，多个标签使用英文逗号分隔。
-        example: 玄幻,冒险
-        type: string
-      updated_at:
-        description: UpdatedAt 表示更新时间。
-        example: "2026-06-13T22:00:00+08:00"
-        type: string
-    type: object
-  internal_api_handler_novel.SuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler_novel.NovelData'
-        description: Data 表示小说响应数据。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  internal_api_handler_novel.UpdateRequest:
-    properties:
-      author_name:
-        description: AuthorName 表示作者名，可以为空。
-        example: 爱潜水的乌贼
-        type: string
-      cover_url:
-        description: CoverURL 表示封面链接，可以为空。
-        example: https://example.com/cover.jpg
-        type: string
-      description:
-        description: Description 表示简介，可以为空。
-        example: 一部关于废土冒险的小说
-        type: string
-      name:
-        description: Name 表示小说名，不能为空。
-        example: 长夜余火
-        type: string
-      status:
-        description: Status 表示小说状态，只允许连载中或已完结，未传或空字符串时保留原状态。
-        enum:
-        - 连载中
-        - 已完结
-        example: 连载中
-        type: string
-      tags:
-        description: Tags 表示标签，可以为空，多个标签使用英文逗号分隔。
-        example: 玄幻,冒险
-        type: string
-    required:
-    - name
-    type: object
-  internal_api_handler_relationship.EdgeData:
-    properties:
-      character_a_id:
-        description: CharacterAID 表示无方向关系线中较小的角色卡 ID。
-        example: 1
-        type: integer
-      character_b_id:
-        description: CharacterBID 表示无方向关系线中较大的角色卡 ID。
-        example: 2
-        type: integer
-      id:
-        description: ID 表示关系线稳定 ID，由两个角色 ID 计算得到。
-        example: rel-1-2
-        type: string
-      note:
-        description: Note 表示关系线备注，用于描述两个角色之间的关系。
-        example: 旧友
-        type: string
-      source_handle:
-        description: SourceHandle 表示较小角色卡端使用的连接点 ID。
-        example: right
-        type: string
-      target_handle:
-        description: TargetHandle 表示较大角色卡端使用的连接点 ID。
-        example: left
-        type: string
-    type: object
-  internal_api_handler_relationship.ErrorBody:
-    properties:
-      code:
-        description: Code 表示错误响应码，使用 HTTP 状态码。
-        example: 400
-        type: integer
-      message:
-        description: Message 表示用户可理解的错误提示。
-        example: 请求参数错误
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  internal_api_handler_relationship.GraphData:
-    properties:
-      edges:
-        description: Edges 表示当前画布中的无方向关系线列表。
-        items:
-          $ref: '#/definitions/internal_api_handler_relationship.EdgeData'
-        type: array
-      nodes:
-        description: Nodes 表示当前画布中的角色节点列表。
-        items:
-          $ref: '#/definitions/internal_api_handler_relationship.NodeData'
-        type: array
-      novel_id:
-        description: NovelID 表示小说主键 ID。
-        example: 1
-        type: integer
-      updated_at:
-        description: UpdatedAt 表示关系图最后更新时间；关系图尚未保存时为空。
-        example: "2026-06-15T10:00:00+08:00"
-        type: string
-      viewport:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler_relationship.ViewportData'
-        description: Viewport 表示画布视口。
-    type: object
-  internal_api_handler_relationship.NodeData:
-    properties:
-      character_id:
-        description: CharacterID 表示画布节点引用的角色卡 ID。
-        example: 1
-        type: integer
-      position_x:
-        description: PositionX 表示节点在画布中的 X 坐标。
-        example: 120
-        type: number
-      position_y:
-        description: PositionY 表示节点在画布中的 Y 坐标。
-        example: 80
-        type: number
-    type: object
-  internal_api_handler_relationship.SaveRequest:
-    properties:
-      edges:
-        description: Edges 表示当前画布中的无方向关系线列表。
-        items:
-          $ref: '#/definitions/internal_api_handler_relationship.EdgeData'
-        type: array
-      nodes:
-        description: Nodes 表示当前画布中的角色节点列表。
-        items:
-          $ref: '#/definitions/internal_api_handler_relationship.NodeData'
-        type: array
-      viewport:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler_relationship.ViewportData'
-        description: Viewport 表示画布视口。
-    type: object
-  internal_api_handler_relationship.SuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler_relationship.GraphData'
-        description: Data 表示角色关系图响应数据。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  internal_api_handler_relationship.ViewportData:
-    properties:
-      x:
-        description: X 表示画布视口 X 坐标。
-        example: 0
-        type: number
-      "y":
-        description: Y 表示画布视口 Y 坐标。
-        example: 0
-        type: number
-      zoom:
-        description: Zoom 表示画布视口缩放比例。
-        example: 1
-        type: number
-    type: object
-  internal_api_handler_system.UpdateSuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/novels_ai_gen_internal_biz_system.UpdateResult'
-        description: Data 表示系统更新结果。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  internal_api_handler_upload.ErrorBody:
-    properties:
-      code:
-        description: Code 表示错误响应码，使用 HTTP 状态码。
-        example: 400
-        type: integer
-      message:
-        description: Message 表示用户可理解的错误提示。
-        example: 请求参数错误
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  internal_api_handler_upload.PreviewData:
-    properties:
-      object_key:
-        description: ObjectKey 表示图片保存在对象存储中的对象 key。
-        example: covers/2026/06/9f1c1c0a1b2c3d4e.png
-        type: string
-      preview_expires_at:
-        description: PreviewExpiresAt 表示预签名预览链接过期时间。
-        example: "2026-06-15T22:00:00+08:00"
-        type: string
-      preview_url:
-        description: PreviewURL 表示可直接预览私有图片的预签名链接。
-        example: https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=...
-        type: string
-    type: object
-  internal_api_handler_upload.PreviewSuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler_upload.PreviewData'
-        description: Data 表示刷新预览链接后的响应数据。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  internal_api_handler_upload.UploadImageData:
-    properties:
-      content_type:
-        description: ContentType 表示根据文件内容探测出的 MIME 类型。
-        example: image/png
-        type: string
-      object_key:
-        description: ObjectKey 表示图片保存在对象存储中的对象 key。
-        example: covers/2026/06/9f1c1c0a1b2c3d4e.png
-        type: string
-      original_filename:
-        description: OriginalFilename 表示用户上传文件的原始文件名。
-        example: cover.png
-        type: string
-      preview_expires_at:
-        description: PreviewExpiresAt 表示预签名预览链接过期时间。
-        example: "2026-06-15T22:00:00+08:00"
-        type: string
-      preview_url:
-        description: PreviewURL 表示可直接预览私有图片的预签名链接。
-        example: https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=...
-        type: string
-      size:
-        description: Size 表示上传文件大小，单位为字节。
-        example: 1024
-        type: integer
-    type: object
-  internal_api_handler_upload.UploadImageSuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler_upload.UploadImageData'
-        description: Data 表示图片上传成功后的响应数据。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  novels_ai_gen_internal_api_response.Body:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0，失败使用 HTTP 状态码。
-        example: 0
-        type: integer
-      data:
-        description: Data 表示响应数据内容。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  novels_ai_gen_internal_api_response.ErrorBody:
-    properties:
-      code:
-        description: Code 表示错误响应码，使用 HTTP 状态码。
-        example: 400
-        type: integer
-      message:
-        description: Message 表示用户可理解的错误提示。
-        example: 请求参数错误
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  novels_ai_gen_internal_biz_event.CreateRequest:
+  event.EventCreateRequest:
     properties:
       cause:
         description: Cause 表示事件起因，可以为空。
@@ -1477,18 +742,7 @@ definitions:
     required:
     - name
     type: object
-  novels_ai_gen_internal_biz_event.DeleteResponse:
-    properties:
-      deleted:
-        description: Deleted 表示后端是否已经删除该事件。
-        example: true
-        type: boolean
-      deleted_relation_count:
-        description: DeletedRelationCount 表示随事件一并删除的关系线数量。
-        example: 2
-        type: integer
-    type: object
-  novels_ai_gen_internal_biz_event.EventResponse:
+  event.EventData:
     properties:
       cause:
         description: Cause 表示事件起因。
@@ -1521,7 +775,7 @@ definitions:
       participants:
         description: Participants 表示参与该事件的角色卡摘要列表。
         items:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.ParticipantResponse'
+          $ref: '#/definitions/event.ParticipantData'
         type: array
       position_x:
         description: PositionX 表示事件节点在画布中的 X 坐标。
@@ -1544,17 +798,47 @@ definitions:
         example: "2026-06-16T10:00:00+08:00"
         type: string
     type: object
-  novels_ai_gen_internal_biz_event.GraphResponse:
+  event.EventDeleteData:
+    properties:
+      deleted:
+        description: Deleted 表示后端是否已经删除该事件。
+        example: true
+        type: boolean
+      deleted_relation_count:
+        description: DeletedRelationCount 表示随事件一并删除的关系线数量。
+        example: 2
+        type: integer
+    type: object
+  event.EventDeleteSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/event.EventDeleteData'
+        description: Data 表示删除事件响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  event.EventGraphData:
     properties:
       edges:
         description: Edges 表示事件图中的有向关系线列表。
         items:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.RelationResponse'
+          $ref: '#/definitions/event.RelationData'
         type: array
       nodes:
         description: Nodes 表示事件图中的事件节点列表。
         items:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.EventResponse'
+          $ref: '#/definitions/event.EventData'
         type: array
       novel_id:
         description: NovelID 表示小说主键 ID。
@@ -1566,44 +850,34 @@ definitions:
         type: string
       viewport:
         allOf:
-        - $ref: '#/definitions/novels_ai_gen_internal_biz_event.Viewport'
+        - $ref: '#/definitions/event.ViewportData'
         description: Viewport 表示事件图画布视口。
     type: object
-  novels_ai_gen_internal_biz_event.LayoutNodeRequest:
+  event.EventGraphSuccessResponse:
     properties:
-      event_id:
-        description: EventID 表示需要保存坐标的事件 ID。
-        example: 1
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
         type: integer
-      position_x:
-        description: PositionX 表示节点在画布中的 X 坐标。
-        example: 120
-        type: number
-      position_y:
-        description: PositionY 表示节点在画布中的 Y 坐标。
-        example: 80
-        type: number
-    required:
-    - event_id
-    type: object
-  novels_ai_gen_internal_biz_event.LayoutRequest:
-    properties:
-      nodes:
-        description: Nodes 表示需要保存坐标的事件节点列表。
-        items:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.LayoutNodeRequest'
-        type: array
-      viewport:
+      data:
         allOf:
-        - $ref: '#/definitions/novels_ai_gen_internal_biz_event.Viewport'
-        description: Viewport 表示事件图画布视口。
+        - $ref: '#/definitions/event.EventGraphData'
+        description: Data 表示事件图响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
     type: object
-  novels_ai_gen_internal_biz_event.ListResponse:
+  event.EventListData:
     properties:
       items:
         description: Items 表示当前页事件列表。
         items:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.EventResponse'
+          $ref: '#/definitions/event.EventData'
         type: array
       page:
         description: Page 表示当前页码。
@@ -1618,82 +892,64 @@ definitions:
         example: 1
         type: integer
     type: object
-  novels_ai_gen_internal_biz_event.ParticipantResponse:
+  event.EventListSuccessResponse:
     properties:
-      gender:
-        description: Gender 表示角色性别。
-        example: 男
-        type: string
-      id:
-        description: ID 表示角色卡主键 ID。
-        example: 1
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
         type: integer
-      name:
-        description: Name 表示角色姓名。
-        example: 林霜夜
+      data:
+        allOf:
+        - $ref: '#/definitions/event.EventListData'
+        description: Data 表示事件列表响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
         type: string
-      novel_id:
-        description: NovelID 表示所属小说 ID。
-        example: 1
-        type: integer
-      tags:
-        description: Tags 表示角色标签，多个标签使用英文逗号分隔。
-        example: 主角,剑修
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  novels_ai_gen_internal_biz_event.RelationCreateRequest:
+  event.EventRelationSuccessResponse:
     properties:
-      note:
-        description: Note 表示关系线备注，可以为空。
-        example: 直接导致
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/event.RelationData'
+        description: Data 表示事件关系线响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
         type: string
-      source_event_id:
-        description: SourceEventID 表示前置事件 ID。
-        example: 1
-        type: integer
-      target_event_id:
-        description: TargetEventID 表示后续事件 ID。
-        example: 2
-        type: integer
-    required:
-    - source_event_id
-    - target_event_id
-    type: object
-  novels_ai_gen_internal_biz_event.RelationResponse:
-    properties:
-      created_at:
-        description: CreatedAt 表示创建时间。
-        example: "2026-06-16T10:00:00+08:00"
-        type: string
-      id:
-        description: ID 表示事件关系线主键 ID。
-        example: 1
-        type: integer
-      note:
-        description: Note 表示事件关系线备注。
-        example: 直接导致
-        type: string
-      source_event_id:
-        description: SourceEventID 表示前置事件 ID。
-        example: 1
-        type: integer
-      target_event_id:
-        description: TargetEventID 表示后续事件 ID。
-        example: 2
-        type: integer
-      updated_at:
-        description: UpdatedAt 表示更新时间。
-        example: "2026-06-16T10:00:00+08:00"
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  novels_ai_gen_internal_biz_event.RelationUpdateRequest:
+  event.EventSuccessResponse:
     properties:
-      note:
-        description: Note 表示关系线备注，可以为空。
-        example: 直接导致
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/event.EventData'
+        description: Data 表示事件响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  novels_ai_gen_internal_biz_event.UpdateRequest:
+  event.EventUpdateRequest:
     properties:
       cause:
         description: Cause 表示事件起因，可以为空。
@@ -1738,7 +994,83 @@ definitions:
     required:
     - name
     type: object
-  novels_ai_gen_internal_biz_event.Viewport:
+  event.ParticipantData:
+    properties:
+      gender:
+        description: Gender 表示角色性别。
+        example: 男
+        type: string
+      id:
+        description: ID 表示角色卡主键 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 表示角色姓名。
+        example: 林霜夜
+        type: string
+      novel_id:
+        description: NovelID 表示所属小说 ID。
+        example: 1
+        type: integer
+      tags:
+        description: Tags 表示角色标签，多个标签使用英文逗号分隔。
+        example: 主角,剑修
+        type: string
+    type: object
+  event.RelationData:
+    properties:
+      created_at:
+        description: CreatedAt 表示创建时间。
+        example: "2026-06-16T10:00:00+08:00"
+        type: string
+      id:
+        description: ID 表示事件关系线主键 ID。
+        example: 1
+        type: integer
+      note:
+        description: Note 表示事件关系线备注。
+        example: 直接导致
+        type: string
+      source_event_id:
+        description: SourceEventID 表示前置事件 ID。
+        example: 1
+        type: integer
+      target_event_id:
+        description: TargetEventID 表示后续事件 ID。
+        example: 2
+        type: integer
+      updated_at:
+        description: UpdatedAt 表示更新时间。
+        example: "2026-06-16T10:00:00+08:00"
+        type: string
+    type: object
+  event.RelationDeleteData:
+    properties:
+      deleted:
+        description: Deleted 表示后端是否已经删除该事件关系线。
+        example: true
+        type: boolean
+    type: object
+  event.RelationDeleteSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/event.RelationDeleteData'
+        description: Data 表示删除事件关系线响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  event.ViewportData:
     properties:
       x:
         description: X 表示画布视口 X 坐标。
@@ -1753,7 +1085,680 @@ definitions:
         example: 1
         type: number
     type: object
-  novels_ai_gen_internal_biz_system.UpdateResult:
+  internal_api_handler_aiprovider.CreateRequest:
+    properties:
+      api_key:
+        description: APIKey 表示 AI 提供商 API Key，创建时不能为空。
+        example: sk-xxx
+        type: string
+      api_type:
+        description: APIType 表示 AI 接口类型，只能是 response 或 completions，未传时默认 response。
+        example: response
+        type: string
+      base_url:
+        description: BaseURL 表示 AI 提供商接口基础地址，可以为空。
+        example: https://api.openai.com/v1
+        type: string
+      enabled:
+        description: Enabled 表示是否启用该 AI 提供商；未传时默认 true。
+        example: true
+        type: boolean
+      name:
+        description: Name 表示 AI 提供商名称，不能为空且唯一。
+        example: 默认 OpenAI
+        type: string
+      provider_type:
+        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+        example: openai
+        type: string
+    required:
+    - api_key
+    - name
+    - provider_type
+    type: object
+  internal_api_handler_aiprovider.ModelListRequest:
+    properties:
+      api_key:
+        description: APIKey 表示用于请求官方模型列表接口的 API Key。
+        example: sk-xxx
+        type: string
+      base_url:
+        description: BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。
+        example: https://api.openai.com/v1
+        type: string
+      provider_type:
+        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+        example: openai
+        type: string
+    required:
+    - api_key
+    - provider_type
+    type: object
+  internal_api_handler_aiprovider.UpdateRequest:
+    properties:
+      api_key:
+        description: APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。
+        example: sk-xxx
+        type: string
+      api_type:
+        description: APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
+        example: response
+        type: string
+      base_url:
+        description: BaseURL 表示 AI 提供商接口基础地址，可以为空。
+        example: https://api.openai.com/v1
+        type: string
+      enabled:
+        description: Enabled 表示是否启用该 AI 提供商；未传时保留原值。
+        example: true
+        type: boolean
+      name:
+        description: Name 表示 AI 提供商名称，不能为空且唯一。
+        example: 默认 OpenAI
+        type: string
+      provider_type:
+        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+        example: openai
+        type: string
+    required:
+    - name
+    - provider_type
+    type: object
+  internal_api_handler_auth.LoginRequest:
+    properties:
+      password:
+        description: Password 表示系统登录密码。
+        example: admin123
+        type: string
+    required:
+    - password
+    type: object
+  internal_api_handler_chapter.CreateRequest:
+    properties:
+      chapter_number:
+        description: ChapterNumber 表示章节号，必须由客户端传入且大于 0。
+        example: 1
+        minimum: 1
+        type: integer
+      content:
+        description: Content 表示章节正文，可以为空。
+        example: 夜色像墨一样铺开。
+        type: string
+      title:
+        description: Title 表示章节名，不能为空。
+        example: 初入长夜
+        type: string
+    required:
+    - chapter_number
+    - title
+    type: object
+  internal_api_handler_chapter.UpdateRequest:
+    properties:
+      content:
+        description: Content 表示章节正文，可以为空。
+        example: 夜色像墨一样铺开。
+        type: string
+      title:
+        description: Title 表示章节名，不能为空。
+        example: 初入长夜
+        type: string
+    required:
+    - title
+    type: object
+  internal_api_handler_character.CreateRequest:
+    properties:
+      ability:
+        description: Ability 表示角色能力，可以为空。
+        example: 擅长御剑与阵法。
+        type: string
+      background:
+        description: Background 表示角色背景，可以为空。
+        example: 出身边城旧族。
+        type: string
+      gender:
+        description: Gender 表示角色性别，可以为空。
+        example: 女
+        type: string
+      goal:
+        description: Goal 表示角色目的，可以为空。
+        example: 寻找失踪的兄长。
+        type: string
+      name:
+        description: Name 表示角色姓名，不能为空。
+        example: 林知夏
+        type: string
+      personality:
+        description: Personality 表示角色性格，可以为空。
+        example: 冷静克制，重诺。
+        type: string
+      portrait_url:
+        description: PortraitURL 表示肖像图链接或对象存储 key，可以为空。
+        example: covers/character-a.webp
+        type: string
+      tags:
+        description: Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。
+        example: 主角,剑修
+        type: string
+    required:
+    - name
+    type: object
+  internal_api_handler_character.UpdateRequest:
+    properties:
+      ability:
+        description: Ability 表示角色能力，可以为空。
+        example: 擅长御剑与阵法。
+        type: string
+      background:
+        description: Background 表示角色背景，可以为空。
+        example: 出身边城旧族。
+        type: string
+      gender:
+        description: Gender 表示角色性别，可以为空。
+        example: 女
+        type: string
+      goal:
+        description: Goal 表示角色目的，可以为空。
+        example: 寻找失踪的兄长。
+        type: string
+      name:
+        description: Name 表示角色姓名，不能为空。
+        example: 林知夏
+        type: string
+      personality:
+        description: Personality 表示角色性格，可以为空。
+        example: 冷静克制，重诺。
+        type: string
+      portrait_url:
+        description: PortraitURL 表示肖像图链接或对象存储 key，可以为空。
+        example: covers/character-a.webp
+        type: string
+      tags:
+        description: Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。
+        example: 主角,剑修
+        type: string
+    required:
+    - name
+    type: object
+  internal_api_handler_event.LayoutNodeRequest:
+    properties:
+      event_id:
+        description: EventID 表示事件主键 ID。
+        example: 1
+        type: integer
+      position_x:
+        description: PositionX 表示事件节点画布 X 坐标。
+        example: 120
+        type: number
+      position_y:
+        description: PositionY 表示事件节点画布 Y 坐标。
+        example: 80
+        type: number
+    type: object
+  internal_api_handler_event.LayoutRequest:
+    properties:
+      nodes:
+        description: Nodes 表示需要保存坐标的事件节点列表。
+        items:
+          $ref: '#/definitions/internal_api_handler_event.LayoutNodeRequest'
+        type: array
+      viewport:
+        allOf:
+        - $ref: '#/definitions/event.ViewportData'
+        description: Viewport 表示事件图画布视口。
+    type: object
+  internal_api_handler_event.RelationCreateRequest:
+    properties:
+      note:
+        description: Note 表示关系线备注，可以为空。
+        example: 直接导致
+        type: string
+      source_event_id:
+        description: SourceEventID 表示前置事件 ID。
+        example: 1
+        type: integer
+      target_event_id:
+        description: TargetEventID 表示后续事件 ID。
+        example: 2
+        type: integer
+    required:
+    - source_event_id
+    - target_event_id
+    type: object
+  internal_api_handler_event.RelationUpdateRequest:
+    properties:
+      note:
+        description: Note 表示关系线备注，可以为空。
+        example: 直接导致
+        type: string
+    type: object
+  internal_api_handler_novel.CreateRequest:
+    properties:
+      author_name:
+        description: AuthorName 表示作者名，可以为空。
+        example: 爱潜水的乌贼
+        type: string
+      cover_url:
+        description: CoverURL 表示封面链接，可以为空。
+        example: https://example.com/cover.jpg
+        type: string
+      description:
+        description: Description 表示简介，可以为空。
+        example: 一部关于废土冒险的小说
+        type: string
+      name:
+        description: Name 表示小说名，不能为空。
+        example: 长夜余火
+        type: string
+      status:
+        description: Status 表示小说状态，只允许连载中或已完结，未传时默认连载中。
+        enum:
+        - 连载中
+        - 已完结
+        example: 连载中
+        type: string
+      tags:
+        description: Tags 表示标签，可以为空，多个标签使用英文逗号分隔。
+        example: 玄幻,冒险
+        type: string
+    required:
+    - name
+    type: object
+  internal_api_handler_novel.UpdateRequest:
+    properties:
+      author_name:
+        description: AuthorName 表示作者名，可以为空。
+        example: 爱潜水的乌贼
+        type: string
+      cover_url:
+        description: CoverURL 表示封面链接，可以为空。
+        example: https://example.com/cover.jpg
+        type: string
+      description:
+        description: Description 表示简介，可以为空。
+        example: 一部关于废土冒险的小说
+        type: string
+      name:
+        description: Name 表示小说名，不能为空。
+        example: 长夜余火
+        type: string
+      status:
+        description: Status 表示小说状态，只允许连载中或已完结，未传或空字符串时保留原状态。
+        enum:
+        - 连载中
+        - 已完结
+        example: 连载中
+        type: string
+      tags:
+        description: Tags 表示标签，可以为空，多个标签使用英文逗号分隔。
+        example: 玄幻,冒险
+        type: string
+    required:
+    - name
+    type: object
+  internal_api_handler_relationship.SaveRequest:
+    properties:
+      edges:
+        description: Edges 表示当前画布中的无方向关系线列表。
+        items:
+          $ref: '#/definitions/relationship.EdgeData'
+        type: array
+      nodes:
+        description: Nodes 表示当前画布中的角色节点列表。
+        items:
+          $ref: '#/definitions/relationship.NodeData'
+        type: array
+      viewport:
+        allOf:
+        - $ref: '#/definitions/relationship.ViewportData'
+        description: Viewport 表示画布视口。
+    type: object
+  log.DeleteFilesRequest:
+    properties:
+      paths:
+        description: Paths 表示需要删除的日志文件相对路径列表。
+        items:
+          type: string
+        type: array
+    required:
+    - paths
+    type: object
+  log.LogEntry:
+    properties:
+      attrs:
+        additionalProperties: {}
+        description: Attrs 表示除标准字段外的结构化日志属性。
+        type: object
+      level:
+        description: Level 表示日志等级。
+        type: string
+      message:
+        description: Message 表示日志消息。
+        type: string
+      raw:
+        description: Raw 表示原始日志文本。
+        type: string
+      request_id:
+        description: RequestID 表示日志关联的请求追踪标识。
+        type: string
+      source:
+        description: Source 表示日志来源位置。
+        type: string
+      time:
+        description: Time 表示日志记录时间。
+        type: string
+    type: object
+  log.streamEvent:
+    properties:
+      entry:
+        allOf:
+        - $ref: '#/definitions/log.LogEntry'
+        description: Entry 表示日志条目事件中的日志内容。
+      follow:
+        description: Follow 表示日志流是否会继续跟随文件追加。
+        type: boolean
+      message:
+        description: Message 表示错误事件中的用户可读提示。
+        type: string
+      path:
+        description: Path 表示当前跟随的日志文件路径。
+        type: string
+      request_id:
+        description: RequestID 表示本次日志流请求的追踪标识。
+        type: string
+      type:
+        description: Type 表示事件类型，支持 meta、entry、error。
+        type: string
+    type: object
+  novel.DeleteData:
+    properties:
+      deleted:
+        description: Deleted 表示是否已经删除。
+        example: true
+        type: boolean
+    type: object
+  novel.DeleteSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/novel.DeleteData'
+        description: Data 表示删除结果。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  novel.ErrorBody:
+    properties:
+      code:
+        description: Code 表示错误响应码，使用 HTTP 状态码。
+        example: 400
+        type: integer
+      message:
+        description: Message 表示用户可理解的错误提示。
+        example: 请求参数错误
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  novel.ListData:
+    properties:
+      items:
+        description: Items 表示当前页小说列表。
+        items:
+          $ref: '#/definitions/novel.NovelData'
+        type: array
+      page:
+        description: Page 表示当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 表示每页数量。
+        example: 20
+        type: integer
+      total:
+        description: Total 表示符合条件的小说总数。
+        example: 1
+        type: integer
+    type: object
+  novel.ListSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/novel.ListData'
+        description: Data 表示小说分页列表响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  novel.NovelData:
+    properties:
+      author_name:
+        description: AuthorName 表示作者名。
+        example: 爱潜水的乌贼
+        type: string
+      cover_url:
+        description: CoverURL 表示封面链接。
+        example: https://example.com/cover.jpg
+        type: string
+      created_at:
+        description: CreatedAt 表示创建时间。
+        example: "2026-06-13T22:00:00+08:00"
+        type: string
+      description:
+        description: Description 表示简介。
+        example: 一部关于废土冒险的小说
+        type: string
+      id:
+        description: ID 表示小说主键 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 表示小说名。
+        example: 长夜余火
+        type: string
+      status:
+        description: Status 表示小说状态，只允许连载中或已完结。
+        enum:
+        - 连载中
+        - 已完结
+        example: 连载中
+        type: string
+      tags:
+        description: Tags 表示标签，多个标签使用英文逗号分隔。
+        example: 玄幻,冒险
+        type: string
+      updated_at:
+        description: UpdatedAt 表示更新时间。
+        example: "2026-06-13T22:00:00+08:00"
+        type: string
+    type: object
+  novel.SuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/novel.NovelData'
+        description: Data 表示小说响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  relationship.EdgeData:
+    properties:
+      character_a_id:
+        description: CharacterAID 表示无方向关系线中较小的角色卡 ID。
+        example: 1
+        type: integer
+      character_b_id:
+        description: CharacterBID 表示无方向关系线中较大的角色卡 ID。
+        example: 2
+        type: integer
+      id:
+        description: ID 表示关系线稳定 ID，由两个角色 ID 计算得到。
+        example: rel-1-2
+        type: string
+      note:
+        description: Note 表示关系线备注，用于描述两个角色之间的关系。
+        example: 旧友
+        type: string
+      source_handle:
+        description: SourceHandle 表示较小角色卡端使用的连接点 ID。
+        example: right
+        type: string
+      target_handle:
+        description: TargetHandle 表示较大角色卡端使用的连接点 ID。
+        example: left
+        type: string
+    type: object
+  relationship.ErrorBody:
+    properties:
+      code:
+        description: Code 表示错误响应码，使用 HTTP 状态码。
+        example: 400
+        type: integer
+      message:
+        description: Message 表示用户可理解的错误提示。
+        example: 请求参数错误
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  relationship.GraphData:
+    properties:
+      edges:
+        description: Edges 表示当前画布中的无方向关系线列表。
+        items:
+          $ref: '#/definitions/relationship.EdgeData'
+        type: array
+      nodes:
+        description: Nodes 表示当前画布中的角色节点列表。
+        items:
+          $ref: '#/definitions/relationship.NodeData'
+        type: array
+      novel_id:
+        description: NovelID 表示小说主键 ID。
+        example: 1
+        type: integer
+      updated_at:
+        description: UpdatedAt 表示关系图最后更新时间；关系图尚未保存时为空。
+        example: "2026-06-15T10:00:00+08:00"
+        type: string
+      viewport:
+        allOf:
+        - $ref: '#/definitions/relationship.ViewportData'
+        description: Viewport 表示画布视口。
+    type: object
+  relationship.NodeData:
+    properties:
+      character_id:
+        description: CharacterID 表示画布节点引用的角色卡 ID。
+        example: 1
+        type: integer
+      position_x:
+        description: PositionX 表示节点在画布中的 X 坐标。
+        example: 120
+        type: number
+      position_y:
+        description: PositionY 表示节点在画布中的 Y 坐标。
+        example: 80
+        type: number
+    type: object
+  relationship.SuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/relationship.GraphData'
+        description: Data 表示角色关系图响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  relationship.ViewportData:
+    properties:
+      x:
+        description: X 表示画布视口 X 坐标。
+        example: 0
+        type: number
+      "y":
+        description: Y 表示画布视口 Y 坐标。
+        example: 0
+        type: number
+      zoom:
+        description: Zoom 表示画布视口缩放比例。
+        example: 1
+        type: number
+    type: object
+  response.Body:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0，失败使用 HTTP 状态码。
+        example: 0
+        type: integer
+      data:
+        description: Data 表示响应数据内容。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  response.ErrorBody:
+    properties:
+      code:
+        description: Code 表示错误响应码，使用 HTTP 状态码。
+        example: 400
+        type: integer
+      message:
+        description: Message 表示用户可理解的错误提示。
+        example: 请求参数错误
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  system.UpdateData:
     properties:
       branch:
         description: Branch 表示本次更新拉取的目标分支。
@@ -1771,6 +1776,120 @@ definitions:
         description: Restarting 表示是否已经启动后台重启脚本。
         example: true
         type: boolean
+    type: object
+  system.UpdateSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/system.UpdateData'
+        description: Data 表示系统更新结果。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  upload.ErrorBody:
+    properties:
+      code:
+        description: Code 表示错误响应码，使用 HTTP 状态码。
+        example: 400
+        type: integer
+      message:
+        description: Message 表示用户可理解的错误提示。
+        example: 请求参数错误
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  upload.PreviewData:
+    properties:
+      object_key:
+        description: ObjectKey 表示图片保存在对象存储中的对象 key。
+        example: covers/2026/06/9f1c1c0a1b2c3d4e.png
+        type: string
+      preview_expires_at:
+        description: PreviewExpiresAt 表示预签名预览链接过期时间。
+        example: "2026-06-15T22:00:00+08:00"
+        type: string
+      preview_url:
+        description: PreviewURL 表示可直接预览私有图片的预签名链接。
+        example: https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=...
+        type: string
+    type: object
+  upload.PreviewSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/upload.PreviewData'
+        description: Data 表示刷新预览链接后的响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  upload.UploadImageData:
+    properties:
+      content_type:
+        description: ContentType 表示根据文件内容探测出的 MIME 类型。
+        example: image/png
+        type: string
+      object_key:
+        description: ObjectKey 表示图片保存在对象存储中的对象 key。
+        example: covers/2026/06/9f1c1c0a1b2c3d4e.png
+        type: string
+      original_filename:
+        description: OriginalFilename 表示用户上传文件的原始文件名。
+        example: cover.png
+        type: string
+      preview_expires_at:
+        description: PreviewExpiresAt 表示预签名预览链接过期时间。
+        example: "2026-06-15T22:00:00+08:00"
+        type: string
+      preview_url:
+        description: PreviewURL 表示可直接预览私有图片的预签名链接。
+        example: https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=...
+        type: string
+      size:
+        description: Size 表示上传文件大小，单位为字节。
+        example: 1024
+        type: integer
+    type: object
+  upload.UploadImageSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/upload.UploadImageData'
+        description: Data 表示图片上传成功后的响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
     type: object
 info:
   contact: {}
@@ -1800,19 +1919,19 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_aiprovider.ProviderListSuccessResponse'
+            $ref: '#/definitions/aiprovider.ProviderListSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 查询 AI 提供商列表
@@ -1835,23 +1954,23 @@ paths:
         "200":
           description: 创建成功
           schema:
-            $ref: '#/definitions/internal_api_handler_aiprovider.ProviderSuccessResponse'
+            $ref: '#/definitions/aiprovider.ProviderSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "409":
           description: AI 提供商名称已存在
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 创建 AI 提供商
@@ -1874,23 +1993,23 @@ paths:
         "200":
           description: 删除成功
           schema:
-            $ref: '#/definitions/internal_api_handler_aiprovider.ProviderDeleteSuccessResponse'
+            $ref: '#/definitions/aiprovider.ProviderDeleteSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "404":
           description: AI 提供商不存在
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 删除 AI 提供商
@@ -1912,23 +2031,23 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_aiprovider.ProviderSuccessResponse'
+            $ref: '#/definitions/aiprovider.ProviderSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "404":
           description: AI 提供商不存在
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 查询 AI 提供商详情
@@ -1956,30 +2075,70 @@ paths:
         "200":
           description: 更新成功
           schema:
-            $ref: '#/definitions/internal_api_handler_aiprovider.ProviderSuccessResponse'
+            $ref: '#/definitions/aiprovider.ProviderSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "404":
           description: AI 提供商不存在
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "409":
           description: AI 提供商名称已存在
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 更新 AI 提供商
+      tags:
+      - ai-providers
+  /ai/providers/models:
+    post:
+      consumes:
+      - application/json
+      description: 根据 provider_type、api_key 和 base_url 直接请求对应 AI 提供商官方模型列表接口，不读取本地数据库。
+      parameters:
+      - description: 模型列表查询请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler_aiprovider.ModelListRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            $ref: '#/definitions/aiprovider.ModelListSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录已过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "502":
+          description: 官方模型列表接口不可用
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 查询 AI 提供商官方模型列表
       tags:
       - ai-providers
   /auth/login:
@@ -2000,15 +2159,15 @@ paths:
         "200":
           description: 登录成功
           schema:
-            $ref: '#/definitions/internal_api_handler_auth.LoginSuccessResponse'
+            $ref: '#/definitions/auth.LoginSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_auth.ErrorBody'
+            $ref: '#/definitions/auth.ErrorBody'
         "401":
           description: 登录密码错误
           schema:
-            $ref: '#/definitions/internal_api_handler_auth.ErrorBody'
+            $ref: '#/definitions/auth.ErrorBody'
       summary: 用户登录
       tags:
       - auth
@@ -2021,15 +2180,15 @@ paths:
         "200":
           description: 读取成功
           schema:
-            $ref: '#/definitions/internal_api_handler_config.FileSuccessResponse'
+            $ref: '#/definitions/config.FileSuccessResponse'
         "401":
           description: 未登录或登录过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 读取后端配置文件
@@ -2045,26 +2204,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler_config.UpdateFileRequest'
+          $ref: '#/definitions/config.UpdateFileRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 保存成功
           schema:
-            $ref: '#/definitions/internal_api_handler_config.FileSuccessResponse'
+            $ref: '#/definitions/config.FileSuccessResponse'
         "400":
           description: 配置内容错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 保存后端配置文件
@@ -2079,19 +2238,19 @@ paths:
         "200":
           description: 清空成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.Body'
+            $ref: '#/definitions/response.Body'
         "400":
           description: 文件日志未开启或参数错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 清空今日日志
@@ -2108,26 +2267,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler_log.DeleteFilesRequest'
+          $ref: '#/definitions/log.DeleteFilesRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 删除完成
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.Body'
+            $ref: '#/definitions/response.Body'
         "400":
           description: 文件日志未开启或参数错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 删除日志文件
@@ -2141,19 +2300,19 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.Body'
+            $ref: '#/definitions/response.Body'
         "400":
           description: 文件日志未开启或参数错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 查询日志文件列表
@@ -2186,19 +2345,19 @@ paths:
         "200":
           description: NDJSON 日志流事件
           schema:
-            $ref: '#/definitions/internal_api_handler_log.streamEvent'
+            $ref: '#/definitions/log.streamEvent'
         "400":
           description: 文件日志未开启或参数错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "401":
           description: 未登录或登录过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 实时预览文件日志
@@ -2226,15 +2385,15 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ListSuccessResponse'
+            $ref: '#/definitions/novel.ListSuccessResponse'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
       security:
       - Bearer: []
       summary: 查询小说列表
@@ -2257,19 +2416,19 @@ paths:
         "200":
           description: 创建成功
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.SuccessResponse'
+            $ref: '#/definitions/novel.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
       security:
       - Bearer: []
       summary: 创建小说
@@ -2292,23 +2451,23 @@ paths:
         "200":
           description: 删除成功
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.DeleteSuccessResponse'
+            $ref: '#/definitions/novel.DeleteSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
       security:
       - Bearer: []
       summary: 删除小说
@@ -2330,23 +2489,23 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.SuccessResponse'
+            $ref: '#/definitions/novel.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
       security:
       - Bearer: []
       summary: 查询小说详情
@@ -2374,23 +2533,23 @@ paths:
         "200":
           description: 更新成功
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.SuccessResponse'
+            $ref: '#/definitions/novel.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_novel.ErrorBody'
+            $ref: '#/definitions/novel.ErrorBody'
       security:
       - Bearer: []
       summary: 更新小说
@@ -2411,19 +2570,19 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_biz_event.GraphResponse'
+            $ref: '#/definitions/event.EventGraphSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 查询事件图
       tags:
       - events
@@ -2443,26 +2602,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.LayoutRequest'
+          $ref: '#/definitions/internal_api_handler_event.LayoutRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 保存成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_biz_event.GraphResponse'
+            $ref: '#/definitions/event.EventGraphSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 保存事件图布局
       tags:
       - events
@@ -2482,26 +2641,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.RelationCreateRequest'
+          $ref: '#/definitions/internal_api_handler_event.RelationCreateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 创建成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_biz_event.RelationResponse'
+            $ref: '#/definitions/event.EventRelationSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 创建事件关系线
       tags:
       - events
@@ -2525,19 +2684,19 @@ paths:
         "200":
           description: 删除成功
           schema:
-            $ref: '#/definitions/internal_api_handler_event.RelationDeleteData'
+            $ref: '#/definitions/event.RelationDeleteSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 关系线不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 删除事件关系线
       tags:
       - events
@@ -2561,26 +2720,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.RelationUpdateRequest'
+          $ref: '#/definitions/internal_api_handler_event.RelationUpdateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 更新成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_biz_event.RelationResponse'
+            $ref: '#/definitions/event.EventRelationSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 关系线不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 更新事件关系线
       tags:
       - events
@@ -2607,19 +2766,19 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_biz_event.ListResponse'
+            $ref: '#/definitions/event.EventListSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 查询事件列表
       tags:
       - events
@@ -2638,26 +2797,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.CreateRequest'
+          $ref: '#/definitions/event.EventCreateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 创建成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_biz_event.EventResponse'
+            $ref: '#/definitions/event.EventSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 创建事件
       tags:
       - events
@@ -2681,19 +2840,19 @@ paths:
         "200":
           description: 删除成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_biz_event.DeleteResponse'
+            $ref: '#/definitions/event.EventDeleteSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 事件不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 删除事件
       tags:
       - events
@@ -2716,19 +2875,19 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_biz_event.EventResponse'
+            $ref: '#/definitions/event.EventSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 事件不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 查询事件详情
       tags:
       - events
@@ -2752,26 +2911,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/novels_ai_gen_internal_biz_event.UpdateRequest'
+          $ref: '#/definitions/event.EventUpdateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 更新成功
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_biz_event.EventResponse'
+            $ref: '#/definitions/event.EventSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "404":
           description: 事件不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_event.ErrorBody'
+            $ref: '#/definitions/event.ErrorBody'
       summary: 更新事件
       tags:
       - events
@@ -2802,23 +2961,23 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ListSuccessResponse'
+            $ref: '#/definitions/chapter.ListSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
       security:
       - Bearer: []
       summary: 查询小说章节列表
@@ -2846,27 +3005,27 @@ paths:
         "200":
           description: 创建成功
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.SuccessResponse'
+            $ref: '#/definitions/chapter.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "409":
           description: 章节号冲突
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
       security:
       - Bearer: []
       summary: 创建小说章节
@@ -2894,23 +3053,23 @@ paths:
         "200":
           description: 删除成功
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.DeleteSuccessResponse'
+            $ref: '#/definitions/chapter.DeleteSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "404":
           description: 章节不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
       security:
       - Bearer: []
       summary: 删除小说章节
@@ -2937,23 +3096,23 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.SuccessResponse'
+            $ref: '#/definitions/chapter.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "404":
           description: 章节不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
       security:
       - Bearer: []
       summary: 查询小说章节详情
@@ -2986,23 +3145,23 @@ paths:
         "200":
           description: 更新成功
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.SuccessResponse'
+            $ref: '#/definitions/chapter.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "404":
           description: 章节不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
       security:
       - Bearer: []
       summary: 更新小说章节
@@ -3035,23 +3194,23 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ListSuccessResponse'
+            $ref: '#/definitions/character.ListSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
       security:
       - Bearer: []
       summary: 查询小说角色卡列表
@@ -3079,23 +3238,23 @@ paths:
         "200":
           description: 创建成功
           schema:
-            $ref: '#/definitions/internal_api_handler_character.SuccessResponse'
+            $ref: '#/definitions/character.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
       security:
       - Bearer: []
       summary: 创建小说角色卡
@@ -3123,23 +3282,23 @@ paths:
         "200":
           description: 删除成功
           schema:
-            $ref: '#/definitions/internal_api_handler_character.DeleteSuccessResponse'
+            $ref: '#/definitions/character.DeleteSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "404":
           description: 角色卡不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
       security:
       - Bearer: []
       summary: 删除小说角色卡
@@ -3166,23 +3325,23 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_character.SuccessResponse'
+            $ref: '#/definitions/character.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "404":
           description: 角色卡不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
       security:
       - Bearer: []
       summary: 查询小说角色卡详情
@@ -3215,23 +3374,23 @@ paths:
         "200":
           description: 更新成功
           schema:
-            $ref: '#/definitions/internal_api_handler_character.SuccessResponse'
+            $ref: '#/definitions/character.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "404":
           description: 角色卡不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_character.ErrorBody'
+            $ref: '#/definitions/character.ErrorBody'
       security:
       - Bearer: []
       summary: 更新小说角色卡
@@ -3254,23 +3413,23 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.NextChapterNumberSuccessResponse'
+            $ref: '#/definitions/chapter.NextChapterNumberSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
       security:
       - Bearer: []
       summary: 查询下一章节号
@@ -3293,23 +3452,23 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.SuccessResponse'
+            $ref: '#/definitions/relationship.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.ErrorBody'
+            $ref: '#/definitions/relationship.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.ErrorBody'
+            $ref: '#/definitions/relationship.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.ErrorBody'
+            $ref: '#/definitions/relationship.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.ErrorBody'
+            $ref: '#/definitions/relationship.ErrorBody'
       security:
       - Bearer: []
       summary: 查询小说角色关系图
@@ -3337,23 +3496,23 @@ paths:
         "200":
           description: 保存成功
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.SuccessResponse'
+            $ref: '#/definitions/relationship.SuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.ErrorBody'
+            $ref: '#/definitions/relationship.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.ErrorBody'
+            $ref: '#/definitions/relationship.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.ErrorBody'
+            $ref: '#/definitions/relationship.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_relationship.ErrorBody'
+            $ref: '#/definitions/relationship.ErrorBody'
       security:
       - Bearer: []
       summary: 保存小说角色关系图
@@ -3376,23 +3535,23 @@ paths:
         "200":
           description: 查询成功
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.WordCountSuccessResponse'
+            $ref: '#/definitions/chapter.WordCountSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "404":
           description: 小说不存在
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_chapter.ErrorBody'
+            $ref: '#/definitions/chapter.ErrorBody'
       security:
       - Bearer: []
       summary: 查询小说总字数
@@ -3407,19 +3566,19 @@ paths:
         "200":
           description: 更新已开始
           schema:
-            $ref: '#/definitions/internal_api_handler_system.UpdateSuccessResponse'
+            $ref: '#/definitions/system.UpdateSuccessResponse'
         "401":
           description: 未登录或登录过期
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "409":
           description: 更新冲突或工作区存在未提交改动
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
         "500":
           description: 系统更新失败
           schema:
-            $ref: '#/definitions/novels_ai_gen_internal_api_response.ErrorBody'
+            $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
       summary: 一键更新并重启系统
@@ -3450,19 +3609,19 @@ paths:
         "200":
           description: 上传成功
           schema:
-            $ref: '#/definitions/internal_api_handler_upload.UploadImageSuccessResponse'
+            $ref: '#/definitions/upload.UploadImageSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_upload.ErrorBody'
+            $ref: '#/definitions/upload.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_upload.ErrorBody'
+            $ref: '#/definitions/upload.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_upload.ErrorBody'
+            $ref: '#/definitions/upload.ErrorBody'
       security:
       - Bearer: []
       summary: 上传图片
@@ -3485,19 +3644,19 @@ paths:
         "200":
           description: 刷新成功
           schema:
-            $ref: '#/definitions/internal_api_handler_upload.PreviewSuccessResponse'
+            $ref: '#/definitions/upload.PreviewSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/internal_api_handler_upload.ErrorBody'
+            $ref: '#/definitions/upload.ErrorBody'
         "401":
           description: 未登录或登录已过期
           schema:
-            $ref: '#/definitions/internal_api_handler_upload.ErrorBody'
+            $ref: '#/definitions/upload.ErrorBody'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/internal_api_handler_upload.ErrorBody'
+            $ref: '#/definitions/upload.ErrorBody'
       security:
       - Bearer: []
       summary: 刷新图片预览链接

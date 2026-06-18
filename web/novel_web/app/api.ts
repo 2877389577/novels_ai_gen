@@ -193,20 +193,10 @@ export interface AIProviderItem {
   provider_type: AIProviderType;
   // masked_api_key 表示 API Key 掩码，不包含明文密钥。
   masked_api_key: string;
-  // model 表示 AI 模型名称。
-  model: string;
   // base_url 表示 AI 提供商接口基础地址。
   base_url: string;
   // api_type 表示 AI 接口类型。
   api_type: AIProviderAPIType;
-  // max_tokens 表示最大输出 token 数。
-  max_tokens: number;
-  // temperature 表示采样温度。
-  temperature: number;
-  // top_p 表示 nucleus sampling 参数。
-  top_p: number;
-  // thinking_level 表示思考等级。
-  thinking_level: number;
   // enabled 表示是否启用该 AI 提供商。
   enabled: boolean;
   // created_at 表示创建时间。
@@ -245,22 +235,42 @@ export interface AIProviderUpsertParams {
   provider_type: AIProviderType;
   // api_key 表示 AI 提供商 API Key，更新时为空表示保留旧密钥。
   api_key: string;
-  // model 表示 AI 模型名称。
-  model: string;
   // base_url 表示 AI 提供商接口基础地址。
   base_url: string;
   // api_type 表示 AI 接口类型。
   api_type: AIProviderAPIType;
-  // max_tokens 表示最大输出 token 数。
-  max_tokens: number;
-  // temperature 表示采样温度。
-  temperature: number;
-  // top_p 表示 nucleus sampling 参数。
-  top_p: number;
-  // thinking_level 表示思考等级。
-  thinking_level: number;
   // enabled 表示是否启用该 AI 提供商。
   enabled: boolean;
+}
+
+// AIProviderModelItem 表示 AI 提供商官方模型列表中的单个模型。
+export interface AIProviderModelItem {
+  // id 表示模型标识。
+  id: string;
+  // display_name 表示模型展示名称。
+  display_name: string;
+  // owned_by 表示模型归属方。
+  owned_by: string;
+  // created_at 表示模型创建时间。
+  created_at: string;
+  // supported_generation_methods 表示模型支持的生成能力。
+  supported_generation_methods: string[];
+}
+
+// AIProviderModelListData 表示 AI 提供商官方模型列表数据。
+export interface AIProviderModelListData {
+  // items 表示模型列表。
+  items: AIProviderModelItem[];
+}
+
+// AIProviderModelListParams 表示查询官方模型列表时提交的参数。
+export interface AIProviderModelListParams {
+  // provider_type 表示 AI 提供商类型。
+  provider_type: AIProviderType;
+  // api_key 表示用于请求官方模型列表接口的 API Key。
+  api_key: string;
+  // base_url 表示 AI 提供商接口基础地址。
+  base_url: string;
 }
 
 // AIProviderDeleteData 表示删除 AI 提供商接口返回的数据。
@@ -1083,6 +1093,38 @@ export async function updateAIProvider(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "AI 提供商更新失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchAIProviderModels 调用后端接口按官方协议查询 AI 提供商模型列表。
+// 参数 params 表示查询模型列表时需要提交的提供商类型、API Key 和 Base URL。
+export async function fetchAIProviderModels(
+  params: AIProviderModelListParams,
+): Promise<AIProviderModelListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/ai/providers/models", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<AIProviderModelListData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 模型列表获取失败，请稍后再试");
   }
 
   return payload.data;
