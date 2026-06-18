@@ -11,6 +11,7 @@ import {
   type FocusEvent,
   type FormEvent,
   type KeyboardEvent,
+  type MouseEvent,
 } from "react";
 import type {
   Message,
@@ -339,6 +340,31 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     }, 0);
   }
 
+  // handleContentKeyDown 处理正文编辑器内需要覆盖浏览器默认行为的按键。
+  // 参数 event 表示正文段落编辑器键盘事件。
+  function handleContentKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    event.preventDefault();
+    insertPlainTextAtSelection("　　");
+    setContentValue(readContentEditorText(event.currentTarget));
+  }
+
+  // handleContentMouseDown 将编辑器空白区域点击固定为移动到正文末尾。
+  // 参数 event 表示正文段落编辑器鼠标按下事件。
+  function handleContentMouseDown(event: MouseEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.focus();
+    ensureContentEditorHasParagraph(event.currentTarget);
+    moveCaretToEnd(getContentEditorTailNode(event.currentTarget));
+  }
+
   // handleSubmit 校验章节表单并提交创建或更新请求。
   // 参数 event 表示表单提交事件。
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -482,6 +508,8 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
                   onBlur={handleContentBlur}
                   onFocus={handleContentFocus}
                   onInput={handleContentChange}
+                  onKeyDown={handleContentKeyDown}
+                  onMouseDown={handleContentMouseDown}
                   onPaste={handleContentPaste}
                 />
               </div>
@@ -687,7 +715,9 @@ function readContentEditorText(element: HTMLDivElement | null): string {
     return "";
   }
 
-  const lines = Array.from(element.childNodes).flatMap(readContentNodeLines);
+  const lines = trimTrailingEmptyEditorLines(
+    Array.from(element.childNodes).flatMap(readContentNodeLines),
+  );
   if (lines.length === 0) {
     return normalizeEditorPlainText(element.textContent ?? "");
   }
@@ -710,13 +740,82 @@ function readContentNodeLines(node: ChildNode): string[] {
     return [""];
   }
 
-  return splitEditorTextLines(node.innerText || node.textContent || "");
+  const lines = splitEditorTextLines(readContentElementText(node));
+  if (
+    lines.length > 1 &&
+    lines[lines.length - 1] === "" &&
+    endsWithLineBreak(node)
+  ) {
+    return lines.slice(0, -1);
+  }
+
+  return lines;
+}
+
+// readContentElementText 从正文元素读取由真实文本和显式换行组成的纯文本。
+// 参数 element 表示需要读取文本的正文元素。
+function readContentElementText(element: HTMLElement): string {
+  let value = "";
+
+  for (const child of Array.from(element.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      value += child.textContent ?? "";
+      continue;
+    }
+
+    if (!(child instanceof HTMLElement)) {
+      continue;
+    }
+
+    if (child.tagName === "BR") {
+      value += "\n";
+      continue;
+    }
+
+    value += readContentElementText(child);
+  }
+
+  return value;
+}
+
+// endsWithLineBreak 判断元素末尾是否是浏览器用于占位的换行节点。
+// 参数 element 表示需要检查末尾节点的正文元素。
+function endsWithLineBreak(element: HTMLElement): boolean {
+  for (let index = element.childNodes.length - 1; index >= 0; index -= 1) {
+    const child = element.childNodes[index];
+    if (child.nodeType === Node.TEXT_NODE) {
+      if (child.textContent) {
+        return false;
+      }
+      continue;
+    }
+
+    if (!(child instanceof HTMLElement)) {
+      continue;
+    }
+
+    return child.tagName === "BR" || endsWithLineBreak(child);
+  }
+
+  return false;
 }
 
 // splitEditorTextLines 将编辑器文本拆分为段落行。
 // 参数 value 表示需要拆分的文本。
 function splitEditorTextLines(value: string): string[] {
   return normalizeEditorPlainText(value).split("\n");
+}
+
+// trimTrailingEmptyEditorLines 移除编辑器尾部由空白占位段落产生的空行。
+// 参数 lines 表示从正文编辑器 DOM 中读取到的段落行。
+function trimTrailingEmptyEditorLines(lines: string[]): string[] {
+  let endIndex = lines.length;
+
+  while (endIndex > 0 && !normalizeText(lines[endIndex - 1])) {
+    endIndex -= 1;
+  }
+
+  return lines.slice(0, endIndex);
 }
 
 // normalizeEditorPlainText 标准化正文编辑器读写的纯文本。
@@ -735,6 +834,12 @@ function ensureContentEditorHasParagraph(element: HTMLDivElement) {
   const paragraph = createContentParagraph("");
   element.replaceChildren(paragraph);
   moveCaretToEnd(paragraph);
+}
+
+// getContentEditorTailNode 获取正文编辑器中适合放置光标的末尾节点。
+// 参数 element 表示正文段落编辑器。
+function getContentEditorTailNode(element: HTMLDivElement): Node {
+  return element.lastChild ?? element;
 }
 
 // moveCaretToEnd 将光标移动到指定节点末尾。
