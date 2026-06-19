@@ -7919,6 +7919,22 @@ html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-user
   outline-offset: 5px;
 }
 
+.chapter-selection-ai-action {
+  position: fixed;
+  z-index: 80;
+  width: 112px;
+  min-width: 112px;
+  height: 36px;
+  border-radius: 18px;
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--semi-color-ai-general) 24%, transparent);
+  white-space: nowrap;
+}
+
+.chapter-selection-ai-action:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--semi-color-ai-general) 36%, transparent);
+  outline-offset: 3px;
+}
+
 @keyframes chapter-ai-slide-in {
   from {
     opacity: 0;

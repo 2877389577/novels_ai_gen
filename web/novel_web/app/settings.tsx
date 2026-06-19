@@ -72,6 +72,8 @@ interface AIProviderFormState {
   apiKey: string;
   // baseURL 表示 AI 提供商接口基础地址。
   baseURL: string;
+  // defaultModel 表示模型列表不可用时使用的默认模型标识。
+  defaultModel: string;
   // apiType 表示 AI 接口类型。
   apiType: string;
   // enabled 表示是否启用该 AI 提供商。
@@ -97,6 +99,7 @@ const defaultAIProviderFormState: AIProviderFormState = {
   providerType: "openai",
   apiKey: "",
   baseURL: "",
+  defaultModel: "",
   apiType: "completions",
   enabled: true,
 };
@@ -539,6 +542,8 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
           return { ...current, apiKey: value };
         case "baseURL":
           return { ...current, baseURL: value };
+        case "defaultModel":
+          return { ...current, defaultModel: value };
         case "apiType":
           return { ...current, apiType: value };
         default:
@@ -787,6 +792,12 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                         </dd>
                       </div>
                       <div>
+                        <dt>默认模型</dt>
+                        <dd title={provider.default_model}>
+                          {formatOptionalText(provider.default_model)}
+                        </dd>
+                      </div>
+                      <div>
                         <dt>更新</dt>
                         <dd>{formatTime(provider.updated_at)}</dd>
                       </div>
@@ -891,6 +902,16 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                 value={form.baseURL}
                 disabled={submitting}
                 placeholder="https://api.openai.com/v1"
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <label className="ai-provider-field ai-provider-field-wide">
+              <span>默认模型</span>
+              <input
+                name="defaultModel"
+                value={form.defaultModel}
+                disabled={submitting}
+                placeholder="例如 gpt-5、claude-sonnet-4-5 或 gemini-2.5-pro"
                 onChange={handleFormInputChange}
               />
             </label>
@@ -1037,6 +1058,7 @@ function providerToAIProviderFormState(
     providerType: provider.provider_type,
     apiKey: "",
     baseURL: provider.base_url,
+    defaultModel: provider.default_model,
     apiType: provider.provider_type === "openai" ? "completions" : provider.api_type,
     enabled: provider.enabled,
   };
@@ -1082,6 +1104,7 @@ function toAIProviderUpsertParams(
     provider_type: providerType,
     api_key: form.apiKey.trim(),
     base_url: form.baseURL.trim(),
+    default_model: form.defaultModel.trim(),
     api_type: apiType,
     enabled: form.enabled,
   };

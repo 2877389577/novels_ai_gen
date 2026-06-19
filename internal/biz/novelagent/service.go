@@ -104,6 +104,10 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	if err != nil {
 		return err
 	}
+	req.Model = modelForChatRequest(req.Model, provider.DefaultModel)
+	if strings.TrimSpace(req.Model) == "" {
+		return ErrModelRequired
+	}
 
 	cfg := s.currentConfig()
 	memory, err := s.memoryForRun(ctx, cfg, req.NovelID)
@@ -314,9 +318,6 @@ func ValidateChatRequest(req ChatRequest) error {
 	if req.ProviderID == 0 {
 		return ErrProviderIDRequired
 	}
-	if strings.TrimSpace(req.Model) == "" {
-		return ErrModelRequired
-	}
 	if strings.TrimSpace(req.Message) == "" {
 		return ErrMessageRequired
 	}
@@ -349,6 +350,16 @@ func (s *Service) providerCredential(ctx context.Context, id uint64) (*bizaiprov
 		return nil, "", fmt.Errorf("解密 AI 提供商 API Key 失败: %w", err)
 	}
 	return provider, apiKey, nil
+}
+
+// modelForChatRequest 返回本轮 Agent 对话最终使用的模型标识。
+// 参数 requestedModel 表示请求体传入的模型标识；参数 defaultModel 表示 AI 提供商配置的默认模型标识。
+func modelForChatRequest(requestedModel string, defaultModel string) string {
+	requestedModel = strings.TrimSpace(requestedModel)
+	if requestedModel != "" {
+		return requestedModel
+	}
+	return strings.TrimSpace(defaultModel)
 }
 
 // currentConfig 返回当前运行配置快照。

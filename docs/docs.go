@@ -40,7 +40,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_novelagent.ChatRequest"
+                            "$ref": "#/definitions/internal_api_handler_novelagent.ChatRequest"
                         }
                     }
                 ],
@@ -48,7 +48,7 @@ const docTemplate = `{
                     "200": {
                         "description": "NDJSON 流事件",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_novelagent.StreamEvent"
+                            "$ref": "#/definitions/internal_api_handler_novelagent.StreamEvent"
                         }
                     },
                     "400": {
@@ -157,7 +157,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_aiprovider.CreateRequest"
+                            "$ref": "#/definitions/internal_api_handler_aiprovider.CreateRequest"
                         }
                     }
                 ],
@@ -220,7 +220,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_aiprovider.ModelListRequest"
+                            "$ref": "#/definitions/internal_api_handler_aiprovider.ModelListRequest"
                         }
                     }
                 ],
@@ -349,7 +349,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_aiprovider.UpdateRequest"
+                            "$ref": "#/definitions/internal_api_handler_aiprovider.UpdateRequest"
                         }
                     }
                 ],
@@ -539,7 +539,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_auth.LoginRequest"
+                            "$ref": "#/definitions/internal_api_handler_auth.LoginRequest"
                         }
                     }
                 ],
@@ -947,7 +947,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_novel.CreateRequest"
+                            "$ref": "#/definitions/internal_api_handler_novel.CreateRequest"
                         }
                     }
                 ],
@@ -1070,7 +1070,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_novel.UpdateRequest"
+                            "$ref": "#/definitions/internal_api_handler_novel.UpdateRequest"
                         }
                     }
                 ],
@@ -1241,7 +1241,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_event.LayoutRequest"
+                            "$ref": "#/definitions/internal_api_handler_event.LayoutRequest"
                         }
                     }
                 ],
@@ -1300,7 +1300,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_event.RelationCreateRequest"
+                            "$ref": "#/definitions/internal_api_handler_event.RelationCreateRequest"
                         }
                     }
                 ],
@@ -1366,7 +1366,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_event.RelationUpdateRequest"
+                            "$ref": "#/definitions/internal_api_handler_event.RelationUpdateRequest"
                         }
                     }
                 ],
@@ -1949,7 +1949,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_chapter.CreateRequest"
+                            "$ref": "#/definitions/internal_api_handler_chapter.CreateRequest"
                         }
                     }
                 ],
@@ -2098,7 +2098,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_chapter.UpdateRequest"
+                            "$ref": "#/definitions/internal_api_handler_chapter.UpdateRequest"
                         }
                     }
                 ],
@@ -2307,7 +2307,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_character.CreateRequest"
+                            "$ref": "#/definitions/internal_api_handler_character.CreateRequest"
                         }
                     }
                 ],
@@ -2450,7 +2450,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_character.UpdateRequest"
+                            "$ref": "#/definitions/internal_api_handler_character.UpdateRequest"
                         }
                     }
                 ],
@@ -2706,7 +2706,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_relationship.SaveRequest"
+                            "$ref": "#/definitions/internal_api_handler_relationship.SaveRequest"
                         }
                     }
                 ],
@@ -3060,6 +3060,11 @@ const docTemplate = `{
                     "description": "CreatedAt 表示创建时间。",
                     "type": "string",
                     "example": "2026-06-18T12:00:00+08:00"
+                },
+                "default_model": {
+                    "description": "DefaultModel 表示模型列表不可用时使用的默认模型标识。",
+                    "type": "string",
+                    "example": "gpt-5"
                 },
                 "enabled": {
                     "description": "Enabled 表示是否启用该 AI 提供商。",
@@ -4460,6 +4465,521 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_api_handler_aiprovider.CreateRequest": {
+            "type": "object",
+            "required": [
+                "api_key",
+                "name",
+                "provider_type"
+            ],
+            "properties": {
+                "api_key": {
+                    "description": "APIKey 表示 AI 提供商 API Key，创建时不能为空。",
+                    "type": "string",
+                    "example": "sk-xxx"
+                },
+                "api_type": {
+                    "description": "APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。",
+                    "type": "string",
+                    "example": "completions"
+                },
+                "base_url": {
+                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
+                    "type": "string",
+                    "example": "https://api.openai.com/v1"
+                },
+                "default_model": {
+                    "description": "DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。",
+                    "type": "string",
+                    "example": "gpt-5"
+                },
+                "enabled": {
+                    "description": "Enabled 表示是否启用该 AI 提供商；未传时默认 true。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "name": {
+                    "description": "Name 表示 AI 提供商名称，不能为空且唯一。",
+                    "type": "string",
+                    "example": "默认 OpenAI"
+                },
+                "provider_type": {
+                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
+                    "type": "string",
+                    "example": "openai"
+                }
+            }
+        },
+        "internal_api_handler_aiprovider.ModelListRequest": {
+            "type": "object",
+            "required": [
+                "api_key",
+                "provider_type"
+            ],
+            "properties": {
+                "api_key": {
+                    "description": "APIKey 表示用于请求官方模型列表接口的 API Key。",
+                    "type": "string",
+                    "example": "sk-xxx"
+                },
+                "base_url": {
+                    "description": "BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。",
+                    "type": "string",
+                    "example": "https://api.openai.com/v1"
+                },
+                "provider_type": {
+                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
+                    "type": "string",
+                    "example": "openai"
+                }
+            }
+        },
+        "internal_api_handler_aiprovider.UpdateRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "provider_type"
+            ],
+            "properties": {
+                "api_key": {
+                    "description": "APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。",
+                    "type": "string",
+                    "example": "sk-xxx"
+                },
+                "api_type": {
+                    "description": "APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。",
+                    "type": "string",
+                    "example": "completions"
+                },
+                "base_url": {
+                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
+                    "type": "string",
+                    "example": "https://api.openai.com/v1"
+                },
+                "default_model": {
+                    "description": "DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。",
+                    "type": "string",
+                    "example": "gpt-5"
+                },
+                "enabled": {
+                    "description": "Enabled 表示是否启用该 AI 提供商；未传时保留原值。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "name": {
+                    "description": "Name 表示 AI 提供商名称，不能为空且唯一。",
+                    "type": "string",
+                    "example": "默认 OpenAI"
+                },
+                "provider_type": {
+                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
+                    "type": "string",
+                    "example": "openai"
+                }
+            }
+        },
+        "internal_api_handler_auth.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password"
+            ],
+            "properties": {
+                "password": {
+                    "description": "Password 表示系统登录密码。",
+                    "type": "string",
+                    "example": "admin123"
+                }
+            }
+        },
+        "internal_api_handler_chapter.CreateRequest": {
+            "type": "object",
+            "required": [
+                "chapter_number",
+                "title"
+            ],
+            "properties": {
+                "chapter_number": {
+                    "description": "ChapterNumber 表示章节号，必须由客户端传入且大于 0。",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content 表示章节正文，可以为空。",
+                    "type": "string",
+                    "example": "夜色像墨一样铺开。"
+                },
+                "title": {
+                    "description": "Title 表示章节名，不能为空。",
+                    "type": "string",
+                    "example": "初入长夜"
+                }
+            }
+        },
+        "internal_api_handler_chapter.UpdateRequest": {
+            "type": "object",
+            "required": [
+                "title"
+            ],
+            "properties": {
+                "content": {
+                    "description": "Content 表示章节正文，可以为空。",
+                    "type": "string",
+                    "example": "夜色像墨一样铺开。"
+                },
+                "title": {
+                    "description": "Title 表示章节名，不能为空。",
+                    "type": "string",
+                    "example": "初入长夜"
+                }
+            }
+        },
+        "internal_api_handler_character.CreateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "ability": {
+                    "description": "Ability 表示角色能力，可以为空。",
+                    "type": "string",
+                    "example": "擅长御剑与阵法。"
+                },
+                "background": {
+                    "description": "Background 表示角色背景，可以为空。",
+                    "type": "string",
+                    "example": "出身边城旧族。"
+                },
+                "gender": {
+                    "description": "Gender 表示角色性别，可以为空。",
+                    "type": "string",
+                    "example": "女"
+                },
+                "goal": {
+                    "description": "Goal 表示角色目的，可以为空。",
+                    "type": "string",
+                    "example": "寻找失踪的兄长。"
+                },
+                "name": {
+                    "description": "Name 表示角色姓名，不能为空。",
+                    "type": "string",
+                    "example": "林知夏"
+                },
+                "personality": {
+                    "description": "Personality 表示角色性格，可以为空。",
+                    "type": "string",
+                    "example": "冷静克制，重诺。"
+                },
+                "portrait_url": {
+                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
+                    "type": "string",
+                    "example": "covers/character-a.webp"
+                },
+                "tags": {
+                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "主角,剑修"
+                }
+            }
+        },
+        "internal_api_handler_character.UpdateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "ability": {
+                    "description": "Ability 表示角色能力，可以为空。",
+                    "type": "string",
+                    "example": "擅长御剑与阵法。"
+                },
+                "background": {
+                    "description": "Background 表示角色背景，可以为空。",
+                    "type": "string",
+                    "example": "出身边城旧族。"
+                },
+                "gender": {
+                    "description": "Gender 表示角色性别，可以为空。",
+                    "type": "string",
+                    "example": "女"
+                },
+                "goal": {
+                    "description": "Goal 表示角色目的，可以为空。",
+                    "type": "string",
+                    "example": "寻找失踪的兄长。"
+                },
+                "name": {
+                    "description": "Name 表示角色姓名，不能为空。",
+                    "type": "string",
+                    "example": "林知夏"
+                },
+                "personality": {
+                    "description": "Personality 表示角色性格，可以为空。",
+                    "type": "string",
+                    "example": "冷静克制，重诺。"
+                },
+                "portrait_url": {
+                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
+                    "type": "string",
+                    "example": "covers/character-a.webp"
+                },
+                "tags": {
+                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "主角,剑修"
+                }
+            }
+        },
+        "internal_api_handler_event.LayoutNodeRequest": {
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "description": "EventID 表示事件主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "position_x": {
+                    "description": "PositionX 表示事件节点画布 X 坐标。",
+                    "type": "number",
+                    "example": 120
+                },
+                "position_y": {
+                    "description": "PositionY 表示事件节点画布 Y 坐标。",
+                    "type": "number",
+                    "example": 80
+                }
+            }
+        },
+        "internal_api_handler_event.LayoutRequest": {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "description": "Nodes 表示需要保存坐标的事件节点列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api_handler_event.LayoutNodeRequest"
+                    }
+                },
+                "viewport": {
+                    "description": "Viewport 表示事件图画布视口。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/event.ViewportData"
+                        }
+                    ]
+                }
+            }
+        },
+        "internal_api_handler_event.RelationCreateRequest": {
+            "type": "object",
+            "required": [
+                "source_event_id",
+                "target_event_id"
+            ],
+            "properties": {
+                "note": {
+                    "description": "Note 表示关系线备注，可以为空。",
+                    "type": "string",
+                    "example": "直接导致"
+                },
+                "source_event_id": {
+                    "description": "SourceEventID 表示前置事件 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "target_event_id": {
+                    "description": "TargetEventID 表示后续事件 ID。",
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "internal_api_handler_event.RelationUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "description": "Note 表示关系线备注，可以为空。",
+                    "type": "string",
+                    "example": "直接导致"
+                }
+            }
+        },
+        "internal_api_handler_novel.CreateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "author_name": {
+                    "description": "AuthorName 表示作者名，可以为空。",
+                    "type": "string",
+                    "example": "爱潜水的乌贼"
+                },
+                "cover_url": {
+                    "description": "CoverURL 表示封面链接，可以为空。",
+                    "type": "string",
+                    "example": "https://example.com/cover.jpg"
+                },
+                "description": {
+                    "description": "Description 表示简介，可以为空。",
+                    "type": "string",
+                    "example": "一部关于废土冒险的小说"
+                },
+                "name": {
+                    "description": "Name 表示小说名，不能为空。",
+                    "type": "string",
+                    "example": "长夜余火"
+                },
+                "status": {
+                    "description": "Status 表示小说状态，只允许连载中或已完结，未传时默认连载中。",
+                    "type": "string",
+                    "enum": [
+                        "连载中",
+                        "已完结"
+                    ],
+                    "example": "连载中"
+                },
+                "tags": {
+                    "description": "Tags 表示标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "玄幻,冒险"
+                }
+            }
+        },
+        "internal_api_handler_novel.UpdateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "author_name": {
+                    "description": "AuthorName 表示作者名，可以为空。",
+                    "type": "string",
+                    "example": "爱潜水的乌贼"
+                },
+                "cover_url": {
+                    "description": "CoverURL 表示封面链接，可以为空。",
+                    "type": "string",
+                    "example": "https://example.com/cover.jpg"
+                },
+                "description": {
+                    "description": "Description 表示简介，可以为空。",
+                    "type": "string",
+                    "example": "一部关于废土冒险的小说"
+                },
+                "name": {
+                    "description": "Name 表示小说名，不能为空。",
+                    "type": "string",
+                    "example": "长夜余火"
+                },
+                "status": {
+                    "description": "Status 表示小说状态，只允许连载中或已完结，未传或空字符串时保留原状态。",
+                    "type": "string",
+                    "enum": [
+                        "连载中",
+                        "已完结"
+                    ],
+                    "example": "连载中"
+                },
+                "tags": {
+                    "description": "Tags 表示标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "玄幻,冒险"
+                }
+            }
+        },
+        "internal_api_handler_novelagent.ChatRequest": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "description": "ChapterID 表示当前请求关联的章节 ID，普通对话可为空。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "message": {
+                    "description": "Message 表示用户输入的写作需求或问题。",
+                    "type": "string",
+                    "example": "帮我润色这一段，让语气更紧张"
+                },
+                "model": {
+                    "description": "Model 表示本次对话使用的模型标识。",
+                    "type": "string",
+                    "example": "gpt-5"
+                },
+                "novel_id": {
+                    "description": "NovelID 表示当前请求关联的小说 ID，普通对话可为空。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "provider_id": {
+                    "description": "ProviderID 表示本次对话使用的 AI 提供商 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "internal_api_handler_novelagent.StreamEvent": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示增量文本或完整文本内容。",
+                    "type": "string",
+                    "example": "雨夜里，门外的脚步声一点点逼近。"
+                },
+                "message": {
+                    "description": "Message 表示错误或状态说明。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                },
+                "stage": {
+                    "description": "Stage 表示 meta 事件所处阶段。",
+                    "type": "string",
+                    "example": "routed"
+                },
+                "task": {
+                    "description": "Task 表示顶层 Agent 选择的任务类型。",
+                    "type": "string",
+                    "example": "polish"
+                },
+                "type": {
+                    "description": "Type 表示事件类型，支持 meta、delta、done、error。",
+                    "type": "string",
+                    "example": "delta"
+                }
+            }
+        },
+        "internal_api_handler_relationship.SaveRequest": {
+            "type": "object",
+            "properties": {
+                "edges": {
+                    "description": "Edges 表示当前画布中的无方向关系线列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.EdgeData"
+                    }
+                },
+                "nodes": {
+                    "description": "Nodes 表示当前画布中的角色节点列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.NodeData"
+                    }
+                },
+                "viewport": {
+                    "description": "Viewport 表示画布视口。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/relationship.ViewportData"
+                        }
+                    ]
+                }
+            }
+        },
         "log.DeleteFilesRequest": {
             "type": "object",
             "required": [
@@ -4852,511 +5372,6 @@ const docTemplate = `{
                     "description": "RequestID 表示本次请求的追踪标识。",
                     "type": "string",
                     "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_aiprovider.CreateRequest": {
-            "type": "object",
-            "required": [
-                "api_key",
-                "name",
-                "provider_type"
-            ],
-            "properties": {
-                "api_key": {
-                    "description": "APIKey 表示 AI 提供商 API Key，创建时不能为空。",
-                    "type": "string",
-                    "example": "sk-xxx"
-                },
-                "api_type": {
-                    "description": "APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。",
-                    "type": "string",
-                    "example": "completions"
-                },
-                "base_url": {
-                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
-                    "type": "string",
-                    "example": "https://api.openai.com/v1"
-                },
-                "enabled": {
-                    "description": "Enabled 表示是否启用该 AI 提供商；未传时默认 true。",
-                    "type": "boolean",
-                    "example": true
-                },
-                "name": {
-                    "description": "Name 表示 AI 提供商名称，不能为空且唯一。",
-                    "type": "string",
-                    "example": "默认 OpenAI"
-                },
-                "provider_type": {
-                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
-                    "type": "string",
-                    "example": "openai"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_aiprovider.ModelListRequest": {
-            "type": "object",
-            "required": [
-                "api_key",
-                "provider_type"
-            ],
-            "properties": {
-                "api_key": {
-                    "description": "APIKey 表示用于请求官方模型列表接口的 API Key。",
-                    "type": "string",
-                    "example": "sk-xxx"
-                },
-                "base_url": {
-                    "description": "BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。",
-                    "type": "string",
-                    "example": "https://api.openai.com/v1"
-                },
-                "provider_type": {
-                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
-                    "type": "string",
-                    "example": "openai"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_aiprovider.UpdateRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "provider_type"
-            ],
-            "properties": {
-                "api_key": {
-                    "description": "APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。",
-                    "type": "string",
-                    "example": "sk-xxx"
-                },
-                "api_type": {
-                    "description": "APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。",
-                    "type": "string",
-                    "example": "completions"
-                },
-                "base_url": {
-                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
-                    "type": "string",
-                    "example": "https://api.openai.com/v1"
-                },
-                "enabled": {
-                    "description": "Enabled 表示是否启用该 AI 提供商；未传时保留原值。",
-                    "type": "boolean",
-                    "example": true
-                },
-                "name": {
-                    "description": "Name 表示 AI 提供商名称，不能为空且唯一。",
-                    "type": "string",
-                    "example": "默认 OpenAI"
-                },
-                "provider_type": {
-                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
-                    "type": "string",
-                    "example": "openai"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_auth.LoginRequest": {
-            "type": "object",
-            "required": [
-                "password"
-            ],
-            "properties": {
-                "password": {
-                    "description": "Password 表示系统登录密码。",
-                    "type": "string",
-                    "example": "admin123"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_chapter.CreateRequest": {
-            "type": "object",
-            "required": [
-                "chapter_number",
-                "title"
-            ],
-            "properties": {
-                "chapter_number": {
-                    "description": "ChapterNumber 表示章节号，必须由客户端传入且大于 0。",
-                    "type": "integer",
-                    "minimum": 1,
-                    "example": 1
-                },
-                "content": {
-                    "description": "Content 表示章节正文，可以为空。",
-                    "type": "string",
-                    "example": "夜色像墨一样铺开。"
-                },
-                "title": {
-                    "description": "Title 表示章节名，不能为空。",
-                    "type": "string",
-                    "example": "初入长夜"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_chapter.UpdateRequest": {
-            "type": "object",
-            "required": [
-                "title"
-            ],
-            "properties": {
-                "content": {
-                    "description": "Content 表示章节正文，可以为空。",
-                    "type": "string",
-                    "example": "夜色像墨一样铺开。"
-                },
-                "title": {
-                    "description": "Title 表示章节名，不能为空。",
-                    "type": "string",
-                    "example": "初入长夜"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_character.CreateRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "ability": {
-                    "description": "Ability 表示角色能力，可以为空。",
-                    "type": "string",
-                    "example": "擅长御剑与阵法。"
-                },
-                "background": {
-                    "description": "Background 表示角色背景，可以为空。",
-                    "type": "string",
-                    "example": "出身边城旧族。"
-                },
-                "gender": {
-                    "description": "Gender 表示角色性别，可以为空。",
-                    "type": "string",
-                    "example": "女"
-                },
-                "goal": {
-                    "description": "Goal 表示角色目的，可以为空。",
-                    "type": "string",
-                    "example": "寻找失踪的兄长。"
-                },
-                "name": {
-                    "description": "Name 表示角色姓名，不能为空。",
-                    "type": "string",
-                    "example": "林知夏"
-                },
-                "personality": {
-                    "description": "Personality 表示角色性格，可以为空。",
-                    "type": "string",
-                    "example": "冷静克制，重诺。"
-                },
-                "portrait_url": {
-                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
-                    "type": "string",
-                    "example": "covers/character-a.webp"
-                },
-                "tags": {
-                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
-                    "type": "string",
-                    "example": "主角,剑修"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_character.UpdateRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "ability": {
-                    "description": "Ability 表示角色能力，可以为空。",
-                    "type": "string",
-                    "example": "擅长御剑与阵法。"
-                },
-                "background": {
-                    "description": "Background 表示角色背景，可以为空。",
-                    "type": "string",
-                    "example": "出身边城旧族。"
-                },
-                "gender": {
-                    "description": "Gender 表示角色性别，可以为空。",
-                    "type": "string",
-                    "example": "女"
-                },
-                "goal": {
-                    "description": "Goal 表示角色目的，可以为空。",
-                    "type": "string",
-                    "example": "寻找失踪的兄长。"
-                },
-                "name": {
-                    "description": "Name 表示角色姓名，不能为空。",
-                    "type": "string",
-                    "example": "林知夏"
-                },
-                "personality": {
-                    "description": "Personality 表示角色性格，可以为空。",
-                    "type": "string",
-                    "example": "冷静克制，重诺。"
-                },
-                "portrait_url": {
-                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
-                    "type": "string",
-                    "example": "covers/character-a.webp"
-                },
-                "tags": {
-                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
-                    "type": "string",
-                    "example": "主角,剑修"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_event.LayoutNodeRequest": {
-            "type": "object",
-            "properties": {
-                "event_id": {
-                    "description": "EventID 表示事件主键 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "position_x": {
-                    "description": "PositionX 表示事件节点画布 X 坐标。",
-                    "type": "number",
-                    "example": 120
-                },
-                "position_y": {
-                    "description": "PositionY 表示事件节点画布 Y 坐标。",
-                    "type": "number",
-                    "example": 80
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_event.LayoutRequest": {
-            "type": "object",
-            "properties": {
-                "nodes": {
-                    "description": "Nodes 表示需要保存坐标的事件节点列表。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/novels_ai_gen_internal_api_handler_event.LayoutNodeRequest"
-                    }
-                },
-                "viewport": {
-                    "description": "Viewport 表示事件图画布视口。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/event.ViewportData"
-                        }
-                    ]
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_event.RelationCreateRequest": {
-            "type": "object",
-            "required": [
-                "source_event_id",
-                "target_event_id"
-            ],
-            "properties": {
-                "note": {
-                    "description": "Note 表示关系线备注，可以为空。",
-                    "type": "string",
-                    "example": "直接导致"
-                },
-                "source_event_id": {
-                    "description": "SourceEventID 表示前置事件 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "target_event_id": {
-                    "description": "TargetEventID 表示后续事件 ID。",
-                    "type": "integer",
-                    "example": 2
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_event.RelationUpdateRequest": {
-            "type": "object",
-            "properties": {
-                "note": {
-                    "description": "Note 表示关系线备注，可以为空。",
-                    "type": "string",
-                    "example": "直接导致"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_novel.CreateRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "author_name": {
-                    "description": "AuthorName 表示作者名，可以为空。",
-                    "type": "string",
-                    "example": "爱潜水的乌贼"
-                },
-                "cover_url": {
-                    "description": "CoverURL 表示封面链接，可以为空。",
-                    "type": "string",
-                    "example": "https://example.com/cover.jpg"
-                },
-                "description": {
-                    "description": "Description 表示简介，可以为空。",
-                    "type": "string",
-                    "example": "一部关于废土冒险的小说"
-                },
-                "name": {
-                    "description": "Name 表示小说名，不能为空。",
-                    "type": "string",
-                    "example": "长夜余火"
-                },
-                "status": {
-                    "description": "Status 表示小说状态，只允许连载中或已完结，未传时默认连载中。",
-                    "type": "string",
-                    "enum": [
-                        "连载中",
-                        "已完结"
-                    ],
-                    "example": "连载中"
-                },
-                "tags": {
-                    "description": "Tags 表示标签，可以为空，多个标签使用英文逗号分隔。",
-                    "type": "string",
-                    "example": "玄幻,冒险"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_novel.UpdateRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "author_name": {
-                    "description": "AuthorName 表示作者名，可以为空。",
-                    "type": "string",
-                    "example": "爱潜水的乌贼"
-                },
-                "cover_url": {
-                    "description": "CoverURL 表示封面链接，可以为空。",
-                    "type": "string",
-                    "example": "https://example.com/cover.jpg"
-                },
-                "description": {
-                    "description": "Description 表示简介，可以为空。",
-                    "type": "string",
-                    "example": "一部关于废土冒险的小说"
-                },
-                "name": {
-                    "description": "Name 表示小说名，不能为空。",
-                    "type": "string",
-                    "example": "长夜余火"
-                },
-                "status": {
-                    "description": "Status 表示小说状态，只允许连载中或已完结，未传或空字符串时保留原状态。",
-                    "type": "string",
-                    "enum": [
-                        "连载中",
-                        "已完结"
-                    ],
-                    "example": "连载中"
-                },
-                "tags": {
-                    "description": "Tags 表示标签，可以为空，多个标签使用英文逗号分隔。",
-                    "type": "string",
-                    "example": "玄幻,冒险"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_novelagent.ChatRequest": {
-            "type": "object",
-            "properties": {
-                "chapter_id": {
-                    "description": "ChapterID 表示当前请求关联的章节 ID，普通对话可为空。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "message": {
-                    "description": "Message 表示用户输入的写作需求或问题。",
-                    "type": "string",
-                    "example": "帮我润色这一段，让语气更紧张"
-                },
-                "model": {
-                    "description": "Model 表示本次对话使用的模型标识。",
-                    "type": "string",
-                    "example": "gpt-5"
-                },
-                "novel_id": {
-                    "description": "NovelID 表示当前请求关联的小说 ID，普通对话可为空。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "provider_id": {
-                    "description": "ProviderID 表示本次对话使用的 AI 提供商 ID。",
-                    "type": "integer",
-                    "example": 1
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_novelagent.StreamEvent": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "description": "Content 表示增量文本或完整文本内容。",
-                    "type": "string",
-                    "example": "雨夜里，门外的脚步声一点点逼近。"
-                },
-                "message": {
-                    "description": "Message 表示错误或状态说明。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                },
-                "stage": {
-                    "description": "Stage 表示 meta 事件所处阶段。",
-                    "type": "string",
-                    "example": "routed"
-                },
-                "task": {
-                    "description": "Task 表示顶层 Agent 选择的任务类型。",
-                    "type": "string",
-                    "example": "polish"
-                },
-                "type": {
-                    "description": "Type 表示事件类型，支持 meta、delta、done、error。",
-                    "type": "string",
-                    "example": "delta"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_handler_relationship.SaveRequest": {
-            "type": "object",
-            "properties": {
-                "edges": {
-                    "description": "Edges 表示当前画布中的无方向关系线列表。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/relationship.EdgeData"
-                    }
-                },
-                "nodes": {
-                    "description": "Nodes 表示当前画布中的角色节点列表。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/relationship.NodeData"
-                    }
-                },
-                "viewport": {
-                    "description": "Viewport 表示画布视口。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/relationship.ViewportData"
-                        }
-                    ]
                 }
             }
         },
