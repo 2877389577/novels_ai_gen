@@ -434,6 +434,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
   const [submitting, setSubmitting] = useState(false);
   const [deletingID, setDeletingID] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [providerModalVisible, setProviderModalVisible] = useState(false);
   const [formMode, setFormMode] = useState<AIProviderFormMode>("create");
   const [editingProvider, setEditingProvider] =
     useState<AIProviderItem | null>(null);
@@ -512,6 +513,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
     setEditingProvider(null);
     setForm(createDefaultAIProviderFormState());
     setErrorMessage("");
+    setProviderModalVisible(true);
   }
 
   // handleEditClick 切换为编辑指定 AI 提供商表单。
@@ -521,11 +523,19 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
     setEditingProvider(provider);
     setForm(providerToAIProviderFormState(provider));
     setErrorMessage("");
+    setProviderModalVisible(true);
   }
 
-  // handleCancelEditClick 取消编辑并恢复创建表单。
-  function handleCancelEditClick() {
-    handleCreateClick();
+  // handleProviderModalCancel 关闭 AI 提供商表单弹窗并恢复默认创建状态。
+  function handleProviderModalCancel() {
+    if (submitting) {
+      return;
+    }
+    setProviderModalVisible(false);
+    setFormMode("create");
+    setEditingProvider(null);
+    setForm(createDefaultAIProviderFormState());
+    setErrorMessage("");
   }
 
   // handleFormInputChange 处理 AI 提供商文本或数字字段输入变化。
@@ -632,6 +642,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
       setFormMode("create");
       setEditingProvider(null);
       setForm(createDefaultAIProviderFormState());
+      setProviderModalVisible(false);
 
       const nextPage =
         formMode === "create" ? aiProviderDefaultPage : page;
@@ -715,131 +726,139 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
         </div>
       </div>
 
-      {errorMessage ? (
+      {errorMessage && !providerModalVisible ? (
         <p className="settings-error-message" role="alert">
           {errorMessage}
         </p>
       ) : null}
 
-      <div className="ai-provider-layout">
-        <section
-          className="ai-provider-list-section"
-          aria-labelledby="ai-provider-list-title"
-        >
-          <div className="ai-provider-section-heading">
-            <div>
-              <h2 id="ai-provider-list-title">提供商列表</h2>
-              <p>{pageSummary}</p>
-            </div>
-            <div className="ai-provider-page-actions">
-              <button
-                type="button"
-                className="settings-secondary-button"
-                disabled={loading || page <= 1}
-                onClick={handlePreviousPageClick}
-              >
-                上一页
-              </button>
-              <button
-                type="button"
-                className="settings-secondary-button"
-                disabled={loading || page >= totalPages}
-                onClick={handleNextPageClick}
-              >
-                下一页
-              </button>
-            </div>
+      <section
+        className="ai-provider-list-section"
+        aria-labelledby="ai-provider-list-title"
+      >
+        <div className="ai-provider-section-heading">
+          <div>
+            <h2 id="ai-provider-list-title">提供商列表</h2>
+            <p>{pageSummary}</p>
           </div>
-
-          <div className="ai-provider-list" aria-label="AI 提供商列表">
-            {loading ? (
-              <p className="ai-provider-empty">正在加载 AI 提供商...</p>
-            ) : null}
-            {!loading && providers.length === 0 ? (
-              <p className="ai-provider-empty">还没有 AI 提供商。</p>
-            ) : null}
-            {!loading
-              ? providers.map((provider) => (
-                  <article
-                    className="ai-provider-card"
-                    key={provider.id}
-                    aria-label={provider.name}
-                  >
-                    <div className="ai-provider-card-heading">
-                      <div>
-                        <h3>{provider.name}</h3>
-                        <p>{provider.provider_type}</p>
-                      </div>
-                      <span
-                        className={
-                          provider.enabled
-                            ? "ai-provider-status ai-provider-status-enabled"
-                            : "ai-provider-status"
-                        }
-                      >
-                        {provider.enabled ? "启用" : "停用"}
-                      </span>
-                    </div>
-
-                    <dl className="ai-provider-card-meta">
-                      <div>
-                        <dt>API 类型</dt>
-                        <dd>{provider.api_type || "未设置"}</dd>
-                      </div>
-                      <div>
-                        <dt>Key</dt>
-                        <dd>{provider.masked_api_key || "未设置"}</dd>
-                      </div>
-                      <div>
-                        <dt>Base URL</dt>
-                        <dd title={provider.base_url}>
-                          {formatOptionalText(provider.base_url)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>默认模型</dt>
-                        <dd title={provider.default_model}>
-                          {formatOptionalText(provider.default_model)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>优先级</dt>
-                        <dd>{provider.priority}</dd>
-                      </div>
-                      <div>
-                        <dt>更新</dt>
-                        <dd>{formatTime(provider.updated_at)}</dd>
-                      </div>
-                    </dl>
-
-                    <div className="ai-provider-card-actions">
-                      <button
-                        type="button"
-                        className="settings-secondary-button"
-                        disabled={submitting || deletingID !== null}
-                        onClick={function handleProviderEditClick() {
-                          handleEditClick(provider);
-                        }}
-                      >
-                        编辑
-                      </button>
-                      <button
-                        type="button"
-                        className="settings-secondary-button ai-provider-danger-button"
-                        disabled={submitting || deletingID !== null}
-                        onClick={function handleProviderDeleteClick() {
-                          handleDeleteClick(provider);
-                        }}
-                      >
-                        {deletingID === provider.id ? "删除中..." : "删除"}
-                      </button>
-                    </div>
-                  </article>
-                ))
-              : null}
+          <div className="ai-provider-page-actions">
+            <button
+              type="button"
+              className="settings-secondary-button"
+              disabled={loading || page <= 1}
+              onClick={handlePreviousPageClick}
+            >
+              上一页
+            </button>
+            <button
+              type="button"
+              className="settings-secondary-button"
+              disabled={loading || page >= totalPages}
+              onClick={handleNextPageClick}
+            >
+              下一页
+            </button>
           </div>
-        </section>
+        </div>
 
+        <div className="ai-provider-list" aria-label="AI 提供商列表">
+          {loading ? (
+            <p className="ai-provider-empty">正在加载 AI 提供商...</p>
+          ) : null}
+          {!loading && providers.length === 0 ? (
+            <p className="ai-provider-empty">还没有 AI 提供商。</p>
+          ) : null}
+          {!loading
+            ? providers.map((provider) => (
+                <article
+                  className="ai-provider-card"
+                  key={provider.id}
+                  aria-label={provider.name}
+                >
+                  <div className="ai-provider-card-heading">
+                    <div>
+                      <h3>{provider.name}</h3>
+                      <p>{provider.provider_type}</p>
+                    </div>
+                    <span
+                      className={
+                        provider.enabled
+                          ? "ai-provider-status ai-provider-status-enabled"
+                          : "ai-provider-status"
+                      }
+                    >
+                      {provider.enabled ? "启用" : "停用"}
+                    </span>
+                  </div>
+
+                  <dl className="ai-provider-card-meta">
+                    <div>
+                      <dt>API 类型</dt>
+                      <dd>{provider.api_type || "未设置"}</dd>
+                    </div>
+                    <div>
+                      <dt>Key</dt>
+                      <dd>{provider.masked_api_key || "未设置"}</dd>
+                    </div>
+                    <div>
+                      <dt>Base URL</dt>
+                      <dd title={provider.base_url}>
+                        {formatOptionalText(provider.base_url)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>默认模型</dt>
+                      <dd title={provider.default_model}>
+                        {formatOptionalText(provider.default_model)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>优先级</dt>
+                      <dd>{provider.priority}</dd>
+                    </div>
+                    <div>
+                      <dt>更新</dt>
+                      <dd>{formatTime(provider.updated_at)}</dd>
+                    </div>
+                  </dl>
+
+                  <div className="ai-provider-card-actions">
+                    <button
+                      type="button"
+                      className="settings-secondary-button"
+                      disabled={submitting || deletingID !== null}
+                      onClick={function handleProviderEditClick() {
+                        handleEditClick(provider);
+                      }}
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-secondary-button ai-provider-danger-button"
+                      disabled={submitting || deletingID !== null}
+                      onClick={function handleProviderDeleteClick() {
+                        handleDeleteClick(provider);
+                      }}
+                    >
+                      {deletingID === provider.id ? "删除中..." : "删除"}
+                    </button>
+                  </div>
+                </article>
+              ))
+            : null}
+        </div>
+      </section>
+
+      <Modal
+        className="ai-provider-modal"
+        footer={null}
+        maskClosable={!submitting}
+        onCancel={handleProviderModalCancel}
+        title={formMode === "edit" ? "编辑 AI 提供商" : "新增 AI 提供商"}
+        visible={providerModalVisible}
+        width={760}
+      >
         <form className="ai-provider-form" onSubmit={handleFormSubmit}>
           <div className="ai-provider-form-heading">
             <div>
@@ -850,17 +869,13 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                   : "创建新的 AI 调用配置"}
               </p>
             </div>
-            {formMode === "edit" ? (
-              <button
-                type="button"
-                className="settings-secondary-button"
-                disabled={submitting}
-                onClick={handleCancelEditClick}
-              >
-                取消编辑
-              </button>
-            ) : null}
           </div>
+
+          {errorMessage ? (
+            <p className="settings-error-message" role="alert">
+              {errorMessage}
+            </p>
+          ) : null}
 
           <div className="ai-provider-form-grid">
             <label className="ai-provider-field">
@@ -968,6 +983,14 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
 
           <div className="ai-provider-form-actions">
             <button
+              type="button"
+              className="settings-secondary-button"
+              disabled={submitting}
+              onClick={handleProviderModalCancel}
+            >
+              取消
+            </button>
+            <button
               type="submit"
               className="settings-primary-button"
               disabled={loading || submitting}
@@ -980,7 +1003,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
             </button>
           </div>
         </form>
-      </div>
+      </Modal>
     </article>
   );
 }
