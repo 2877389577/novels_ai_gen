@@ -162,8 +162,8 @@ type chatAgentRuntime struct {
 }
 
 // Stream 流式执行基于 schema.Message 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 emit 表示文本增量回调。
-func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 history 表示需要注入模型上下文的历史消息；参数 emit 表示文本增量回调。
+func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, history []MessageRecord, emit func(delta AgentDelta) error) (AgentResult, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
@@ -178,7 +178,7 @@ func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, 
 		Agent:           agent,
 		EnableStreaming: true,
 	})
-	return streamChatAgentEvents(runner.Run(ctx, []*schema.Message{schema.UserMessage(req.Message)}), agentCfg.taskByAgent, emit)
+	return streamChatAgentEvents(runner.Run(ctx, chatRunMessages(req, history)), agentCfg.taskByAgent, emit)
 }
 
 // agenticAgentRuntime 表示基于 schema.AgenticMessage 的 Eino ADK 多层 Agent 运行时。
@@ -190,8 +190,8 @@ type agenticAgentRuntime struct {
 }
 
 // Stream 流式执行基于 schema.AgenticMessage 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 emit 表示文本增量回调。
-func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 history 表示需要注入模型上下文的历史消息；参数 emit 表示文本增量回调。
+func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, history []MessageRecord, emit func(delta AgentDelta) error) (AgentResult, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
@@ -206,7 +206,73 @@ func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfi
 		Agent:           agent,
 		EnableStreaming: true,
 	})
-	return streamAgenticAgentEvents(runner.Run(ctx, []*schema.AgenticMessage{schema.UserAgenticMessage(req.Message)}), agentCfg.taskByAgent, emit)
+	return streamAgenticAgentEvents(runner.Run(ctx, agenticRunMessages(req, history)), agentCfg.taskByAgent, emit)
+}
+
+// chatRunMessages 构造 schema.Message 路径的 Agent 输入消息列表。
+// 参数 req 表示本轮聊天请求；参数 history 表示需要注入模型上下文的历史消息。
+func chatRunMessages(req ChatRequest, history []MessageRecord) []*schema.Message {
+	messages := make([]*schema.Message, 0, len(history)+2)
+	for _, item := range history {
+		content := strings.TrimSpace(item.Content)
+		if content == "" {
+			continue
+		}
+		switch item.Role {
+		case MessageRoleUser:
+			messages = append(messages, schema.UserMessage(item.Content))
+		case MessageRoleAssistant:
+			messages = append(messages, schema.AssistantMessage(item.Content, nil))
+		}
+	}
+	if prompt := requestContextPrompt(req); prompt != "" {
+		messages = append(messages, schema.SystemMessage(prompt))
+	}
+	messages = append(messages, schema.UserMessage(req.Message))
+	return messages
+}
+
+// agenticRunMessages 构造 schema.AgenticMessage 路径的 Agent 输入消息列表。
+// 参数 req 表示本轮聊天请求；参数 history 表示需要注入模型上下文的历史消息。
+func agenticRunMessages(req ChatRequest, history []MessageRecord) []*schema.AgenticMessage {
+	messages := make([]*schema.AgenticMessage, 0, len(history)+2)
+	for _, item := range history {
+		content := strings.TrimSpace(item.Content)
+		if content == "" {
+			continue
+		}
+		switch item.Role {
+		case MessageRoleUser:
+			messages = append(messages, schema.UserAgenticMessage(item.Content))
+		case MessageRoleAssistant:
+			messages = append(messages, assistantAgenticMessage(item.Content))
+		}
+	}
+	if prompt := requestContextPrompt(req); prompt != "" {
+		messages = append(messages, schema.SystemAgenticMessage(prompt))
+	}
+	messages = append(messages, schema.UserAgenticMessage(req.Message))
+	return messages
+}
+
+// assistantAgenticMessage 创建 AgenticMessage 路径使用的助手历史消息。
+// 参数 content 表示助手历史消息正文。
+func assistantAgenticMessage(content string) *schema.AgenticMessage {
+	return &schema.AgenticMessage{
+		Role: schema.AgenticRoleTypeAssistant,
+		ContentBlocks: []*schema.ContentBlock{
+			schema.NewContentBlock(&schema.AssistantGenText{Text: content}),
+		},
+	}
+}
+
+// requestContextPrompt 生成仅用于本轮模型输入的请求上下文提示，不写入记忆。
+// 参数 req 表示本轮聊天请求。
+func requestContextPrompt(req ChatRequest) string {
+	if req.NovelID == 0 || req.ChapterID == 0 {
+		return ""
+	}
+	return "本轮请求已关联当前小说的当前章节。若用户请求需要读取当前章节正文，请调用合适的章节处理子 Agent，不要要求用户粘贴全文；当前章节的真实章节号以子 Agent 读取到的章节数据为准。"
 }
 
 // newChatSupervisorAgent 创建基于 schema.Message 的顶层 Agent，并把配置中的子 Agent 包装为 tool。

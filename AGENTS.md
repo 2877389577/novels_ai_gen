@@ -10,3 +10,6 @@ This is a project for writing Chinese web novels. Use this project to write the 
 
 ## Frontend-Backend Integration
 1. Backend API routes are defined in `internal/api/router/router.go`, and the service layer is located in the `internal/api/handler` directory.
+
+## Note
+1. For frontend components related to Semi, prioritize using Semi MCP over Context7.

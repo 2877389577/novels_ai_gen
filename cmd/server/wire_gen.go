@@ -15,7 +15,7 @@ import (
 	event3 "novels_ai_gen/internal/api/handler/event"
 	"novels_ai_gen/internal/api/handler/log"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
-	novelagent2 "novels_ai_gen/internal/api/handler/novelagent"
+	novelagent3 "novels_ai_gen/internal/api/handler/novelagent"
 	relationship3 "novels_ai_gen/internal/api/handler/relationship"
 	system2 "novels_ai_gen/internal/api/handler/system"
 	upload2 "novels_ai_gen/internal/api/handler/upload"
@@ -38,6 +38,7 @@ import (
 	"novels_ai_gen/internal/data/character"
 	"novels_ai_gen/internal/data/event"
 	"novels_ai_gen/internal/data/novel"
+	novelagent2 "novels_ai_gen/internal/data/novelagent"
 	"novels_ai_gen/internal/data/objectstore"
 	"novels_ai_gen/internal/data/relationship"
 	"novels_ai_gen/internal/server"
@@ -97,8 +98,9 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	aiproviderService := aiprovider2.NewService(aiproviderRepository, cipher, modelClient)
 	aiproviderHandler := aiprovider3.NewHandler(aiproviderService)
 	einoAgentRuntimeFactory := novelagent.NewEinoAgentRuntimeFactory(chapterRepository)
-	novelagentService := novelagent.NewService(aiproviderRepository, cipher, configManager, einoAgentRuntimeFactory)
-	novelagentHandler := novelagent2.NewHandler(novelagentService)
+	novelagentRepository := novelagent2.NewRepository(gormDB)
+	novelagentService := novelagent.NewService(aiproviderRepository, cipher, configManager, einoAgentRuntimeFactory, novelagentRepository)
+	novelagentHandler := novelagent3.NewHandler(novelagentService)
 	client, err := objectstore.NewClient(appConfig)
 	if err != nil {
 		cleanup3()

@@ -9,7 +9,7 @@ var (
 	ErrModelRequired = errors.New("novel agent model required")
 	// ErrMessageRequired 表示用户消息不能为空。
 	ErrMessageRequired = errors.New("novel agent message required")
-	// ErrChapterContextInvalid 表示章节上下文参数必须同时提供或同时为空。
+	// ErrChapterContextInvalid 表示章节上下文缺少小说 ID。
 	ErrChapterContextInvalid = errors.New("novel agent chapter context invalid")
 	// ErrProviderDisabled 表示 AI 提供商未启用。
 	ErrProviderDisabled = errors.New("novel agent provider disabled")
@@ -21,4 +21,6 @@ var (
 	ErrModelFactoryUnavailable = errors.New("novel agent model factory unavailable")
 	// ErrModelStreamFailed 表示模型流式生成失败。
 	ErrModelStreamFailed = errors.New("novel agent model stream failed")
+	// ErrAgentMemoryFailed 表示 Agent 记忆读取或写入失败。
+	ErrAgentMemoryFailed = errors.New("novel agent memory failed")
 )

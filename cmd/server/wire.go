@@ -36,6 +36,7 @@ import (
 	datacharacter "novels_ai_gen/internal/data/character"
 	dataevent "novels_ai_gen/internal/data/event"
 	datanovel "novels_ai_gen/internal/data/novel"
+	datanovelagent "novels_ai_gen/internal/data/novelagent"
 	"novels_ai_gen/internal/data/objectstore"
 	datarelationship "novels_ai_gen/internal/data/relationship"
 	"novels_ai_gen/internal/server"
@@ -78,6 +79,8 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		wire.Bind(new(biznovelagent.PromptProvider), new(*config.ConfigManager)),
 		biznovelagent.NewEinoAgentRuntimeFactory,
 		wire.Bind(new(biznovelagent.AgentRuntimeFactory), new(*biznovelagent.EinoAgentRuntimeFactory)),
+		datanovelagent.NewRepository,
+		wire.Bind(new(biznovelagent.MemoryRepository), new(*datanovelagent.Repository)),
 		biznovelagent.NewService,
 		objectstore.NewClient,
 		wire.Bind(new(bizupload.ObjectStorage), new(*objectstore.Client)),

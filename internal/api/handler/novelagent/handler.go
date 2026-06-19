@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"novels_ai_gen/internal/api/response"
@@ -47,10 +48,122 @@ type StreamEvent struct {
 	Message string `json:"message,omitempty" example:"ok"`
 }
 
+// MessageData 表示 Swagger 文档中的 Agent 历史消息响应数据。
+type MessageData struct {
+	// ID 表示 Agent 消息主键 ID。
+	ID uint64 `json:"id" example:"1"`
+	// NovelID 表示消息所属小说 ID。
+	NovelID uint64 `json:"novel_id" example:"1"`
+	// ChapterID 表示本轮消息关联的章节 ID，普通小说级对话可为空。
+	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
+	// Role 表示消息角色，仅包含 user 或 assistant。
+	Role string `json:"role" example:"user"`
+	// Task 表示产生助手消息的任务类型，用户消息为空。
+	Task string `json:"task,omitempty" example:"polish"`
+	// Content 表示消息正文。
+	Content string `json:"content" example:"帮我润色这一章"`
+	// CreatedAt 表示创建时间。
+	CreatedAt string `json:"created_at" example:"2026-06-19T22:00:00+08:00"`
+}
+
+// MessageListData 表示 Swagger 文档中的 Agent 历史消息列表响应数据。
+type MessageListData struct {
+	// Items 表示最近的 Agent 历史消息列表，按时间正序排列。
+	Items []MessageData `json:"items"`
+}
+
+// MessageListSuccessResponse 表示 Agent 历史消息列表接口 Swagger 成功响应结构。
+type MessageListSuccessResponse struct {
+	// Code 表示业务响应码，成功固定为 0。
+	Code int `json:"code" example:"0"`
+	// Message 表示响应提示信息。
+	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
+	// Data 表示 Agent 历史消息列表。
+	Data MessageListData `json:"data"`
+}
+
+// ClearMessagesData 表示 Swagger 文档中的清空 Agent 历史响应数据。
+type ClearMessagesData struct {
+	// Cleared 表示本次清空的消息数量。
+	Cleared int64 `json:"cleared" example:"2"`
+}
+
+// ClearMessagesSuccessResponse 表示清空 Agent 历史接口 Swagger 成功响应结构。
+type ClearMessagesSuccessResponse struct {
+	// Code 表示业务响应码，成功固定为 0。
+	Code int `json:"code" example:"0"`
+	// Message 表示响应提示信息。
+	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
+	// Data 表示清空结果。
+	Data ClearMessagesData `json:"data"`
+}
+
 // NewHandler 创建小说写作 Agent HTTP 处理器。
 // 参数 service 表示小说写作 Agent 业务服务。
 func NewHandler(service *biznovelagent.Service) *Handler {
 	return &Handler{service: service}
+}
+
+// ListMessages 查询指定小说最近的 Agent 历史消息。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 查询小说 Agent 历史消息
+// @Description 查询指定小说最近 20 条 Agent 历史消息，按时间正序返回。
+// @Tags ai-agents
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param novel_id path int true "小说 ID"
+// @Success 200 {object} MessageListSuccessResponse "查询成功"
+// @Failure 400 {object} response.ErrorBody "请求参数错误"
+// @Failure 401 {object} response.ErrorBody "未登录或登录已过期"
+// @Failure 500 {object} response.ErrorBody "服务器内部错误"
+// @Router /novels/{novel_id}/agent-messages [get]
+func (h *Handler) ListMessages(c *gin.Context) {
+	novelID, ok := parseNovelID(c)
+	if !ok {
+		return
+	}
+
+	data, err := h.service.ListMessages(c.Request.Context(), novelID)
+	if err != nil {
+		writeAgentError(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+// ClearMessages 清空指定小说的 Agent 历史消息。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 清空小说 Agent 历史消息
+// @Description 清空指定小说已保存的 Agent 历史消息。
+// @Tags ai-agents
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param novel_id path int true "小说 ID"
+// @Success 200 {object} ClearMessagesSuccessResponse "清空成功"
+// @Failure 400 {object} response.ErrorBody "请求参数错误"
+// @Failure 401 {object} response.ErrorBody "未登录或登录已过期"
+// @Failure 500 {object} response.ErrorBody "服务器内部错误"
+// @Router /novels/{novel_id}/agent-messages [delete]
+func (h *Handler) ClearMessages(c *gin.Context) {
+	novelID, ok := parseNovelID(c)
+	if !ok {
+		return
+	}
+
+	data, err := h.service.ClearMessages(c.Request.Context(), novelID)
+	if err != nil {
+		writeAgentError(c, err)
+		return
+	}
+	response.OK(c, data)
 }
 
 // StreamChat 处理小说写作 Agent 流式对话请求。
@@ -135,12 +248,37 @@ func agentErrorMessage(err error) string {
 	case errors.Is(err, biznovelagent.ErrMessageRequired):
 		return "请输入要发送给 AI 的内容"
 	case errors.Is(err, biznovelagent.ErrChapterContextInvalid):
-		return "章节上下文参数不完整"
+		return "章节上下文缺少小说 ID"
 	case errors.Is(err, biznovelagent.ErrProviderDisabled):
 		return "当前 AI 提供商未启用"
 	case errors.Is(err, biznovelagent.ErrAgentNotConfigured), errors.Is(err, biznovelagent.ErrAgentConfigInvalid):
 		return "AI 写作智能体配置错误"
+	case errors.Is(err, biznovelagent.ErrAgentMemoryFailed):
+		return "AI 记忆暂时不可用，请稍后再试"
 	default:
 		return "AI 写作助手暂时不可用，请稍后再试"
+	}
+}
+
+// parseNovelID 解析路径中的小说 ID。
+// 参数 c 表示 Gin 请求上下文。
+func parseNovelID(c *gin.Context) (uint64, bool) {
+	value := c.Param("id")
+	novelID, err := strconv.ParseUint(value, 10, 64)
+	if err != nil || novelID == 0 {
+		response.Error(c, http.StatusBadRequest, "请求参数错误")
+		return 0, false
+	}
+	return novelID, true
+}
+
+// writeAgentError 根据业务错误写出 Agent HTTP 错误响应。
+// 参数 c 表示 Gin 请求上下文；参数 err 表示业务层返回的错误。
+func writeAgentError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, biznovelagent.ErrChapterContextInvalid):
+		response.Error(c, http.StatusBadRequest, agentErrorMessage(err))
+	default:
+		response.Error(c, http.StatusInternalServerError, agentErrorMessage(err))
 	}
 }

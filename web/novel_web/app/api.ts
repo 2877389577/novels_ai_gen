@@ -128,6 +128,39 @@ export type NovelAgentStreamEvent =
   | NovelAgentStreamDoneEvent
   | NovelAgentStreamErrorEvent;
 
+// NovelAgentMessageRole 表示 Agent 历史消息角色。
+export type NovelAgentMessageRole = "user" | "assistant";
+
+// NovelAgentMessageItem 表示单条 Agent 历史消息。
+export interface NovelAgentMessageItem {
+  // id 表示 Agent 消息主键 ID。
+  id: number;
+  // novel_id 表示消息所属小说 ID。
+  novel_id: number;
+  // chapter_id 表示本轮消息关联的章节 ID，普通小说级对话可为空。
+  chapter_id?: number;
+  // role 表示消息角色，仅包含 user 或 assistant。
+  role: NovelAgentMessageRole;
+  // task 表示产生助手消息的任务类型，用户消息为空。
+  task?: string;
+  // content 表示消息正文。
+  content: string;
+  // created_at 表示创建时间。
+  created_at: string;
+}
+
+// NovelAgentMessageListData 表示 Agent 历史消息列表响应数据。
+export interface NovelAgentMessageListData {
+  // items 表示最近的 Agent 历史消息列表，按时间正序排列。
+  items: NovelAgentMessageItem[];
+}
+
+// NovelAgentClearMessagesData 表示清空 Agent 历史消息后的响应数据。
+export interface NovelAgentClearMessagesData {
+  // cleared 表示本次清空的消息数量。
+  cleared: number;
+}
+
 // NovelAgentChatParams 表示小说写作 Agent 流式对话请求参数。
 export interface NovelAgentChatParams {
   // providerId 表示本次对话使用的 AI 提供商 ID。
@@ -1353,6 +1386,63 @@ export async function streamNovelAgentChat(
   }
 
   await readNovelAgentStream(response.body, handlers);
+}
+
+// fetchNovelAgentMessages 查询指定小说最近的 Agent 历史消息。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNovelAgentMessages(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<NovelAgentMessageListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/agent-messages`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelAgentMessageListData>(response);
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 历史消息加载失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// clearNovelAgentMessages 清空指定小说的 Agent 历史消息。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function clearNovelAgentMessages(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<NovelAgentClearMessagesData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/agent-messages`, {
+    method: "DELETE",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelAgentClearMessagesData>(response);
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 历史消息清空失败，请稍后再试");
+  }
+  return payload.data;
 }
 
 // fetchLogFiles 查询后端日志目录中的普通日志文件。

@@ -46,6 +46,8 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.GET("/novels/:id", novelHandler.Get)
 	protected.PUT("/novels/:id", novelHandler.Update)
 	protected.DELETE("/novels/:id", novelHandler.Delete)
+	protected.GET("/novels/:id/agent-messages", novelAgentHandler.ListMessages)
+	protected.DELETE("/novels/:id/agent-messages", novelAgentHandler.ClearMessages)
 	protected.GET("/novels/:id/next-chapter-number", chapterHandler.NextChapterNumber)
 	protected.GET("/novels/:id/word-count", chapterHandler.WordCount)
 	protected.GET("/novels/:id/relationship-graph", relationshipHandler.Get)

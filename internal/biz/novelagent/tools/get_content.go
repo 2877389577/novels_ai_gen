@@ -34,6 +34,8 @@ type GetContentInput struct{}
 
 // GetContentOutput 表示 get_content 工具返回给 Agent 的章节正文数据。
 type GetContentOutput struct {
+	// ChapterNumber 表示章节号，即“第 x 章”中的 x。
+	ChapterNumber int `json:"chapter_number"`
 	// Title 表示章节名。
 	Title string `json:"title"`
 	// Content 表示章节正文。
@@ -75,9 +77,10 @@ func getContent(ctx context.Context, reader ChapterReader, novelID uint64, chapt
 	}
 
 	return GetContentOutput{
-		Title:     chapter.Title,
-		Content:   chapter.Content,
-		WordCount: chapter.WordCount,
-		UpdatedAt: chapter.UpdatedAt,
+		ChapterNumber: chapter.ChapterNumber,
+		Title:         chapter.Title,
+		Content:       chapter.Content,
+		WordCount:     chapter.WordCount,
+		UpdatedAt:     chapter.UpdatedAt,
 	}, nil
 }

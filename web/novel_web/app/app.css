@@ -7624,9 +7624,9 @@ html[data-theme="dark"] .chapter-editor-page {
 .chapter-ai-assistant-panel {
   position: relative;
   min-width: 0;
-  height: calc(100% - 48px);
-  max-height: calc(100% - 48px);
-  margin: 24px 24px 24px 0;
+  height: calc(100% - 60px);
+  max-height: calc(100% - 60px);
+  margin: 36px 24px 24px 0;
   overflow: hidden;
   animation: chapter-ai-slide-in 240ms ease-out both;
 }
@@ -7682,7 +7682,15 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
   letter-spacing: 0;
 }
 
-.chapter-ai-assistant-close {
+.chapter-ai-assistant-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.chapter-ai-assistant-close,
+.chapter-ai-assistant-clear {
   display: inline-grid;
   width: 38px;
   height: 38px;
@@ -7697,16 +7705,23 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
     background-color 180ms ease,
     border-color 180ms ease,
     color 180ms ease,
-    transform 180ms ease;
+  transform 180ms ease;
 }
 
 .chapter-ai-assistant-close:hover,
-.chapter-ai-assistant-close:focus-visible {
+.chapter-ai-assistant-close:focus-visible,
+.chapter-ai-assistant-clear:not(:disabled):hover,
+.chapter-ai-assistant-clear:not(:disabled):focus-visible {
   border-color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary-container) 40%, var(--color-surface));
   color: var(--color-primary);
   outline: none;
   transform: translateY(-1px);
+}
+
+.chapter-ai-assistant-clear:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 
 .chapter-ai-dialogue-wrap {

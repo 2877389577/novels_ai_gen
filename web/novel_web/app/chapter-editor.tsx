@@ -1,5 +1,13 @@
-import { IconAIEditLevel1, IconClose, IconSend } from "@douyinfe/semi-icons";
-import { AIChatDialogue, FloatButton, Toast } from "@douyinfe/semi-ui-19";
+import {
+  IconAIEditLevel1,
+  IconClose,
+  IconDelete,
+  IconDeleteStroked,
+  IconEditStroked,
+  IconRedoStroked,
+  IconSend,
+} from "@douyinfe/semi-icons";
+import { AIChatDialogue, Button, FloatButton, Toast } from "@douyinfe/semi-ui-19";
 import {
   useCallback,
   useEffect,
@@ -14,15 +22,19 @@ import {
   type MouseEvent,
 } from "react";
 import type {
+  DialogueRenderConfig,
   Message,
+  RenderActionProps,
   RoleConfig,
 } from "@douyinfe/semi-ui-19/lib/es/aiChatDialogue/interface";
 
 import {
   UnauthorizedError,
+  clearNovelAgentMessages,
   createChapter,
   fetchChapterDetail,
   fetchAIProviderModelsByProviderID,
+  fetchNovelAgentMessages,
   fetchAIProviders,
   fetchNextChapterNumber,
   streamNovelAgentChat,
@@ -32,6 +44,7 @@ import {
   type ChapterCreateParams,
   type ChapterDetailItem,
   type ChapterUpdateParams,
+  type NovelAgentMessageItem,
 } from "./api";
 import { normalizeText } from "./novel-utils";
 
@@ -71,6 +84,62 @@ const chapterAiAssistantRoleConfig: RoleConfig = {
     name: "你",
   },
 };
+
+const chapterAiDialogueRenderConfig: DialogueRenderConfig = {
+  renderDialogueAction: renderChapterAiDialogueAction,
+};
+
+// renderChapterAiDialogueAction 渲染章节 AI 对话消息操作区，按消息角色保留允许的操作按钮。
+// 参数 props 表示 Semi AIChatDialogue 传入的默认操作节点和样式类名。
+function renderChapterAiDialogueAction(props: RenderActionProps) {
+  const copyNode = props.defaultActionsObj?.copyNode ?? null;
+  if (props.message?.role !== "user") {
+    return <div className={props.className}>{copyNode}</div>;
+  }
+
+  return (
+    <div className={props.className}>
+      {copyNode}
+      <Button
+        aria-label="重试用户消息"
+        className="semi-ai-chat-dialogue-action-btn"
+        htmlType="button"
+        icon={<IconRedoStroked aria-hidden="true" />}
+        onClick={handleChapterAiPendingMessageAction}
+        theme="borderless"
+        title="重试"
+        type="tertiary"
+      />
+      <Button
+        aria-label="修改用户消息"
+        className="semi-ai-chat-dialogue-action-btn"
+        htmlType="button"
+        icon={<IconEditStroked aria-hidden="true" />}
+        onClick={handleChapterAiPendingMessageAction}
+        theme="borderless"
+        title="修改"
+        type="tertiary"
+      />
+      <Button
+        aria-label="删除用户消息"
+        className="semi-ai-chat-dialogue-action-btn"
+        htmlType="button"
+        icon={<IconDeleteStroked aria-hidden="true" />}
+        onClick={handleChapterAiPendingMessageAction}
+        theme="borderless"
+        title="删除"
+        type="tertiary"
+      />
+    </div>
+  );
+}
+
+// handleChapterAiPendingMessageAction 处理暂未接入真实逻辑的章节 AI 消息操作按钮。
+// 参数 event 表示按钮点击事件，用于阻止占位操作触发外层交互。
+function handleChapterAiPendingMessageAction(event: MouseEvent<HTMLElement>) {
+  event.preventDefault();
+  event.stopPropagation();
+}
 
 // ChapterFormValues 表示章节编辑页中可由用户编辑的字段。
 interface ChapterFormValues {
@@ -849,6 +918,8 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const [inputValue, setInputValue] = useState("");
   const [providerLoading, setProviderLoading] = useState(true);
   const [modelLoading, setModelLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyClearing, setHistoryClearing] = useState(false);
   const [assistantSending, setAssistantSending] = useState(false);
   const streamControllerRef = useRef<AbortController | null>(null);
   const onUnauthorized = props.onUnauthorized;
@@ -879,6 +950,48 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     : models.length === 0
       ? "暂无模型"
       : "选择模型";
+
+  useEffect(
+    function loadAgentHistory() {
+      const controller = new AbortController();
+      setHistoryLoading(true);
+
+      async function loadHistory() {
+        try {
+          const data = await fetchNovelAgentMessages(props.novelId, controller.signal);
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          if (data.items.length === 0) {
+            setChats(chapterAiAssistantMessages);
+            return;
+          }
+          setChats(data.items.map(chapterAiMessageFromHistory));
+        } catch (error) {
+          if (controller.signal.aborted) {
+            return;
+          }
+          if (error instanceof UnauthorizedError) {
+            onUnauthorized();
+            return;
+          }
+          setChats(chapterAiAssistantMessages);
+          Toast.error(getErrorMessage(error, "AI 历史消息加载失败，请稍后再试"));
+        } finally {
+          if (!controller.signal.aborted) {
+            setHistoryLoading(false);
+          }
+        }
+      }
+
+      void loadHistory();
+      return function cancelHistoryLoad() {
+        controller.abort();
+      };
+    },
+    [onUnauthorized, props.novelId],
+  );
 
   useEffect(
     function loadEnabledProviders() {
@@ -1033,6 +1146,32 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     props.onClose();
   }
 
+  // handleClearAssistantHistory 清空当前小说的 AI 历史消息。
+  async function handleClearAssistantHistory() {
+    if (assistantSending) {
+      Toast.info("AI 正在回复，稍后再清空历史");
+      return;
+    }
+    if (historyClearing) {
+      return;
+    }
+
+    setHistoryClearing(true);
+    try {
+      await clearNovelAgentMessages(props.novelId);
+      setChats(chapterAiAssistantMessages);
+      Toast.success("AI 历史消息已清空");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        onUnauthorized();
+        return;
+      }
+      Toast.error(getErrorMessage(error, "AI 历史消息清空失败，请稍后再试"));
+    } finally {
+      setHistoryClearing(false);
+    }
+  }
+
   // submitAssistantMessage 将用户输入发送给后端小说写作 Agent。
   async function submitAssistantMessage() {
     const normalizedInput = inputValue.trim();
@@ -1113,7 +1252,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         {
           providerId: Number(selectedProviderID),
           model: selectedModelID,
-          message: buildChapterAgentMessage(normalizedInput),
+          message: normalizedInput,
           novelId: props.novelId,
           chapterId: savedChapterID,
           signal: controller.signal,
@@ -1209,20 +1348,33 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             <p>AI Assistant</p>
             <h2>写作助手</h2>
           </div>
-          <button
-            aria-label="关闭 AI 写作助手"
-            className="chapter-ai-assistant-close"
-            onClick={handleAssistantClose}
-            type="button"
-          >
-            <IconClose aria-hidden="true" />
-          </button>
+          <div className="chapter-ai-assistant-actions">
+            <button
+              aria-label="清空 AI 历史消息"
+              className="chapter-ai-assistant-clear"
+              disabled={historyLoading || historyClearing || assistantSending}
+              onClick={handleClearAssistantHistory}
+              title="清空历史"
+              type="button"
+            >
+              <IconDelete aria-hidden="true" />
+            </button>
+            <button
+              aria-label="关闭 AI 写作助手"
+              className="chapter-ai-assistant-close"
+              onClick={handleAssistantClose}
+              type="button"
+            >
+              <IconClose aria-hidden="true" />
+            </button>
+          </div>
         </header>
         <div className="chapter-ai-dialogue-wrap">
           <AIChatDialogue
             align="leftRight"
             chats={chats}
             className="chapter-ai-dialogue"
+            dialogueRenderConfig={chapterAiDialogueRenderConfig}
             mode="bubble"
             roleConfig={chapterAiAssistantRoleConfig}
             style={{ height: "100%" }}
@@ -1294,17 +1446,21 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   );
 }
 
-// buildChapterAgentMessage 生成不包含章节全文的 Agent 用户消息。
-// 参数 userMessage 表示用户在 AI 输入框中提交的需求。
-function buildChapterAgentMessage(userMessage: string): string {
-  const normalizedUserMessage = userMessage.trim();
-  return `用户需求：\n${normalizedUserMessage}\n\n当前请求关联章节，如需正文请使用 get_content。`;
-}
-
 // createChapterAiMessageID 创建章节 AI 对话本地消息 ID。
 // 参数 role 表示消息角色；参数 createdAt 表示消息创建时间戳。
 function createChapterAiMessageID(role: string, createdAt: number): string {
   return `chapter-ai-${role}-${createdAt}`;
+}
+
+// chapterAiMessageFromHistory 将后端历史消息转换为 AIChatDialogue 消息。
+// 参数 item 表示后端返回的单条 Agent 历史消息。
+function chapterAiMessageFromHistory(item: NovelAgentMessageItem): Message {
+  return {
+    id: `chapter-ai-history-${item.id}`,
+    role: item.role,
+    content: item.content,
+    status: "completed",
+  };
 }
 
 // createChapterAiRenderMessageID 创建章节 AI 消息最终渲染 ID，避免流式 Markdown 旧解析结果覆盖最终内容。

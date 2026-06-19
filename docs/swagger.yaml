@@ -1283,6 +1283,90 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
+  novelagent.ClearMessagesData:
+    properties:
+      cleared:
+        description: Cleared 表示本次清空的消息数量。
+        example: 2
+        type: integer
+    type: object
+  novelagent.ClearMessagesSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/novelagent.ClearMessagesData'
+        description: Data 表示清空结果。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  novelagent.MessageData:
+    properties:
+      chapter_id:
+        description: ChapterID 表示本轮消息关联的章节 ID，普通小说级对话可为空。
+        example: 1
+        type: integer
+      content:
+        description: Content 表示消息正文。
+        example: 帮我润色这一章
+        type: string
+      created_at:
+        description: CreatedAt 表示创建时间。
+        example: "2026-06-19T22:00:00+08:00"
+        type: string
+      id:
+        description: ID 表示 Agent 消息主键 ID。
+        example: 1
+        type: integer
+      novel_id:
+        description: NovelID 表示消息所属小说 ID。
+        example: 1
+        type: integer
+      role:
+        description: Role 表示消息角色，仅包含 user 或 assistant。
+        example: user
+        type: string
+      task:
+        description: Task 表示产生助手消息的任务类型，用户消息为空。
+        example: polish
+        type: string
+    type: object
+  novelagent.MessageListData:
+    properties:
+      items:
+        description: Items 表示最近的 Agent 历史消息列表，按时间正序排列。
+        items:
+          $ref: '#/definitions/novelagent.MessageData'
+        type: array
+    type: object
+  novelagent.MessageListSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/novelagent.MessageListData'
+        description: Data 表示 Agent 历史消息列表。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
   novels_ai_gen_internal_api_handler_aiprovider.CreateRequest:
     properties:
       api_key:
@@ -3064,6 +3148,75 @@ paths:
       summary: 更新事件
       tags:
       - events
+  /novels/{novel_id}/agent-messages:
+    delete:
+      consumes:
+      - application/json
+      description: 清空指定小说已保存的 Agent 历史消息。
+      parameters:
+      - description: 小说 ID
+        in: path
+        name: novel_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 清空成功
+          schema:
+            $ref: '#/definitions/novelagent.ClearMessagesSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录已过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 清空小说 Agent 历史消息
+      tags:
+      - ai-agents
+    get:
+      consumes:
+      - application/json
+      description: 查询指定小说最近 20 条 Agent 历史消息，按时间正序返回。
+      parameters:
+      - description: 小说 ID
+        in: path
+        name: novel_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            $ref: '#/definitions/novelagent.MessageListSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录已过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 查询小说 Agent 历史消息
+      tags:
+      - ai-agents
   /novels/{novel_id}/chapters:
     get:
       consumes:

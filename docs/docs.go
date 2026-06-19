@@ -1736,6 +1736,114 @@ const docTemplate = `{
                 }
             }
         },
+        "/novels/{novel_id}/agent-messages": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "查询指定小说最近 20 条 Agent 历史消息，按时间正序返回。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "查询小说 Agent 历史消息",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelagent.MessageListSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "清空指定小说已保存的 Agent 历史消息。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "清空小说 Agent 历史消息",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "清空成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelagent.ClearMessagesSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/novels/{novel_id}/chapters": {
             "get": {
                 "security": [
@@ -4614,6 +4722,124 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/novel.NovelData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novelagent.ClearMessagesData": {
+            "type": "object",
+            "properties": {
+                "cleared": {
+                    "description": "Cleared 表示本次清空的消息数量。",
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "novelagent.ClearMessagesSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示清空结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novelagent.ClearMessagesData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novelagent.MessageData": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "description": "ChapterID 表示本轮消息关联的章节 ID，普通小说级对话可为空。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content 表示消息正文。",
+                    "type": "string",
+                    "example": "帮我润色这一章"
+                },
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-19T22:00:00+08:00"
+                },
+                "id": {
+                    "description": "ID 表示 Agent 消息主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "novel_id": {
+                    "description": "NovelID 表示消息所属小说 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "role": {
+                    "description": "Role 表示消息角色，仅包含 user 或 assistant。",
+                    "type": "string",
+                    "example": "user"
+                },
+                "task": {
+                    "description": "Task 表示产生助手消息的任务类型，用户消息为空。",
+                    "type": "string",
+                    "example": "polish"
+                }
+            }
+        },
+        "novelagent.MessageListData": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items 表示最近的 Agent 历史消息列表，按时间正序排列。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/novelagent.MessageData"
+                    }
+                }
+            }
+        },
+        "novelagent.MessageListSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示 Agent 历史消息列表。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novelagent.MessageListData"
                         }
                     ]
                 },

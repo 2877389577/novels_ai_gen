@@ -5,17 +5,39 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"unicode"
 
 	bizaiprovider "novels_ai_gen/internal/biz/aiprovider"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
 	"novels_ai_gen/internal/requestid"
 )
 
+const defaultMemoryHistoryLimit = 20
+
 // Repository 表示小说写作 Agent 读取 AI 提供商配置的数据依赖。
 type Repository interface {
 	// GetByID 根据 ID 查询 AI 提供商。
 	// 参数 ctx 表示请求上下文；参数 id 表示 AI 提供商主键 ID。
 	GetByID(ctx context.Context, id uint64) (*bizaiprovider.Provider, error)
+}
+
+// MemoryRepository 表示小说写作 Agent 记忆读写数据依赖。
+type MemoryRepository interface {
+	// FindConversationByNovelID 根据小说 ID 查询 Agent 会话。
+	// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
+	FindConversationByNovelID(ctx context.Context, novelID uint64) (*Conversation, bool, error)
+	// GetOrCreateConversation 获取或创建指定小说的 Agent 会话。
+	// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
+	GetOrCreateConversation(ctx context.Context, novelID uint64) (*Conversation, error)
+	// ListRecentMessages 查询指定会话最近的 Agent 记忆消息，并按时间正序返回。
+	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 limit 表示最多返回的消息数量。
+	ListRecentMessages(ctx context.Context, conversationID uint64, limit int) ([]MessageRecord, error)
+	// AppendMessages 以事务追加一组 Agent 记忆消息。
+	// 参数 ctx 表示请求上下文；参数 messages 表示需要写入的消息列表。
+	AppendMessages(ctx context.Context, messages []MessageRecord) error
+	// ClearMessagesByNovelID 清空指定小说的 Agent 记忆消息。
+	// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
+	ClearMessagesByNovelID(ctx context.Context, novelID uint64) (int64, error)
 }
 
 // Cipher 表示小说写作 Agent 解密 AI 提供商 API Key 的依赖。
@@ -41,11 +63,13 @@ type Service struct {
 	prompts PromptProvider
 	// runtimeFactory 表示 Eino 多层 Agent 运行时工厂。
 	runtimeFactory AgentRuntimeFactory
+	// memoryRepo 表示小说级 Agent 记忆仓储。
+	memoryRepo MemoryRepository
 }
 
 // NewService 创建小说写作 Agent 业务服务。
-// 参数 repo 表示 AI 提供商仓储；参数 cipher 表示 API Key 解密器；参数 prompts 表示提示词配置来源；参数 runtimeFactory 表示 Eino 多层 Agent 运行时工厂。
-func NewService(repo Repository, cipher Cipher, prompts PromptProvider, runtimeFactory AgentRuntimeFactory) *Service {
+// 参数 repo 表示 AI 提供商仓储；参数 cipher 表示 API Key 解密器；参数 prompts 表示提示词配置来源；参数 runtimeFactory 表示 Eino 多层 Agent 运行时工厂；参数 memoryRepo 表示小说级 Agent 记忆仓储。
+func NewService(repo Repository, cipher Cipher, prompts PromptProvider, runtimeFactory AgentRuntimeFactory, memoryRepo MemoryRepository) *Service {
 	if runtimeFactory == nil {
 		runtimeFactory = NewEinoAgentRuntimeFactory(nil)
 	}
@@ -54,6 +78,7 @@ func NewService(repo Repository, cipher Cipher, prompts PromptProvider, runtimeF
 		cipher:         cipher,
 		prompts:        prompts,
 		runtimeFactory: runtimeFactory,
+		memoryRepo:     memoryRepo,
 	}
 }
 
@@ -69,6 +94,11 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	}
 
 	provider, apiKey, err := s.providerCredential(ctx, req.ProviderID)
+	if err != nil {
+		return err
+	}
+
+	history, err := s.historyForRun(ctx, req.NovelID)
 	if err != nil {
 		return err
 	}
@@ -101,7 +131,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		return err
 	}
 
-	result, err := runtime.Stream(ctx, cfg, req, func(delta AgentDelta) error {
+	result, err := runtime.Stream(ctx, cfg, req, history, func(delta AgentDelta) error {
 		if delta.Content == "" {
 			return nil
 		}
@@ -119,8 +149,156 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: friendlyError(err)})
 		return fmt.Errorf("%w: %v", ErrModelStreamFailed, err)
 	}
+	result.Content = normalizeAssistantContentLineBreaks(result.Content)
+
+	if err := s.saveSuccessfulTurn(ctx, req, result, provider.ID); err != nil {
+		slog.ErrorContext(ctx, "小说写作 Agent 记忆保存失败",
+			"error", err,
+			"provider_id", req.ProviderID,
+			"model", req.Model,
+			"novel_id", req.NovelID,
+			"chapter_id", req.ChapterID,
+		)
+		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: "AI 记忆保存失败，本次回复未完成入库"})
+		return fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+	}
 
 	return writer.WriteEvent(StreamEvent{Type: "done", Task: result.Task, Content: result.Content, Message: "ok"})
+}
+
+// ListMessages 查询指定小说最近的 Agent 历史消息。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
+func (s *Service) ListMessages(ctx context.Context, novelID uint64) (MessageListResponse, error) {
+	if novelID == 0 {
+		return MessageListResponse{}, ErrChapterContextInvalid
+	}
+	if s.memoryRepo == nil {
+		return MessageListResponse{}, fmt.Errorf("%w: Agent 记忆仓储未初始化", ErrAgentMemoryFailed)
+	}
+
+	conversation, ok, err := s.memoryRepo.FindConversationByNovelID(ctx, novelID)
+	if err != nil {
+		return MessageListResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+	}
+	if !ok {
+		return MessageListResponse{Items: []MessageResponse{}}, nil
+	}
+
+	messages, err := s.memoryRepo.ListRecentMessages(ctx, conversation.ID, defaultMemoryHistoryLimit)
+	if err != nil {
+		return MessageListResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+	}
+	return MessageListResponse{Items: messageResponses(messages)}, nil
+}
+
+// normalizeAssistantContentLineBreaks 规范化助手最终回复中的换行，保证进入记忆和 done 事件的内容可按段落展示。
+// 参数 content 表示 Agent 生成的完整助手回复。
+func normalizeAssistantContentLineBreaks(content string) string {
+	normalized := strings.ReplaceAll(content, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+	normalized = strings.ReplaceAll(normalized, "\\r\\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\\n", "\n")
+	if strings.Contains(normalized, "```") {
+		return normalized
+	}
+	if strings.Contains(normalized, "\n") {
+		return normalizeAssistantParagraphBreaks(normalized)
+	}
+	return paragraphizeSingleLineAssistantContent(normalized)
+}
+
+// normalizeAssistantParagraphBreaks 将已有换行统一为 Markdown 可见的段落分隔。
+// 参数 content 表示已经包含真实换行的助手回复。
+func normalizeAssistantParagraphBreaks(content string) string {
+	lines := strings.Split(content, "\n")
+	paragraphs := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		paragraphs = append(paragraphs, trimmed)
+	}
+	if len(paragraphs) == 0 {
+		return strings.TrimSpace(content)
+	}
+	return strings.Join(paragraphs, "\n\n")
+}
+
+// paragraphizeSingleLineAssistantContent 将完全没有换行的中文回复按句末标点拆成段落。
+// 参数 content 表示不包含真实换行的助手回复。
+func paragraphizeSingleLineAssistantContent(content string) string {
+	text := strings.TrimSpace(content)
+	if text == "" {
+		return text
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(text) + 16)
+	pendingBreak := false
+	insertedBreak := false
+	for _, char := range text {
+		if pendingBreak && !isAssistantSentenceCloser(char) {
+			if unicode.IsSpace(char) {
+				continue
+			}
+			builder.WriteString("\n\n")
+			insertedBreak = true
+			pendingBreak = false
+		}
+
+		builder.WriteRune(char)
+		if isAssistantSentenceTerminator(char) {
+			pendingBreak = true
+			continue
+		}
+		if !isAssistantSentenceCloser(char) && !unicode.IsSpace(char) {
+			pendingBreak = false
+		}
+	}
+	if !insertedBreak {
+		return text
+	}
+	return builder.String()
+}
+
+// isAssistantSentenceTerminator 判断字符是否适合作为中文段落拆分的句末标点。
+// 参数 char 表示待判断字符。
+func isAssistantSentenceTerminator(char rune) bool {
+	switch char {
+	case '。', '！', '？', '；', '…':
+		return true
+	default:
+		return false
+	}
+}
+
+// isAssistantSentenceCloser 判断字符是否为句末标点后的右侧闭合符号。
+// 参数 char 表示待判断字符。
+func isAssistantSentenceCloser(char rune) bool {
+	switch char {
+	case '”', '’', '"', '\'', '）', ')', '】', ']', '》', '}', '」', '』':
+		return true
+	default:
+		return false
+	}
+}
+
+// ClearMessages 清空指定小说的 Agent 历史消息。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
+func (s *Service) ClearMessages(ctx context.Context, novelID uint64) (ClearMessagesResponse, error) {
+	if novelID == 0 {
+		return ClearMessagesResponse{}, ErrChapterContextInvalid
+	}
+	if s.memoryRepo == nil {
+		return ClearMessagesResponse{}, fmt.Errorf("%w: Agent 记忆仓储未初始化", ErrAgentMemoryFailed)
+	}
+
+	cleared, err := s.memoryRepo.ClearMessagesByNovelID(ctx, novelID)
+	if err != nil {
+		return ClearMessagesResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+	}
+	return ClearMessagesResponse{Cleared: cleared}, nil
 }
 
 // ValidateChatRequest 校验小说写作 Agent 流式对话请求。
@@ -135,7 +313,7 @@ func ValidateChatRequest(req ChatRequest) error {
 	if strings.TrimSpace(req.Message) == "" {
 		return ErrMessageRequired
 	}
-	if (req.NovelID == 0) != (req.ChapterID == 0) {
+	if req.ChapterID != 0 && req.NovelID == 0 {
 		return ErrChapterContextInvalid
 	}
 	return nil
@@ -172,6 +350,99 @@ func (s *Service) currentConfig() *appconfig.AppConfig {
 		return appconfig.Get()
 	}
 	return s.prompts.Current()
+}
+
+// historyForRun 读取本次 Agent 请求需要注入模型上下文的历史消息。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID，普通无记忆对话为 0。
+func (s *Service) historyForRun(ctx context.Context, novelID uint64) ([]MessageRecord, error) {
+	if novelID == 0 {
+		return nil, nil
+	}
+	if s.memoryRepo == nil {
+		return nil, fmt.Errorf("%w: Agent 记忆仓储未初始化", ErrAgentMemoryFailed)
+	}
+
+	conversation, ok, err := s.memoryRepo.FindConversationByNovelID(ctx, novelID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	messages, err := s.memoryRepo.ListRecentMessages(ctx, conversation.ID, defaultMemoryHistoryLimit)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+	}
+	return messages, nil
+}
+
+// saveSuccessfulTurn 将成功完成的一轮用户消息和助手回复写入小说级 Agent 记忆。
+// 参数 ctx 表示请求上下文；参数 req 表示本轮聊天请求；参数 result 表示 Agent 最终生成结果；参数 providerID 表示实际使用的 AI 提供商 ID。
+func (s *Service) saveSuccessfulTurn(ctx context.Context, req ChatRequest, result AgentResult, providerID uint64) error {
+	if req.NovelID == 0 {
+		return nil
+	}
+	if s.memoryRepo == nil {
+		return fmt.Errorf("Agent 记忆仓储未初始化")
+	}
+
+	conversation, err := s.memoryRepo.GetOrCreateConversation(ctx, req.NovelID)
+	if err != nil {
+		return err
+	}
+
+	var chapterID *uint64
+	if req.ChapterID != 0 {
+		value := req.ChapterID
+		chapterID = &value
+	}
+	messages := []MessageRecord{
+		{
+			ConversationID: conversation.ID,
+			NovelID:        req.NovelID,
+			ChapterID:      chapterID,
+			Role:           MessageRoleUser,
+			Content:        req.Message,
+			ProviderID:     providerID,
+			Model:          req.Model,
+			RequestID:      requestid.FromContext(ctx),
+		},
+		{
+			ConversationID: conversation.ID,
+			NovelID:        req.NovelID,
+			ChapterID:      chapterID,
+			Role:           MessageRoleAssistant,
+			Task:           result.Task,
+			Content:        result.Content,
+			ProviderID:     providerID,
+			Model:          req.Model,
+			RequestID:      requestid.FromContext(ctx),
+		},
+	}
+	return s.memoryRepo.AppendMessages(ctx, messages)
+}
+
+// messageResponses 将数据库消息模型转换为前端响应结构。
+// 参数 messages 表示数据库中的 Agent 记忆消息列表。
+func messageResponses(messages []MessageRecord) []MessageResponse {
+	if len(messages) == 0 {
+		return []MessageResponse{}
+	}
+
+	items := make([]MessageResponse, 0, len(messages))
+	for _, message := range messages {
+		items = append(items, MessageResponse{
+			ID:        message.ID,
+			NovelID:   message.NovelID,
+			ChapterID: message.ChapterID,
+			Role:      message.Role,
+			Task:      message.Task,
+			Content:   message.Content,
+			CreatedAt: message.CreatedAt,
+		})
+	}
+	return items
 }
 
 // normalizeChatRequest 标准化小说写作 Agent 请求。

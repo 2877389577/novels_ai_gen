@@ -2,7 +2,9 @@ package novelagent
 
 import (
 	"context"
+	"time"
 
+	biznovel "novels_ai_gen/internal/biz/novel"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
 
@@ -18,6 +20,98 @@ type ChatRequest struct {
 	NovelID uint64 `json:"novel_id,omitempty" example:"1"`
 	// ChapterID 表示当前请求关联的章节 ID，普通对话可为空。
 	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
+}
+
+// MessageRole 表示 Agent 记忆消息角色。
+type MessageRole string
+
+const (
+	// MessageRoleUser 表示用户发送给 Agent 的消息。
+	MessageRoleUser MessageRole = "user"
+	// MessageRoleAssistant 表示 Agent 最终返回给用户的助手消息。
+	MessageRoleAssistant MessageRole = "assistant"
+)
+
+// Conversation 表示小说级 Agent 会话数据库模型。
+type Conversation struct {
+	// ID 表示 Agent 会话主键 ID。
+	ID uint64 `json:"id" gorm:"column:id;primaryKey;autoIncrement;comment:Agent会话主键ID" example:"1"`
+	// NovelID 表示会话所属小说 ID，一部小说只保留一条 Agent 会话。
+	NovelID uint64 `json:"novel_id" gorm:"column:novel_id;not null;uniqueIndex:idx_agent_conversations_novel_id;comment:会话所属小说ID，一部小说只保留一条Agent会话" example:"1"`
+	// Novel 表示所属小说关联，用于生成外键和级联删除约束。
+	Novel biznovel.Novel `json:"-" gorm:"foreignKey:NovelID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;comment:所属小说关联"`
+	// CreatedAt 表示创建时间。
+	CreatedAt time.Time `json:"created_at" gorm:"column:created_at;comment:创建时间" example:"2026-06-19T22:00:00+08:00"`
+	// UpdatedAt 表示更新时间。
+	UpdatedAt time.Time `json:"updated_at" gorm:"column:updated_at;comment:更新时间" example:"2026-06-19T22:00:00+08:00"`
+}
+
+// TableName 返回 Agent 会话模型对应的数据表名称。
+func (Conversation) TableName() string {
+	return "agent_conversations"
+}
+
+// MessageRecord 表示 Agent 记忆消息数据库模型。
+type MessageRecord struct {
+	// ID 表示 Agent 消息主键 ID。
+	ID uint64 `json:"id" gorm:"column:id;primaryKey;autoIncrement;comment:Agent消息主键ID" example:"1"`
+	// ConversationID 表示消息所属 Agent 会话 ID。
+	ConversationID uint64 `json:"conversation_id" gorm:"column:conversation_id;not null;index:idx_agent_messages_conversation_created,priority:1;comment:消息所属Agent会话ID" example:"1"`
+	// Conversation 表示所属 Agent 会话关联，用于生成外键和级联删除约束。
+	Conversation Conversation `json:"-" gorm:"foreignKey:ConversationID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;comment:所属Agent会话关联"`
+	// NovelID 表示消息所属小说 ID。
+	NovelID uint64 `json:"novel_id" gorm:"column:novel_id;not null;index:idx_agent_messages_novel_created,priority:1;comment:消息所属小说ID" example:"1"`
+	// ChapterID 表示本轮消息关联的章节 ID，普通小说级对话可为空。
+	ChapterID *uint64 `json:"chapter_id,omitempty" gorm:"column:chapter_id;comment:本轮消息关联的章节ID，普通小说级对话可为空" example:"1"`
+	// Role 表示消息角色，仅保存 user 或 assistant。
+	Role MessageRole `json:"role" gorm:"column:role;type:varchar(32);not null;comment:消息角色，仅保存user或assistant" example:"user"`
+	// Task 表示产生助手消息的任务类型，用户消息为空。
+	Task string `json:"task,omitempty" gorm:"column:task;type:varchar(64);comment:产生助手消息的任务类型，用户消息为空" example:"polish"`
+	// Content 表示消息正文。
+	Content string `json:"content" gorm:"column:content;type:text;not null;comment:消息正文" example:"帮我润色这一章"`
+	// ProviderID 表示本轮消息使用的 AI 提供商 ID。
+	ProviderID uint64 `json:"provider_id,omitempty" gorm:"column:provider_id;comment:本轮消息使用的AI提供商ID" example:"1"`
+	// Model 表示本轮消息使用的模型标识。
+	Model string `json:"model,omitempty" gorm:"column:model;type:varchar(255);comment:本轮消息使用的模型标识" example:"gpt-5"`
+	// RequestID 表示本轮流式请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" gorm:"column:request_id;type:varchar(64);comment:本轮流式请求的追踪标识" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
+	// CreatedAt 表示创建时间。
+	CreatedAt time.Time `json:"created_at" gorm:"column:created_at;index:idx_agent_messages_conversation_created,priority:2;index:idx_agent_messages_novel_created,priority:2;comment:创建时间" example:"2026-06-19T22:00:00+08:00"`
+}
+
+// TableName 返回 Agent 记忆消息模型对应的数据表名称。
+func (MessageRecord) TableName() string {
+	return "agent_messages"
+}
+
+// MessageResponse 表示前端展示用的 Agent 历史消息。
+type MessageResponse struct {
+	// ID 表示 Agent 消息主键 ID。
+	ID uint64 `json:"id" example:"1"`
+	// NovelID 表示消息所属小说 ID。
+	NovelID uint64 `json:"novel_id" example:"1"`
+	// ChapterID 表示本轮消息关联的章节 ID，普通小说级对话可为空。
+	ChapterID *uint64 `json:"chapter_id,omitempty" example:"1"`
+	// Role 表示消息角色，仅包含 user 或 assistant。
+	Role MessageRole `json:"role" example:"user"`
+	// Task 表示产生助手消息的任务类型，用户消息为空。
+	Task string `json:"task,omitempty" example:"polish"`
+	// Content 表示消息正文。
+	Content string `json:"content" example:"帮我润色这一章"`
+	// CreatedAt 表示创建时间。
+	CreatedAt time.Time `json:"created_at" example:"2026-06-19T22:00:00+08:00"`
+}
+
+// MessageListResponse 表示 Agent 历史消息列表响应。
+type MessageListResponse struct {
+	// Items 表示最近的 Agent 历史消息列表，按时间正序排列。
+	Items []MessageResponse `json:"items"`
+}
+
+// ClearMessagesResponse 表示清空 Agent 历史消息后的响应。
+type ClearMessagesResponse struct {
+	// Cleared 表示本次清空的消息数量。
+	Cleared int64 `json:"cleared" example:"2"`
 }
 
 // StreamEvent 表示小说写作 Agent NDJSON 流事件。
@@ -76,8 +170,8 @@ type AgentResult struct {
 // AgentRuntime 表示可执行小说写作多层 Agent 的运行时。
 type AgentRuntime interface {
 	// Stream 流式执行小说写作 Agent。
-	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 emit 表示文本增量回调。
-	Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, emit func(delta AgentDelta) error) (AgentResult, error)
+	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 history 表示需要注入模型上下文的历史消息；参数 emit 表示文本增量回调。
+	Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, history []MessageRecord, emit func(delta AgentDelta) error) (AgentResult, error)
 }
 
 // AgentRuntimeFactory 表示 Eino 多层 Agent 运行时工厂。
