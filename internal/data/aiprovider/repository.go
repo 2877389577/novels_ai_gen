@@ -49,6 +49,8 @@ func (r *Repository) List(ctx context.Context, offset int, limit int) ([]bizaipr
 
 	var items []bizaiprovider.Provider
 	if err := r.db.WithContext(ctx).
+		Order("priority DESC").
+		Order("created_at DESC").
 		Order("id DESC").
 		Offset(offset).
 		Limit(limit).
@@ -89,6 +91,7 @@ func (r *Repository) Update(ctx context.Context, provider *bizaiprovider.Provide
 			"api_key_mask":       provider.APIKeyMask,
 			"base_url":           provider.BaseURL,
 			"default_model":      provider.DefaultModel,
+			"priority":           provider.Priority,
 			"api_type":           provider.APIType,
 			"enabled":            provider.Enabled,
 		})

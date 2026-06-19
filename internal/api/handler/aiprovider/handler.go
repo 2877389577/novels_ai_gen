@@ -28,6 +28,8 @@ type CreateRequest struct {
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
+	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+	Priority int `json:"priority" example:"1"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时默认 true。
@@ -46,6 +48,8 @@ type UpdateRequest struct {
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
+	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+	Priority int `json:"priority" example:"1"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时保留原值。
@@ -66,6 +70,8 @@ type ProviderData struct {
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
+	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+	Priority int `json:"priority" example:"1"`
 	// APIType 表示 AI 接口类型。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。
@@ -431,6 +437,8 @@ func writeServiceError(c *gin.Context, err error) {
 		response.Error(c, http.StatusBadRequest, "AI 提供商 API Key 不能为空")
 	case errors.Is(err, bizaiprovider.ErrInvalidAPIType):
 		response.Error(c, http.StatusBadRequest, "AI 接口类型只能是 response 或 completions")
+	case errors.Is(err, bizaiprovider.ErrInvalidPriority):
+		response.Error(c, http.StatusBadRequest, "AI 提供商优先级不能小于 0")
 	case errors.Is(err, bizaiprovider.ErrInvalidBaseURL):
 		response.Error(c, http.StatusBadRequest, "AI 提供商 Base URL 格式无效")
 	case errors.Is(err, bizaiprovider.ErrModelListUnavailable):

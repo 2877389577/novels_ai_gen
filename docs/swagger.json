@@ -3083,6 +3083,11 @@
                     "type": "string",
                     "example": "默认 OpenAI"
                 },
+                "priority": {
+                    "description": "Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。",
+                    "type": "integer",
+                    "example": 1
+                },
                 "provider_type": {
                     "description": "ProviderType 表示 AI 提供商类型。",
                     "type": "string",
@@ -4500,6 +4505,11 @@
                     "type": "string",
                     "example": "默认 OpenAI"
                 },
+                "priority": {
+                    "description": "Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。",
+                    "type": "integer",
+                    "example": 1
+                },
                 "provider_type": {
                     "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
                     "type": "string",
@@ -4567,6 +4577,11 @@
                     "description": "Name 表示 AI 提供商名称，不能为空且唯一。",
                     "type": "string",
                     "example": "默认 OpenAI"
+                },
+                "priority": {
+                    "description": "Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。",
+                    "type": "integer",
+                    "example": 1
                 },
                 "provider_type": {
                     "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",

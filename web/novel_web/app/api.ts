@@ -303,6 +303,8 @@ export interface AIProviderItem {
   base_url: string;
   // default_model 表示模型列表不可用时使用的默认模型标识。
   default_model: string;
+  // priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+  priority: number;
   // api_type 表示 AI 接口类型。
   api_type: AIProviderAPIType;
   // enabled 表示是否启用该 AI 提供商。
@@ -347,6 +349,8 @@ export interface AIProviderUpsertParams {
   base_url: string;
   // default_model 表示模型列表不可用时使用的默认模型标识。
   default_model: string;
+  // priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+  priority: number;
   // api_type 表示 AI 接口类型。
   api_type: AIProviderAPIType;
   // enabled 表示是否启用该 AI 提供商。

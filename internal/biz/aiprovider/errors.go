@@ -15,6 +15,8 @@ var (
 	ErrAPIKeyRequired = errors.New("ai provider api key required")
 	// ErrInvalidAPIType 表示 AI 接口类型不在允许范围内。
 	ErrInvalidAPIType = errors.New("ai provider api type invalid")
+	// ErrInvalidPriority 表示 AI 提供商排序优先级不能小于 0。
+	ErrInvalidPriority = errors.New("ai provider priority invalid")
 	// ErrInvalidBaseURL 表示 AI 提供商接口基础地址格式无效。
 	ErrInvalidBaseURL = errors.New("ai provider base url invalid")
 	// ErrModelListUnavailable 表示官方模型列表接口暂时不可用。

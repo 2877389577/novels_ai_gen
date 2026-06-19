@@ -74,6 +74,8 @@ interface AIProviderFormState {
   baseURL: string;
   // defaultModel 表示模型列表不可用时使用的默认模型标识。
   defaultModel: string;
+  // priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+  priority: string;
   // apiType 表示 AI 接口类型。
   apiType: string;
   // enabled 表示是否启用该 AI 提供商。
@@ -100,6 +102,7 @@ const defaultAIProviderFormState: AIProviderFormState = {
   apiKey: "",
   baseURL: "",
   defaultModel: "",
+  priority: "0",
   apiType: "completions",
   enabled: true,
 };
@@ -544,6 +547,8 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
           return { ...current, baseURL: value };
         case "defaultModel":
           return { ...current, defaultModel: value };
+        case "priority":
+          return { ...current, priority: value };
         case "apiType":
           return { ...current, apiType: value };
         default:
@@ -798,6 +803,10 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                         </dd>
                       </div>
                       <div>
+                        <dt>优先级</dt>
+                        <dd>{provider.priority}</dd>
+                      </div>
+                      <div>
                         <dt>更新</dt>
                         <dd>{formatTime(provider.updated_at)}</dd>
                       </div>
@@ -912,6 +921,19 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                 value={form.defaultModel}
                 disabled={submitting}
                 placeholder="例如 gpt-5、claude-sonnet-4-5 或 gemini-2.5-pro"
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <label className="ai-provider-field">
+              <span>优先级</span>
+              <input
+                name="priority"
+                type="number"
+                min="0"
+                step="1"
+                value={form.priority}
+                disabled={submitting}
+                placeholder="0"
                 onChange={handleFormInputChange}
               />
             </label>
@@ -1059,6 +1081,7 @@ function providerToAIProviderFormState(
     apiKey: "",
     baseURL: provider.base_url,
     defaultModel: provider.default_model,
+    priority: String(provider.priority ?? 0),
     apiType: provider.provider_type === "openai" ? "completions" : provider.api_type,
     enabled: provider.enabled,
   };
@@ -1081,6 +1104,12 @@ function validateAIProviderForm(
   }
   if (mode === "create" && !form.apiKey.trim()) {
     return "AI 提供商 API Key 不能为空";
+  }
+  const priority = parseAIProviderPriority(form.priority);
+  if (priority === null) {
+    return form.priority.trim().startsWith("-")
+      ? "优先级不能小于 0"
+      : "优先级必须是非负整数";
   }
   if (!isAIProviderAPIType(form.apiType)) {
     return "AI 接口类型只能是 response 或 completions";
@@ -1105,9 +1134,23 @@ function toAIProviderUpsertParams(
     api_key: form.apiKey.trim(),
     base_url: form.baseURL.trim(),
     default_model: form.defaultModel.trim(),
+    priority: parseAIProviderPriority(form.priority) ?? 0,
     api_type: apiType,
     enabled: form.enabled,
   };
+}
+
+// parseAIProviderPriority 将表单优先级文本转换为非负整数。
+// 参数 value 表示 AI 提供商优先级输入文本。
+function parseAIProviderPriority(value: string): number | null {
+  const text = value.trim();
+  if (text === "") {
+    return 0;
+  }
+  if (!/^\d+$/.test(text)) {
+    return null;
+  }
+  return Number.parseInt(text, 10);
 }
 
 // isAIProviderType 判断前端表单中的 AI 提供商类型是否为允许值。
