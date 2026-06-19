@@ -7753,8 +7753,34 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble,
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble {
   border-radius: 8px;
-  background: color-mix(in srgb, var(--color-surface-container-low) 76%, var(--color-paper));
   color: var(--color-on-surface);
+  box-shadow: 0 6px 18px rgba(40, 52, 70, 0.08);
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble:not(.semi-ai-chat-dialogue-content-user) {
+  border: 1px solid color-mix(in srgb, #60a5fa 36%, transparent);
+  background: color-mix(in srgb, #dbeafe 82%, var(--color-paper));
+  color: #16325c;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-user.semi-ai-chat-dialogue-content-bubble,
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble {
+  border: 1px solid color-mix(in srgb, #7bd46f 42%, transparent);
+  background: #95ec69;
+  color: #10210f;
+}
+
+html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble:not(.semi-ai-chat-dialogue-content-user) {
+  border-color: color-mix(in srgb, #60a5fa 42%, transparent);
+  background: color-mix(in srgb, #1d4ed8 46%, var(--color-surface-container-high));
+  color: #eaf2ff;
+}
+
+html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-user.semi-ai-chat-dialogue-content-bubble,
+html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble {
+  border-color: color-mix(in srgb, #95ec69 46%, transparent);
+  background: color-mix(in srgb, #2f8f2f 76%, var(--color-surface-container-high));
+  color: #f1ffe9;
 }
 
 .chapter-ai-composer {
