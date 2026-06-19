@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 	"unicode"
 
 	bizaiprovider "novels_ai_gen/internal/biz/aiprovider"
@@ -12,7 +13,7 @@ import (
 	"novels_ai_gen/internal/requestid"
 )
 
-const defaultMemoryHistoryLimit = 20
+const defaultMemoryRecentRounds = 10
 
 // Repository 表示小说写作 Agent 读取 AI 提供商配置的数据依赖。
 type Repository interface {
@@ -32,9 +33,15 @@ type MemoryRepository interface {
 	// ListRecentMessages 查询指定会话最近的 Agent 记忆消息，并按时间正序返回。
 	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 limit 表示最多返回的消息数量。
 	ListRecentMessages(ctx context.Context, conversationID uint64, limit int) ([]MessageRecord, error)
-	// AppendMessages 以事务追加一组 Agent 记忆消息。
-	// 参数 ctx 表示请求上下文；参数 messages 表示需要写入的消息列表。
-	AppendMessages(ctx context.Context, messages []MessageRecord) error
+	// CountMessagesAfterID 统计指定消息 ID 之后的 Agent 记忆消息数量。
+	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID。
+	CountMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64) (int64, error)
+	// ListMessagesAfterID 查询指定消息 ID 之后的 Agent 记忆消息，并按时间正序返回。
+	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID；参数 limit 表示最多返回的消息数量。
+	ListMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64, limit int) ([]MessageRecord, error)
+	// AppendMessagesAndUpdateSummary 以事务追加 Agent 记忆消息并可选更新会话摘要。
+	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 messages 表示需要写入的消息列表；参数 summary 表示需要写回的摘要更新，nil 表示不更新摘要。
+	AppendMessagesAndUpdateSummary(ctx context.Context, conversationID uint64, messages []MessageRecord, summary *ConversationSummaryUpdate) error
 	// ClearMessagesByNovelID 清空指定小说的 Agent 记忆消息。
 	// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
 	ClearMessagesByNovelID(ctx context.Context, novelID uint64) (int64, error)
@@ -98,12 +105,12 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		return err
 	}
 
-	history, err := s.historyForRun(ctx, req.NovelID)
+	cfg := s.currentConfig()
+	memory, err := s.memoryForRun(ctx, cfg, req.NovelID)
 	if err != nil {
 		return err
 	}
 
-	cfg := s.currentConfig()
 	runtime, err := s.runtimeFactory.NewRuntime(ctx, ModelConfig{
 		ProviderType: provider.ProviderType,
 		APIType:      provider.APIType,
@@ -131,7 +138,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		return err
 	}
 
-	result, err := runtime.Stream(ctx, cfg, req, history, func(delta AgentDelta) error {
+	result, err := runtime.Stream(ctx, cfg, req, memory, func(delta AgentDelta) error {
 		if delta.Content == "" {
 			return nil
 		}
@@ -151,7 +158,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	}
 	result.Content = normalizeAssistantContentLineBreaks(result.Content)
 
-	if err := s.saveSuccessfulTurn(ctx, req, result, provider.ID); err != nil {
+	if err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, provider.ID); err != nil {
 		slog.ErrorContext(ctx, "小说写作 Agent 记忆保存失败",
 			"error", err,
 			"provider_id", req.ProviderID,
@@ -184,7 +191,7 @@ func (s *Service) ListMessages(ctx context.Context, novelID uint64) (MessageList
 		return MessageListResponse{Items: []MessageResponse{}}, nil
 	}
 
-	messages, err := s.memoryRepo.ListRecentMessages(ctx, conversation.ID, defaultMemoryHistoryLimit)
+	messages, err := s.memoryRepo.ListRecentMessages(ctx, conversation.ID, memoryMessageLimit(s.currentConfig()))
 	if err != nil {
 		return MessageListResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
@@ -352,34 +359,37 @@ func (s *Service) currentConfig() *appconfig.AppConfig {
 	return s.prompts.Current()
 }
 
-// historyForRun 读取本次 Agent 请求需要注入模型上下文的历史消息。
-// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID，普通无记忆对话为 0。
-func (s *Service) historyForRun(ctx context.Context, novelID uint64) ([]MessageRecord, error) {
+// memoryForRun 读取本次 Agent 请求需要注入模型上下文的小说级记忆。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 novelID 表示小说主键 ID，普通无记忆对话为 0。
+func (s *Service) memoryForRun(ctx context.Context, cfg *appconfig.AppConfig, novelID uint64) (AgentMemoryInput, error) {
 	if novelID == 0 {
-		return nil, nil
+		return AgentMemoryInput{}, nil
 	}
 	if s.memoryRepo == nil {
-		return nil, fmt.Errorf("%w: Agent 记忆仓储未初始化", ErrAgentMemoryFailed)
+		return AgentMemoryInput{}, fmt.Errorf("%w: Agent 记忆仓储未初始化", ErrAgentMemoryFailed)
 	}
 
 	conversation, ok, err := s.memoryRepo.FindConversationByNovelID(ctx, novelID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+		return AgentMemoryInput{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
 	if !ok {
-		return nil, nil
+		return AgentMemoryInput{}, nil
 	}
 
-	messages, err := s.memoryRepo.ListRecentMessages(ctx, conversation.ID, defaultMemoryHistoryLimit)
+	messages, err := s.memoryRepo.ListRecentMessages(ctx, conversation.ID, memoryMessageLimit(cfg))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+		return AgentMemoryInput{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
-	return messages, nil
+	return AgentMemoryInput{
+		Summary:  conversation.Summary,
+		Messages: messages,
+	}, nil
 }
 
 // saveSuccessfulTurn 将成功完成的一轮用户消息和助手回复写入小说级 Agent 记忆。
-// 参数 ctx 表示请求上下文；参数 req 表示本轮聊天请求；参数 result 表示 Agent 最终生成结果；参数 providerID 表示实际使用的 AI 提供商 ID。
-func (s *Service) saveSuccessfulTurn(ctx context.Context, req ChatRequest, result AgentResult, providerID uint64) error {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 runtime 表示本轮使用的 Agent 运行时；参数 req 表示本轮聊天请求；参数 result 表示 Agent 最终生成结果；参数 providerID 表示实际使用的 AI 提供商 ID。
+func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConfig, runtime AgentRuntime, req ChatRequest, result AgentResult, providerID uint64) error {
 	if req.NovelID == 0 {
 		return nil
 	}
@@ -420,7 +430,78 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, req ChatRequest, resul
 			RequestID:      requestid.FromContext(ctx),
 		},
 	}
-	return s.memoryRepo.AppendMessages(ctx, messages)
+	summary, err := s.summaryUpdateForTurn(ctx, cfg, runtime, conversation, messages)
+	if err != nil {
+		return err
+	}
+	return s.memoryRepo.AppendMessagesAndUpdateSummary(ctx, conversation.ID, messages, summary)
+}
+
+// summaryUpdateForTurn 计算本轮保存前是否需要生成新的滚动摘要。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 runtime 表示本轮使用的 Agent 运行时；参数 conversation 表示小说级 Agent 会话；参数 pendingMessages 表示本轮即将写入的用户和助手消息。
+func (s *Service) summaryUpdateForTurn(ctx context.Context, cfg *appconfig.AppConfig, runtime AgentRuntime, conversation *Conversation, pendingMessages []MessageRecord) (*ConversationSummaryUpdate, error) {
+	if runtime == nil || conversation == nil || len(pendingMessages) == 0 {
+		return nil, nil
+	}
+	messageLimit := memoryMessageLimit(cfg)
+	if messageLimit <= 0 {
+		return nil, nil
+	}
+
+	afterID := conversationSummaryMessageID(conversation)
+	unsummarizedCount, err := s.memoryRepo.CountMessagesAfterID(ctx, conversation.ID, afterID)
+	if err != nil {
+		return nil, err
+	}
+	summarizeCount := int(unsummarizedCount) + len(pendingMessages) - messageLimit
+	if summarizeCount <= 0 {
+		return nil, nil
+	}
+
+	messages, err := s.memoryRepo.ListMessagesAfterID(ctx, conversation.ID, afterID, summarizeCount)
+	if err != nil {
+		return nil, err
+	}
+	if len(messages) == 0 {
+		return nil, nil
+	}
+
+	summary, err := runtime.Summarize(ctx, cfg, AgentSummaryInput{
+		PreviousSummary: conversation.Summary,
+		Messages:        messages,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &ConversationSummaryUpdate{
+		Summary:          summary,
+		SummaryMessageID: messages[len(messages)-1].ID,
+		SummaryUpdatedAt: time.Now(),
+	}, nil
+}
+
+// memoryRecentRounds 返回配置生效后的最近对话轮数。
+// 参数 cfg 表示当前配置快照。
+func memoryRecentRounds(cfg *appconfig.AppConfig) int {
+	if cfg == nil || cfg.AI.Agent.Memory.RecentRounds <= 0 {
+		return defaultMemoryRecentRounds
+	}
+	return cfg.AI.Agent.Memory.RecentRounds
+}
+
+// memoryMessageLimit 返回最近对话轮数对应的消息条数上限。
+// 参数 cfg 表示当前配置快照。
+func memoryMessageLimit(cfg *appconfig.AppConfig) int {
+	return memoryRecentRounds(cfg) * 2
+}
+
+// conversationSummaryMessageID 返回会话已经纳入摘要的最新消息 ID。
+// 参数 conversation 表示小说级 Agent 会话。
+func conversationSummaryMessageID(conversation *Conversation) uint64 {
+	if conversation == nil || conversation.SummaryMessageID == nil {
+		return 0
+	}
+	return *conversation.SummaryMessageID
 }
 
 // messageResponses 将数据库消息模型转换为前端响应结构。

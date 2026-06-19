@@ -95,6 +95,10 @@ ai:
   provider_secret_key: "46468"
   # 小说写作多层 Agent 配置。
   agent:
+    # 小说级 Agent 记忆配置。
+    memory:
+      # 每次请求注入模型上下文的最近对话轮数；一轮为用户消息 + AI 回复。
+      recent_rounds: 10
     # 顶层 Agent 配置；顶层 Agent 不放入子 Agent 数组。
     supervisor:
       name: novel_supervisor

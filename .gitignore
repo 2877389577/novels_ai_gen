@@ -3,7 +3,10 @@ config/config-dev.yaml
 *_test.go
 !internal/bootstrap/config/config_test.go
 !internal/biz/novelagent/agents_test.go
+!internal/biz/novelagent/service_test.go
 !internal/biz/novelagent/tools/get_content_test.go
+!internal/api/handler/novelagent/handler_test.go
+!internal/data/novelagent/repository_test.go
 !internal/biz/system/service_test.go
 logs/
 .idea/

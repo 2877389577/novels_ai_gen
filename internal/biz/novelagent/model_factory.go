@@ -34,6 +34,8 @@ const (
 	defaultTimeout     = 120 * time.Second
 )
 
+const summarySystemPrompt = "你是小说写作 Agent 的长期记忆摘要器。请把旧摘要和新增对话整理成一份紧凑、准确、可持续更新的中文摘要，保留用户偏好、小说设定、角色关系、写作要求、已经确认的修改方向和重要上下文。不要输出寒暄、标题或 Markdown 代码块，只输出摘要正文。"
+
 // EinoAgentRuntimeFactory 表示基于 Eino ADK 的多层 Agent 运行时工厂。
 type EinoAgentRuntimeFactory struct {
 	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
@@ -162,8 +164,8 @@ type chatAgentRuntime struct {
 }
 
 // Stream 流式执行基于 schema.Message 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 history 表示需要注入模型上下文的历史消息；参数 emit 表示文本增量回调。
-func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, history []MessageRecord, emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆；参数 emit 表示文本增量回调。
+func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, emit func(delta AgentDelta) error) (AgentResult, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
@@ -178,7 +180,24 @@ func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, 
 		Agent:           agent,
 		EnableStreaming: true,
 	})
-	return streamChatAgentEvents(runner.Run(ctx, chatRunMessages(req, history)), agentCfg.taskByAgent, emit)
+	return streamChatAgentEvents(runner.Run(ctx, chatRunMessages(req, memory)), agentCfg.taskByAgent, emit)
+}
+
+// Summarize 使用 schema.Message 模型生成小说级 Agent 滚动摘要。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
+func (r chatAgentRuntime) Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error) {
+	messages := []*schema.Message{
+		schema.SystemMessage(summarySystemPrompt),
+		schema.UserMessage(summaryUserPrompt(input)),
+	}
+	output, err := r.model.Generate(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	if output == nil {
+		return "", fmt.Errorf("摘要模型返回空消息")
+	}
+	return normalizeSummaryContent(output.Content)
 }
 
 // agenticAgentRuntime 表示基于 schema.AgenticMessage 的 Eino ADK 多层 Agent 运行时。
@@ -190,8 +209,8 @@ type agenticAgentRuntime struct {
 }
 
 // Stream 流式执行基于 schema.AgenticMessage 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 history 表示需要注入模型上下文的历史消息；参数 emit 表示文本增量回调。
-func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, history []MessageRecord, emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆；参数 emit 表示文本增量回调。
+func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, emit func(delta AgentDelta) error) (AgentResult, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
@@ -206,14 +225,31 @@ func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfi
 		Agent:           agent,
 		EnableStreaming: true,
 	})
-	return streamAgenticAgentEvents(runner.Run(ctx, agenticRunMessages(req, history)), agentCfg.taskByAgent, emit)
+	return streamAgenticAgentEvents(runner.Run(ctx, agenticRunMessages(req, memory)), agentCfg.taskByAgent, emit)
+}
+
+// Summarize 使用 schema.AgenticMessage 模型生成小说级 Agent 滚动摘要。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
+func (r agenticAgentRuntime) Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error) {
+	messages := []*schema.AgenticMessage{
+		schema.SystemAgenticMessage(summarySystemPrompt),
+		schema.UserAgenticMessage(summaryUserPrompt(input)),
+	}
+	output, err := r.model.Generate(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	return normalizeSummaryContent(agenticMessageText(output))
 }
 
 // chatRunMessages 构造 schema.Message 路径的 Agent 输入消息列表。
-// 参数 req 表示本轮聊天请求；参数 history 表示需要注入模型上下文的历史消息。
-func chatRunMessages(req ChatRequest, history []MessageRecord) []*schema.Message {
-	messages := make([]*schema.Message, 0, len(history)+2)
-	for _, item := range history {
+// 参数 req 表示本轮聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆。
+func chatRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Message {
+	messages := make([]*schema.Message, 0, len(memory.Messages)+3)
+	if prompt := memorySummaryPrompt(memory.Summary); prompt != "" {
+		messages = append(messages, schema.SystemMessage(prompt))
+	}
+	for _, item := range memory.Messages {
 		content := strings.TrimSpace(item.Content)
 		if content == "" {
 			continue
@@ -233,10 +269,13 @@ func chatRunMessages(req ChatRequest, history []MessageRecord) []*schema.Message
 }
 
 // agenticRunMessages 构造 schema.AgenticMessage 路径的 Agent 输入消息列表。
-// 参数 req 表示本轮聊天请求；参数 history 表示需要注入模型上下文的历史消息。
-func agenticRunMessages(req ChatRequest, history []MessageRecord) []*schema.AgenticMessage {
-	messages := make([]*schema.AgenticMessage, 0, len(history)+2)
-	for _, item := range history {
+// 参数 req 表示本轮聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆。
+func agenticRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.AgenticMessage {
+	messages := make([]*schema.AgenticMessage, 0, len(memory.Messages)+3)
+	if prompt := memorySummaryPrompt(memory.Summary); prompt != "" {
+		messages = append(messages, schema.SystemAgenticMessage(prompt))
+	}
+	for _, item := range memory.Messages {
 		content := strings.TrimSpace(item.Content)
 		if content == "" {
 			continue
@@ -273,6 +312,65 @@ func requestContextPrompt(req ChatRequest) string {
 		return ""
 	}
 	return "本轮请求已关联当前小说的当前章节。若用户请求需要读取当前章节正文，请调用合适的章节处理子 Agent，不要要求用户粘贴全文；当前章节的真实章节号以子 Agent 读取到的章节数据为准。"
+}
+
+// memorySummaryPrompt 生成注入模型上下文的长期记忆摘要提示。
+// 参数 summary 表示数据库中保存的滚动摘要。
+func memorySummaryPrompt(summary string) string {
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		return ""
+	}
+	return "以下是当前小说此前对话的长期记忆摘要。请在理解用户当前问题时参考它，但不要主动复述摘要：\n" + summary
+}
+
+// summaryUserPrompt 生成滚动摘要模型的用户消息。
+// 参数 input 表示旧摘要和本次需要滚入摘要的历史消息。
+func summaryUserPrompt(input AgentSummaryInput) string {
+	var builder strings.Builder
+	previousSummary := strings.TrimSpace(input.PreviousSummary)
+	if previousSummary == "" {
+		builder.WriteString("旧摘要：无\n\n")
+	} else {
+		builder.WriteString("旧摘要：\n")
+		builder.WriteString(previousSummary)
+		builder.WriteString("\n\n")
+	}
+	builder.WriteString("需要滚入摘要的新对话：\n")
+	for _, message := range input.Messages {
+		content := strings.TrimSpace(message.Content)
+		if content == "" {
+			continue
+		}
+		builder.WriteString(summaryMessageRoleLabel(message.Role))
+		builder.WriteString("：")
+		builder.WriteString(content)
+		builder.WriteString("\n")
+	}
+	return builder.String()
+}
+
+// summaryMessageRoleLabel 返回摘要提示中使用的消息角色名称。
+// 参数 role 表示 Agent 记忆消息角色。
+func summaryMessageRoleLabel(role MessageRole) string {
+	switch role {
+	case MessageRoleUser:
+		return "用户"
+	case MessageRoleAssistant:
+		return "助手"
+	default:
+		return "未知"
+	}
+}
+
+// normalizeSummaryContent 标准化摘要模型返回的正文。
+// 参数 content 表示模型生成的原始摘要文本。
+func normalizeSummaryContent(content string) (string, error) {
+	summary := strings.TrimSpace(content)
+	if summary == "" {
+		return "", fmt.Errorf("摘要模型返回空内容")
+	}
+	return summary, nil
 }
 
 // newChatSupervisorAgent 创建基于 schema.Message 的顶层 Agent，并把配置中的子 Agent 包装为 tool。

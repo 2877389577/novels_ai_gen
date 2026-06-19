@@ -81,6 +81,14 @@ type AgentConfig struct {
 	Supervisor AgentDefinition `mapstructure:"supervisor"`
 	// Agent 表示可被顶层 Agent 当成工具调用的子 Agent 配置列表。
 	Agent []AgentDefinition `mapstructure:"agent"`
+	// Memory 表示小说写作 Agent 的持久记忆配置。
+	Memory AgentMemoryConfig `mapstructure:"memory"`
+}
+
+// AgentMemoryConfig 表示小说写作 Agent 的持久记忆配置。
+type AgentMemoryConfig struct {
+	// RecentRounds 表示每次请求注入模型上下文的最近对话轮数，小于等于 0 时使用业务默认值。
+	RecentRounds int `mapstructure:"recent_rounds"`
 }
 
 // AgentDefinition 表示单个小说写作 Agent 的配置。

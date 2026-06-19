@@ -40,6 +40,12 @@ type Conversation struct {
 	NovelID uint64 `json:"novel_id" gorm:"column:novel_id;not null;uniqueIndex:idx_agent_conversations_novel_id;comment:会话所属小说ID，一部小说只保留一条Agent会话" example:"1"`
 	// Novel 表示所属小说关联，用于生成外键和级联删除约束。
 	Novel biznovel.Novel `json:"-" gorm:"foreignKey:NovelID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;comment:所属小说关联"`
+	// Summary 表示已经滚动压缩后的 Agent 长期记忆摘要。
+	Summary string `json:"summary,omitempty" gorm:"column:summary;type:text;comment:已经滚动压缩后的Agent长期记忆摘要"`
+	// SummaryMessageID 表示已经纳入摘要的最新 Agent 消息 ID。
+	SummaryMessageID *uint64 `json:"summary_message_id,omitempty" gorm:"column:summary_message_id;comment:已经纳入摘要的最新Agent消息ID" example:"20"`
+	// SummaryUpdatedAt 表示 Agent 长期记忆摘要最近更新时间。
+	SummaryUpdatedAt *time.Time `json:"summary_updated_at,omitempty" gorm:"column:summary_updated_at;comment:Agent长期记忆摘要最近更新时间" example:"2026-06-19T22:00:00+08:00"`
 	// CreatedAt 表示创建时间。
 	CreatedAt time.Time `json:"created_at" gorm:"column:created_at;comment:创建时间" example:"2026-06-19T22:00:00+08:00"`
 	// UpdatedAt 表示更新时间。
@@ -167,11 +173,40 @@ type AgentResult struct {
 	Content string
 }
 
+// AgentMemoryInput 表示运行 Agent 时需要注入模型上下文的小说级记忆。
+type AgentMemoryInput struct {
+	// Summary 表示已经滚动压缩后的长期记忆摘要。
+	Summary string
+	// Messages 表示仍以原文形式注入的最近 Agent 记忆消息。
+	Messages []MessageRecord
+}
+
+// AgentSummaryInput 表示生成滚动摘要所需的历史上下文。
+type AgentSummaryInput struct {
+	// PreviousSummary 表示此前已经保存的长期记忆摘要，可以为空。
+	PreviousSummary string
+	// Messages 表示本次需要滚入长期摘要的旧 Agent 记忆消息。
+	Messages []MessageRecord
+}
+
+// ConversationSummaryUpdate 表示需要写回 Agent 会话的滚动摘要更新。
+type ConversationSummaryUpdate struct {
+	// Summary 表示新的长期记忆摘要正文。
+	Summary string
+	// SummaryMessageID 表示新摘要已经覆盖到的最新 Agent 消息 ID。
+	SummaryMessageID uint64
+	// SummaryUpdatedAt 表示新摘要生成完成的时间。
+	SummaryUpdatedAt time.Time
+}
+
 // AgentRuntime 表示可执行小说写作多层 Agent 的运行时。
 type AgentRuntime interface {
 	// Stream 流式执行小说写作 Agent。
-	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 history 表示需要注入模型上下文的历史消息；参数 emit 表示文本增量回调。
-	Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, history []MessageRecord, emit func(delta AgentDelta) error) (AgentResult, error)
+	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆；参数 emit 表示文本增量回调。
+	Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, emit func(delta AgentDelta) error) (AgentResult, error)
+	// Summarize 生成小说级 Agent 滚动摘要。
+	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
+	Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error)
 }
 
 // AgentRuntimeFactory 表示 Eino 多层 Agent 运行时工厂。

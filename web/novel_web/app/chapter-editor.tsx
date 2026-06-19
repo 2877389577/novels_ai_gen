@@ -57,7 +57,7 @@ const emptyChapterFormValues: ChapterFormValues = {
   content: "",
 };
 
-const chapterAiAssistantMessages: Message[] = [
+const chapterAiAssistantMessages: ChapterAiMessage[] = [
   {
     id: "chapter-ai-assistant-welcome",
     role: "assistant",
@@ -85,55 +85,6 @@ const chapterAiAssistantRoleConfig: RoleConfig = {
   },
 };
 
-const chapterAiDialogueRenderConfig: DialogueRenderConfig = {
-  renderDialogueAction: renderChapterAiDialogueAction,
-};
-
-// renderChapterAiDialogueAction 渲染章节 AI 对话消息操作区，按消息角色保留允许的操作按钮。
-// 参数 props 表示 Semi AIChatDialogue 传入的默认操作节点和样式类名。
-function renderChapterAiDialogueAction(props: RenderActionProps) {
-  const copyNode = props.defaultActionsObj?.copyNode ?? null;
-  if (props.message?.role !== "user") {
-    return <div className={props.className}>{copyNode}</div>;
-  }
-
-  return (
-    <div className={props.className}>
-      {copyNode}
-      <Button
-        aria-label="重试用户消息"
-        className="semi-ai-chat-dialogue-action-btn"
-        htmlType="button"
-        icon={<IconRedoStroked aria-hidden="true" />}
-        onClick={handleChapterAiPendingMessageAction}
-        theme="borderless"
-        title="重试"
-        type="tertiary"
-      />
-      <Button
-        aria-label="修改用户消息"
-        className="semi-ai-chat-dialogue-action-btn"
-        htmlType="button"
-        icon={<IconEditStroked aria-hidden="true" />}
-        onClick={handleChapterAiPendingMessageAction}
-        theme="borderless"
-        title="修改"
-        type="tertiary"
-      />
-      <Button
-        aria-label="删除用户消息"
-        className="semi-ai-chat-dialogue-action-btn"
-        htmlType="button"
-        icon={<IconDeleteStroked aria-hidden="true" />}
-        onClick={handleChapterAiPendingMessageAction}
-        theme="borderless"
-        title="删除"
-        type="tertiary"
-      />
-    </div>
-  );
-}
-
 // handleChapterAiPendingMessageAction 处理暂未接入真实逻辑的章节 AI 消息操作按钮。
 // 参数 event 表示按钮点击事件，用于阻止占位操作触发外层交互。
 function handleChapterAiPendingMessageAction(event: MouseEvent<HTMLElement>) {
@@ -147,6 +98,44 @@ interface ChapterFormValues {
   title: string;
   // content 表示章节正文，可以为空。
   content: string;
+}
+
+// ChapterAiRetryPayload 表示章节 AI 用户消息失败后可复用的原始发送参数。
+interface ChapterAiRetryPayload {
+  // providerId 表示原始请求使用的 AI 提供商 ID。
+  providerId: number;
+  // modelId 表示原始请求使用的模型标识。
+  modelId: string;
+  // message 表示原始请求发送给 AI 的用户原文。
+  message: string;
+  // providerName 表示原始请求使用的 AI 提供商展示名。
+  providerName: string;
+  // modelName 表示原始请求使用的模型展示名。
+  modelName: string;
+}
+
+// ChapterAiMessage 表示章节 AI 对话在前端本地增强后的消息。
+interface ChapterAiMessage extends Message {
+  // chapterAiPairID 表示同一轮用户消息与助手消息的配对 ID。
+  chapterAiPairID?: string;
+  // chapterAiSourceID 表示助手消息流式更新时使用的基础消息 ID。
+  chapterAiSourceID?: string;
+  // chapterAiRetryable 表示该用户消息是否允许展示重试按钮。
+  chapterAiRetryable?: boolean;
+  // chapterAiRetryPayload 表示该用户消息重试时复用的原始发送参数。
+  chapterAiRetryPayload?: ChapterAiRetryPayload;
+}
+
+// ChapterAiStreamRequest 表示一次章节 AI 流式请求所需的本地上下文。
+interface ChapterAiStreamRequest {
+  // pairID 表示当前用户消息和助手消息共用的配对 ID。
+  pairID: string;
+  // assistantMessageID 表示当前助手消息的基础 ID。
+  assistantMessageID: string;
+  // savedChapterID 表示发送请求前已保存到后端的章节 ID。
+  savedChapterID: number;
+  // retryPayload 表示本次请求使用的原始 AI 调用参数。
+  retryPayload: ChapterAiRetryPayload;
 }
 
 // ChapterSaveSnapshot 表示最近一次成功保存到后端的章节内容快照。
@@ -910,7 +899,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
 // ChapterAiAssistantPanel 渲染章节编辑页右侧 AI 对话侧栏。
 // 参数 props 表示章节 AI 助手侧栏需要的回调。
 function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
-  const [chats, setChats] = useState<Message[]>(chapterAiAssistantMessages);
+  const [chats, setChats] = useState<ChapterAiMessage[]>(chapterAiAssistantMessages);
   const [providers, setProviders] = useState<AIProviderItem[]>([]);
   const [models, setModels] = useState<AIProviderModelItem[]>([]);
   const [selectedProviderID, setSelectedProviderID] = useState("");
@@ -1222,17 +1211,30 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     const providerName = selectedProvider?.name ?? "当前提供商";
     const modelName = formatAIModelName(selectedModel);
     const createdAt = Date.now();
+    const pairID = createChapterAiPairID(createdAt);
+    const userMessageID = createChapterAiMessageID("user", createdAt);
     const assistantMessageID = createChapterAiMessageID("assistant", createdAt);
+    const retryPayload: ChapterAiRetryPayload = {
+      providerId: Number(selectedProviderID),
+      modelId: selectedModelID,
+      message: normalizedInput,
+      providerName,
+      modelName,
+    };
     setChats(function appendAssistantMessages(currentChats) {
       return [
         ...currentChats,
         {
-          id: createChapterAiMessageID("user", createdAt),
+          id: userMessageID,
+          chapterAiPairID: pairID,
+          chapterAiRetryable: false,
+          chapterAiRetryPayload: retryPayload,
           role: "user",
           content: normalizedInput,
         },
         {
           id: assistantMessageID,
+          chapterAiPairID: pairID,
           chapterAiSourceID: assistantMessageID,
           role: "assistant",
           content: "",
@@ -1242,27 +1244,110 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     });
     setInputValue("");
 
+    await runChapterAiStream({
+      pairID,
+      assistantMessageID,
+      savedChapterID,
+      retryPayload,
+    });
+  }
+
+  // handleRetryAssistantMessage 重新发送指定用户消息对应的 AI 请求。
+  // 参数 message 表示触发重试的用户消息。
+  async function handleRetryAssistantMessage(message: ChapterAiMessage) {
+    if (assistantSending) {
+      Toast.info("AI 正在回复，请稍后再重试");
+      return;
+    }
+
+    const pairID = message.chapterAiPairID;
+    const retryPayload = message.chapterAiRetryPayload;
+    if (!pairID || !retryPayload) {
+      Toast.warning("当前消息缺少重试信息");
+      return;
+    }
+
+    const assistantMessage = chats.find(function findPairAssistantMessage(chat) {
+      return chat.role === "assistant" && chat.chapterAiPairID === pairID;
+    });
+    const assistantMessageID = assistantMessage?.chapterAiSourceID ?? assistantMessage?.id;
+    if (!assistantMessageID || typeof assistantMessageID !== "string") {
+      Toast.warning("未找到可重试的 AI 回复");
+      return;
+    }
+
+    setAssistantSending(true);
+    let savedChapterID: number | null;
+    try {
+      savedChapterID = await props.ensureChapterSavedForAgent();
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        setAssistantSending(false);
+        onUnauthorized();
+        return;
+      }
+      Toast.error(getErrorMessage(error, "章节保存失败，请稍后再试"));
+      setAssistantSending(false);
+      return;
+    }
+    if (savedChapterID === null) {
+      setAssistantSending(false);
+      return;
+    }
+
+    resetChapterAiRequestForRetry(pairID, assistantMessageID);
+    await runChapterAiStream({
+      pairID,
+      assistantMessageID,
+      savedChapterID,
+      retryPayload,
+    });
+  }
+
+  // runChapterAiStream 执行章节 AI 流式请求并更新对应助手消息。
+  // 参数 request 表示本次流式请求所需的消息配对、章节和模型上下文。
+  async function runChapterAiStream(request: ChapterAiStreamRequest) {
     const controller = new AbortController();
     streamControllerRef.current?.abort();
     streamControllerRef.current = controller;
 
     let assistantContent = "";
+    let handledFailure = false;
+
+    // handleChapterAiStreamFailure 将当前 AI 请求标记为失败并开启用户消息重试入口。
+    // 参数 errorMessage 表示展示给用户的失败原因。
+    function handleChapterAiStreamFailure(errorMessage: string) {
+      if (handledFailure) {
+        return;
+      }
+      handledFailure = true;
+      markChapterAiRequestFailed(
+        request.pairID,
+        request.assistantMessageID,
+        errorMessage,
+      );
+      Toast.error(errorMessage);
+    }
+
     try {
       await streamNovelAgentChat(
         {
-          providerId: Number(selectedProviderID),
-          model: selectedModelID,
-          message: normalizedInput,
+          providerId: request.retryPayload.providerId,
+          model: request.retryPayload.modelId,
+          message: request.retryPayload.message,
           novelId: props.novelId,
-          chapterId: savedChapterID,
+          chapterId: request.savedChapterID,
           signal: controller.signal,
         },
         {
           onEvent(event) {
+            if (handledFailure) {
+              return;
+            }
             if (event.type === "delta") {
               assistantContent += event.content ?? "";
               updateAssistantMessage(
-                assistantMessageID,
+                request.assistantMessageID,
                 assistantContent,
                 "in_progress",
               );
@@ -1271,47 +1356,107 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             if (event.type === "done") {
               assistantContent = event.content || assistantContent;
               updateAssistantMessage(
-                assistantMessageID,
+                request.assistantMessageID,
                 assistantContent,
                 "completed",
               );
+              updateChapterAiPairRetryable(request.pairID, false);
               return;
             }
             if (event.type === "error") {
               const baseErrorMessage =
-                event.message || `${providerName} / ${modelName} 生成失败，请稍后再试`;
+                event.message ||
+                `${request.retryPayload.providerName} / ${request.retryPayload.modelName} 生成失败，请稍后再试`;
               const requestID = event.request_id?.trim();
               const errorMessage = requestID
                 ? `${baseErrorMessage}（请求ID：${requestID}）`
                 : baseErrorMessage;
-              updateAssistantMessage(assistantMessageID, errorMessage, "failed");
-              Toast.error(errorMessage);
+              handleChapterAiStreamFailure(errorMessage);
             }
           },
         },
       );
     } catch (error) {
+      if (handledFailure) {
+        return;
+      }
       if (controller.signal.aborted) {
+        updateChapterAiPairRetryable(request.pairID, false);
         updateAssistantMessage(
-          assistantMessageID,
+          request.assistantMessageID,
           "本次 AI 回复已取消。",
           "cancelled",
         );
         return;
       }
       if (error instanceof UnauthorizedError) {
+        handleChapterAiStreamFailure(getErrorMessage(error, "登录已过期，请重新登录"));
         onUnauthorized();
         return;
       }
       const errorMessage = getErrorMessage(error, "AI 写作助手生成失败，请稍后再试");
-      updateAssistantMessage(assistantMessageID, errorMessage, "failed");
-      Toast.error(errorMessage);
+      handleChapterAiStreamFailure(errorMessage);
     } finally {
       if (streamControllerRef.current === controller) {
         streamControllerRef.current = null;
       }
       setAssistantSending(false);
     }
+  }
+
+  // markChapterAiRequestFailed 标记指定 AI 请求失败并允许用户消息重试。
+  // 参数 pairID 表示失败请求的消息配对 ID；参数 assistantMessageID 表示助手消息基础 ID；参数 errorMessage 表示失败说明。
+  function markChapterAiRequestFailed(
+    pairID: string,
+    assistantMessageID: string,
+    errorMessage: string,
+  ) {
+    updateChapterAiPairRetryable(pairID, true);
+    updateAssistantMessage(assistantMessageID, errorMessage, "failed");
+  }
+
+  // updateChapterAiPairRetryable 更新指定配对中用户消息的可重试状态。
+  // 参数 pairID 表示需要更新的消息配对 ID；参数 retryable 表示是否允许展示重试按钮。
+  function updateChapterAiPairRetryable(pairID: string, retryable: boolean) {
+    setChats(function updateMessageRetryable(currentChats) {
+      return currentChats.map(function updateChatRetryable(chat) {
+        if (chat.role !== "user" || chat.chapterAiPairID !== pairID) {
+          return chat;
+        }
+        return {
+          ...chat,
+          chapterAiRetryable: retryable,
+        };
+      });
+    });
+  }
+
+  // resetChapterAiRequestForRetry 重置指定配对的助手消息，使重试复用原对话位置。
+  // 参数 pairID 表示需要重试的消息配对 ID；参数 assistantMessageID 表示助手消息基础 ID。
+  function resetChapterAiRequestForRetry(pairID: string, assistantMessageID: string) {
+    setChats(function resetRetryMessages(currentChats) {
+      return currentChats.map(function resetRetryMessage(chat) {
+        if (chat.chapterAiPairID !== pairID) {
+          return chat;
+        }
+        if (chat.role === "user") {
+          return {
+            ...chat,
+            chapterAiRetryable: false,
+          };
+        }
+        if (chat.role === "assistant") {
+          return {
+            ...chat,
+            id: assistantMessageID,
+            chapterAiSourceID: assistantMessageID,
+            content: "",
+            status: "in_progress",
+          };
+        }
+        return chat;
+      });
+    });
   }
 
   // updateAssistantMessage 更新指定 AI 助手消息内容。
@@ -1335,6 +1480,62 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       });
     });
   }
+
+  // renderChapterAiDialogueAction 渲染章节 AI 对话消息操作区，按消息角色保留允许的操作按钮。
+  // 参数 actionProps 表示 Semi AIChatDialogue 传入的默认操作节点和样式类名。
+  function renderChapterAiDialogueAction(actionProps: RenderActionProps) {
+    const copyNode = actionProps.defaultActionsObj?.copyNode ?? null;
+    const message = actionProps.message as ChapterAiMessage | undefined;
+    if (message?.role !== "user") {
+      return <div className={actionProps.className}>{copyNode}</div>;
+    }
+
+    return (
+      <div className={actionProps.className}>
+        {copyNode}
+        {message.chapterAiRetryable === true ? (
+          <Button
+            aria-label="重试用户消息"
+            className="semi-ai-chat-dialogue-action-btn"
+            htmlType="button"
+            icon={<IconRedoStroked aria-hidden="true" />}
+            onClick={function retryChapterAiMessage(event) {
+              event.preventDefault();
+              event.stopPropagation();
+              void handleRetryAssistantMessage(message);
+            }}
+            theme="borderless"
+            title="重试"
+            type="tertiary"
+          />
+        ) : null}
+        <Button
+          aria-label="修改用户消息"
+          className="semi-ai-chat-dialogue-action-btn"
+          htmlType="button"
+          icon={<IconEditStroked aria-hidden="true" />}
+          onClick={handleChapterAiPendingMessageAction}
+          theme="borderless"
+          title="修改"
+          type="tertiary"
+        />
+        <Button
+          aria-label="删除用户消息"
+          className="semi-ai-chat-dialogue-action-btn"
+          htmlType="button"
+          icon={<IconDeleteStroked aria-hidden="true" />}
+          onClick={handleChapterAiPendingMessageAction}
+          theme="borderless"
+          title="删除"
+          type="tertiary"
+        />
+      </div>
+    );
+  }
+
+  const chapterAiDialogueRenderConfig: DialogueRenderConfig = {
+    renderDialogueAction: renderChapterAiDialogueAction,
+  };
 
   return (
     <aside
@@ -1452,9 +1653,15 @@ function createChapterAiMessageID(role: string, createdAt: number): string {
   return `chapter-ai-${role}-${createdAt}`;
 }
 
+// createChapterAiPairID 创建同一轮章节 AI 用户消息和助手消息共用的配对 ID。
+// 参数 createdAt 表示消息创建时间戳。
+function createChapterAiPairID(createdAt: number): string {
+  return `chapter-ai-pair-${createdAt}`;
+}
+
 // chapterAiMessageFromHistory 将后端历史消息转换为 AIChatDialogue 消息。
 // 参数 item 表示后端返回的单条 Agent 历史消息。
-function chapterAiMessageFromHistory(item: NovelAgentMessageItem): Message {
+function chapterAiMessageFromHistory(item: NovelAgentMessageItem): ChapterAiMessage {
   return {
     id: `chapter-ai-history-${item.id}`,
     role: item.role,

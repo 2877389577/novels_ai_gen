@@ -78,16 +78,63 @@ func (r *Repository) ListRecentMessages(ctx context.Context, conversationID uint
 	return items, nil
 }
 
-// AppendMessages 以事务追加一组 Agent 记忆消息。
-// 参数 ctx 表示请求上下文；参数 messages 表示需要写入的消息列表。
-func (r *Repository) AppendMessages(ctx context.Context, messages []biznovelagent.MessageRecord) error {
-	if len(messages) == 0 {
-		return nil
+// CountMessagesAfterID 统计指定消息 ID 之后的 Agent 记忆消息数量。
+// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID。
+func (r *Repository) CountMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&biznovelagent.MessageRecord{}).
+		Where("conversation_id = ?", conversationID)
+	if afterID > 0 {
+		query = query.Where("id > ?", afterID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("统计 Agent 记忆消息失败: %w", err)
+	}
+	return count, nil
+}
+
+// ListMessagesAfterID 查询指定消息 ID 之后的 Agent 记忆消息，并按时间正序返回。
+// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID；参数 limit 表示最多返回的消息数量。
+func (r *Repository) ListMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64, limit int) ([]biznovelagent.MessageRecord, error) {
+	if limit <= 0 {
+		return []biznovelagent.MessageRecord{}, nil
 	}
 
+	var items []biznovelagent.MessageRecord
+	query := r.db.WithContext(ctx).
+		Where("conversation_id = ?", conversationID)
+	if afterID > 0 {
+		query = query.Where("id > ?", afterID)
+	}
+	if err := query.
+		Order("created_at ASC").
+		Order("id ASC").
+		Limit(limit).
+		Find(&items).Error; err != nil {
+		return nil, fmt.Errorf("查询待摘要 Agent 记忆消息失败: %w", err)
+	}
+	return items, nil
+}
+
+// AppendMessagesAndUpdateSummary 以事务追加 Agent 记忆消息并可选更新会话摘要。
+// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 messages 表示需要写入的消息列表；参数 summary 表示需要写回的摘要更新，nil 表示不更新摘要。
+func (r *Repository) AppendMessagesAndUpdateSummary(ctx context.Context, conversationID uint64, messages []biznovelagent.MessageRecord, summary *biznovelagent.ConversationSummaryUpdate) error {
 	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&messages).Error; err != nil {
-			return fmt.Errorf("写入 Agent 记忆消息失败: %w", err)
+		if len(messages) > 0 {
+			if err := tx.Create(&messages).Error; err != nil {
+				return fmt.Errorf("写入 Agent 记忆消息失败: %w", err)
+			}
+		}
+		if summary != nil {
+			if err := tx.Model(&biznovelagent.Conversation{}).
+				Where("id = ?", conversationID).
+				Updates(map[string]any{
+					"summary":            summary.Summary,
+					"summary_message_id": summary.SummaryMessageID,
+					"summary_updated_at": summary.SummaryUpdatedAt,
+				}).Error; err != nil {
+				return fmt.Errorf("更新 Agent 会话摘要失败: %w", err)
+			}
 		}
 		return nil
 	}); err != nil {
@@ -109,6 +156,16 @@ func (r *Repository) ClearMessagesByNovelID(ctx context.Context, novelID uint64)
 		Delete(&biznovelagent.MessageRecord{})
 	if result.Error != nil {
 		return 0, fmt.Errorf("清空 Agent 记忆消息失败: %w", result.Error)
+	}
+	if err := r.db.WithContext(ctx).
+		Model(&biznovelagent.Conversation{}).
+		Where("id = ?", conversation.ID).
+		Updates(map[string]any{
+			"summary":            "",
+			"summary_message_id": nil,
+			"summary_updated_at": nil,
+		}).Error; err != nil {
+		return 0, fmt.Errorf("清空 Agent 会话摘要失败: %w", err)
 	}
 	return result.RowsAffected, nil
 }
