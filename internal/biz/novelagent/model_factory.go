@@ -207,7 +207,7 @@ func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, 
 
 	polishAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
 		Name:          agentNamePolish,
-		Description:   "负责根据用户需求润色小说章节内容的子 Agent。",
+		Description:   "负责小说章节正文润色的机器人工具，用户需要对小说、句子等进行润色时使用。但仅支持润色，不支持扩写、续写等功能。",
 		Instruction:   strings.TrimSpace(polishPrompt),
 		Model:         model,
 		MaxIterations: 6,
@@ -216,7 +216,8 @@ func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, 
 		return nil, err
 	}
 
-	polishTool := adk.NewTypedAgentTool(ctx, polishAgent)
+	polishTool := adk.NewAgentTool(ctx, polishAgent)
+
 	return adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
 		Name:        agentNameSupervisor,
 		Description: "负责理解用户意图，并决定直接回答或调用小说写作子 Agent。",
@@ -253,7 +254,7 @@ func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel
 
 	polishAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
 		Name:          agentNamePolish,
-		Description:   "负责根据用户需求润色小说章节内容的子 Agent。",
+		Description:   "负责小说章节正文润色的机器人工具，用户需要对小说、句子等进行润色时使用。但仅支持润色，不支持扩写、续写等功能。",
 		Instruction:   strings.TrimSpace(polishPrompt),
 		Model:         model,
 		MaxIterations: 6,
@@ -262,7 +263,7 @@ func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel
 		return nil, err
 	}
 
-	polishTool := adk.NewTypedAgentTool(ctx, polishAgent)
+	polishTool := adk.NewTypedAgentTool[*schema.AgenticMessage](ctx, polishAgent)
 	return adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
 		Name:        agentNameSupervisor,
 		Description: "负责理解用户意图，并决定直接回答或调用小说写作子 Agent。",

@@ -808,8 +808,10 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         },
         {
           id: assistantMessageID,
+          chapterAiSourceID: assistantMessageID,
           role: "assistant",
           content: "",
+          status: "in_progress",
         },
       ];
     });
@@ -837,12 +839,20 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           onEvent(event) {
             if (event.type === "delta") {
               assistantContent += event.content ?? "";
-              updateAssistantMessage(assistantMessageID, assistantContent);
+              updateAssistantMessage(
+                assistantMessageID,
+                assistantContent,
+                "in_progress",
+              );
               return;
             }
             if (event.type === "done") {
               assistantContent = event.content || assistantContent;
-              updateAssistantMessage(assistantMessageID, assistantContent);
+              updateAssistantMessage(
+                assistantMessageID,
+                assistantContent,
+                "completed",
+              );
               return;
             }
             if (event.type === "error") {
@@ -852,7 +862,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
               const errorMessage = requestID
                 ? `${baseErrorMessage}（请求ID：${requestID}）`
                 : baseErrorMessage;
-              updateAssistantMessage(assistantMessageID, errorMessage);
+              updateAssistantMessage(assistantMessageID, errorMessage, "failed");
               Toast.error(errorMessage);
             }
           },
@@ -860,7 +870,11 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       );
     } catch (error) {
       if (controller.signal.aborted) {
-        updateAssistantMessage(assistantMessageID, "本次 AI 回复已取消。");
+        updateAssistantMessage(
+          assistantMessageID,
+          "本次 AI 回复已取消。",
+          "cancelled",
+        );
         return;
       }
       if (error instanceof UnauthorizedError) {
@@ -868,7 +882,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         return;
       }
       const errorMessage = getErrorMessage(error, "AI 写作助手生成失败，请稍后再试");
-      updateAssistantMessage(assistantMessageID, errorMessage);
+      updateAssistantMessage(assistantMessageID, errorMessage, "failed");
       Toast.error(errorMessage);
     } finally {
       if (streamControllerRef.current === controller) {
@@ -879,16 +893,22 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   }
 
   // updateAssistantMessage 更新指定 AI 助手消息内容。
-  // 参数 messageID 表示需要更新的消息 ID；参数 content 表示新的消息内容。
-  function updateAssistantMessage(messageID: string, content: string) {
+  // 参数 messageID 表示需要更新的基础消息 ID；参数 content 表示新的消息内容；参数 status 表示消息当前生成状态。
+  function updateAssistantMessage(messageID: string, content: string, status: string) {
     setChats(function updateMessage(currentChats) {
       return currentChats.map(function updateChat(chat) {
-        if (chat.id !== messageID) {
+        if (chat.id !== messageID && chat.chapterAiSourceID !== messageID) {
           return chat;
         }
         return {
           ...chat,
+          id:
+            status === "in_progress"
+              ? chat.id
+              : createChapterAiRenderMessageID(messageID, status, content.length),
+          chapterAiSourceID: messageID,
           content,
+          status,
         };
       });
     });
@@ -995,6 +1015,16 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
 // 参数 role 表示消息角色；参数 createdAt 表示消息创建时间戳。
 function createChapterAiMessageID(role: string, createdAt: number): string {
   return `chapter-ai-${role}-${createdAt}`;
+}
+
+// createChapterAiRenderMessageID 创建章节 AI 消息最终渲染 ID，避免流式 Markdown 旧解析结果覆盖最终内容。
+// 参数 messageID 表示消息的基础 ID；参数 status 表示消息最终状态；参数 contentLength 表示最终内容长度。
+function createChapterAiRenderMessageID(
+  messageID: string,
+  status: string,
+  contentLength: number,
+): string {
+  return `${messageID}-${status}-${contentLength}`;
 }
 
 // formatAIModelName 返回 AI 模型在对话提示中的展示名。

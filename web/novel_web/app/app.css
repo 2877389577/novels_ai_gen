@@ -7799,7 +7799,7 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
   display: grid;
   min-width: 0;
   grid-template-columns: minmax(0, 1fr) 42px;
-  align-items: end;
+  align-items: center;
   gap: 10px;
 }
 
