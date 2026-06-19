@@ -15,6 +15,63 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/ai/agents/chat/stream": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "使用已保存 AI 提供商配置创建 Eino 写作 Agent，并以 NDJSON 流式返回模型输出。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "小说写作 Agent 流式对话",
+                "parameters": [
+                    {
+                        "description": "小说写作 Agent 流式对话请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_novelagent.ChatRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "NDJSON 流事件",
+                        "schema": {
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_novelagent.StreamEvent"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/ai/providers": {
             "get": {
                 "security": [
@@ -53,25 +110,25 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.ProviderListSuccessResponse"
+                            "$ref": "#/definitions/aiprovider.ProviderListSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -100,7 +157,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.CreateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_aiprovider.CreateRequest"
                         }
                     }
                 ],
@@ -108,31 +165,94 @@ const docTemplate = `{
                     "200": {
                         "description": "创建成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.ProviderSuccessResponse"
+                            "$ref": "#/definitions/aiprovider.ProviderSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "409": {
                         "description": "AI 提供商名称已存在",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai/providers/models": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "根据 provider_type、api_key 和 base_url 直接请求对应 AI 提供商官方模型列表接口，不读取本地数据库。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-providers"
+                ],
+                "summary": "查询 AI 提供商官方模型列表",
+                "parameters": [
+                    {
+                        "description": "模型列表查询请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_aiprovider.ModelListRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/aiprovider.ModelListSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "502": {
+                        "description": "官方模型列表接口不可用",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -169,31 +289,31 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.ProviderSuccessResponse"
+                            "$ref": "#/definitions/aiprovider.ProviderSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "AI 提供商不存在",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -229,7 +349,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.UpdateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_aiprovider.UpdateRequest"
                         }
                     }
                 ],
@@ -237,37 +357,37 @@ const docTemplate = `{
                     "200": {
                         "description": "更新成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.ProviderSuccessResponse"
+                            "$ref": "#/definitions/aiprovider.ProviderSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "AI 提供商不存在",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "409": {
                         "description": "AI 提供商名称已存在",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -302,31 +422,98 @@ const docTemplate = `{
                     "200": {
                         "description": "删除成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.ProviderDeleteSuccessResponse"
+                            "$ref": "#/definitions/aiprovider.ProviderDeleteSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "AI 提供商不存在",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai/providers/{id}/models": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "根据 AI 提供商 ID 读取本地加密密钥并在后端按官方协议查询模型列表，API Key 不会回显到前端。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-providers"
+                ],
+                "summary": "根据已保存 AI 提供商查询官方模型列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "AI 提供商 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/aiprovider.ModelListSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "AI 提供商不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "502": {
+                        "description": "官方模型列表接口不可用",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -352,7 +539,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_auth.LoginRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_auth.LoginRequest"
                         }
                     }
                 ],
@@ -360,19 +547,19 @@ const docTemplate = `{
                     "200": {
                         "description": "登录成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_auth.LoginSuccessResponse"
+                            "$ref": "#/definitions/auth.LoginSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_auth.ErrorBody"
+                            "$ref": "#/definitions/auth.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "登录密码错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_auth.ErrorBody"
+                            "$ref": "#/definitions/auth.ErrorBody"
                         }
                     }
                 }
@@ -397,19 +584,19 @@ const docTemplate = `{
                     "200": {
                         "description": "读取成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_config.FileSuccessResponse"
+                            "$ref": "#/definitions/config.FileSuccessResponse"
                         }
                     },
                     "401": {
                         "description": "未登录或登录过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -438,7 +625,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_config.UpdateFileRequest"
+                            "$ref": "#/definitions/config.UpdateFileRequest"
                         }
                     }
                 ],
@@ -446,25 +633,25 @@ const docTemplate = `{
                     "200": {
                         "description": "保存成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_config.FileSuccessResponse"
+                            "$ref": "#/definitions/config.FileSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "配置内容错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -489,25 +676,25 @@ const docTemplate = `{
                     "200": {
                         "description": "清空成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.Body"
+                            "$ref": "#/definitions/response.Body"
                         }
                     },
                     "400": {
                         "description": "文件日志未开启或参数错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -532,25 +719,25 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.Body"
+                            "$ref": "#/definitions/response.Body"
                         }
                     },
                     "400": {
                         "description": "文件日志未开启或参数错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -579,7 +766,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_log.DeleteFilesRequest"
+                            "$ref": "#/definitions/log.DeleteFilesRequest"
                         }
                     }
                 ],
@@ -587,25 +774,25 @@ const docTemplate = `{
                     "200": {
                         "description": "删除完成",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.Body"
+                            "$ref": "#/definitions/response.Body"
                         }
                     },
                     "400": {
                         "description": "文件日志未开启或参数错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -657,25 +844,25 @@ const docTemplate = `{
                     "200": {
                         "description": "NDJSON 日志流事件",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_log.streamEvent"
+                            "$ref": "#/definitions/log.streamEvent"
                         }
                     },
                     "400": {
                         "description": "文件日志未开启或参数错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -719,19 +906,19 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ListSuccessResponse"
+                            "$ref": "#/definitions/novel.ListSuccessResponse"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     }
                 }
@@ -760,7 +947,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.CreateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_novel.CreateRequest"
                         }
                     }
                 ],
@@ -768,25 +955,25 @@ const docTemplate = `{
                     "200": {
                         "description": "创建成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.SuccessResponse"
+                            "$ref": "#/definitions/novel.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     }
                 }
@@ -823,31 +1010,31 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.SuccessResponse"
+                            "$ref": "#/definitions/novel.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     }
                 }
@@ -883,7 +1070,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.UpdateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_novel.UpdateRequest"
                         }
                     }
                 ],
@@ -891,31 +1078,31 @@ const docTemplate = `{
                     "200": {
                         "description": "更新成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.SuccessResponse"
+                            "$ref": "#/definitions/novel.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     }
                 }
@@ -950,31 +1137,31 @@ const docTemplate = `{
                     "200": {
                         "description": "删除成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.DeleteSuccessResponse"
+                            "$ref": "#/definitions/novel.DeleteSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novel.ErrorBody"
+                            "$ref": "#/definitions/novel.ErrorBody"
                         }
                     }
                 }
@@ -1003,25 +1190,25 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.GraphResponse"
+                            "$ref": "#/definitions/event.EventGraphSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     }
                 }
@@ -1054,7 +1241,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.LayoutRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_event.LayoutRequest"
                         }
                     }
                 ],
@@ -1062,25 +1249,25 @@ const docTemplate = `{
                     "200": {
                         "description": "保存成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.GraphResponse"
+                            "$ref": "#/definitions/event.EventGraphSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     }
                 }
@@ -1113,7 +1300,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.RelationCreateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_event.RelationCreateRequest"
                         }
                     }
                 ],
@@ -1121,25 +1308,25 @@ const docTemplate = `{
                     "200": {
                         "description": "创建成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.RelationResponse"
+                            "$ref": "#/definitions/event.EventRelationSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     }
                 }
@@ -1179,7 +1366,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.RelationUpdateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_event.RelationUpdateRequest"
                         }
                     }
                 ],
@@ -1187,25 +1374,25 @@ const docTemplate = `{
                     "200": {
                         "description": "更新成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.RelationResponse"
+                            "$ref": "#/definitions/event.EventRelationSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "关系线不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     }
                 }
@@ -1239,25 +1426,25 @@ const docTemplate = `{
                     "200": {
                         "description": "删除成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.RelationDeleteData"
+                            "$ref": "#/definitions/event.RelationDeleteSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "关系线不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     }
                 }
@@ -1298,25 +1485,25 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.ListResponse"
+                            "$ref": "#/definitions/event.EventListSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     }
                 }
@@ -1347,7 +1534,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.CreateRequest"
+                            "$ref": "#/definitions/event.EventCreateRequest"
                         }
                     }
                 ],
@@ -1355,25 +1542,25 @@ const docTemplate = `{
                     "200": {
                         "description": "创建成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.EventResponse"
+                            "$ref": "#/definitions/event.EventSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     }
                 }
@@ -1409,25 +1596,25 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.EventResponse"
+                            "$ref": "#/definitions/event.EventSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "事件不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     }
                 }
@@ -1465,7 +1652,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.UpdateRequest"
+                            "$ref": "#/definitions/event.EventUpdateRequest"
                         }
                     }
                 ],
@@ -1473,25 +1660,25 @@ const docTemplate = `{
                     "200": {
                         "description": "更新成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.EventResponse"
+                            "$ref": "#/definitions/event.EventSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "事件不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     }
                 }
@@ -1525,25 +1712,133 @@ const docTemplate = `{
                     "200": {
                         "description": "删除成功",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.DeleteResponse"
+                            "$ref": "#/definitions/event.EventDeleteSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "事件不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_event.ErrorBody"
+                            "$ref": "#/definitions/event.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/novels/{novel_id}/agent-messages": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "查询指定小说最近 20 条 Agent 历史消息，按时间正序返回。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "查询小说 Agent 历史消息",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelagent.MessageListSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "清空指定小说已保存的 Agent 历史消息。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "清空小说 Agent 历史消息",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "清空成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelagent.ClearMessagesSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -1594,31 +1889,31 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ListSuccessResponse"
+                            "$ref": "#/definitions/chapter.ListSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     }
                 }
@@ -1654,7 +1949,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.CreateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_chapter.CreateRequest"
                         }
                     }
                 ],
@@ -1662,37 +1957,37 @@ const docTemplate = `{
                     "200": {
                         "description": "创建成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.SuccessResponse"
+                            "$ref": "#/definitions/chapter.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "409": {
                         "description": "章节号冲突",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     }
                 }
@@ -1736,31 +2031,31 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.SuccessResponse"
+                            "$ref": "#/definitions/chapter.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "章节不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     }
                 }
@@ -1803,7 +2098,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.UpdateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_chapter.UpdateRequest"
                         }
                     }
                 ],
@@ -1811,31 +2106,31 @@ const docTemplate = `{
                     "200": {
                         "description": "更新成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.SuccessResponse"
+                            "$ref": "#/definitions/chapter.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "章节不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     }
                 }
@@ -1877,31 +2172,31 @@ const docTemplate = `{
                     "200": {
                         "description": "删除成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.DeleteSuccessResponse"
+                            "$ref": "#/definitions/chapter.DeleteSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "章节不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     }
                 }
@@ -1952,31 +2247,31 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ListSuccessResponse"
+                            "$ref": "#/definitions/character.ListSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     }
                 }
@@ -2012,7 +2307,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.CreateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_character.CreateRequest"
                         }
                     }
                 ],
@@ -2020,31 +2315,31 @@ const docTemplate = `{
                     "200": {
                         "description": "创建成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.SuccessResponse"
+                            "$ref": "#/definitions/character.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     }
                 }
@@ -2088,31 +2383,31 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.SuccessResponse"
+                            "$ref": "#/definitions/character.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "角色卡不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     }
                 }
@@ -2155,7 +2450,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.UpdateRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_character.UpdateRequest"
                         }
                     }
                 ],
@@ -2163,31 +2458,31 @@ const docTemplate = `{
                     "200": {
                         "description": "更新成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.SuccessResponse"
+                            "$ref": "#/definitions/character.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "角色卡不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     }
                 }
@@ -2229,31 +2524,31 @@ const docTemplate = `{
                     "200": {
                         "description": "删除成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.DeleteSuccessResponse"
+                            "$ref": "#/definitions/character.DeleteSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "角色卡不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_character.ErrorBody"
+                            "$ref": "#/definitions/character.ErrorBody"
                         }
                     }
                 }
@@ -2290,31 +2585,31 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.NextChapterNumberSuccessResponse"
+                            "$ref": "#/definitions/chapter.NextChapterNumberSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     }
                 }
@@ -2351,31 +2646,31 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.SuccessResponse"
+                            "$ref": "#/definitions/relationship.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ErrorBody"
+                            "$ref": "#/definitions/relationship.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ErrorBody"
+                            "$ref": "#/definitions/relationship.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ErrorBody"
+                            "$ref": "#/definitions/relationship.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ErrorBody"
+                            "$ref": "#/definitions/relationship.ErrorBody"
                         }
                     }
                 }
@@ -2411,7 +2706,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.SaveRequest"
+                            "$ref": "#/definitions/novels_ai_gen_internal_api_handler_relationship.SaveRequest"
                         }
                     }
                 ],
@@ -2419,31 +2714,31 @@ const docTemplate = `{
                     "200": {
                         "description": "保存成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.SuccessResponse"
+                            "$ref": "#/definitions/relationship.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ErrorBody"
+                            "$ref": "#/definitions/relationship.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ErrorBody"
+                            "$ref": "#/definitions/relationship.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ErrorBody"
+                            "$ref": "#/definitions/relationship.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ErrorBody"
+                            "$ref": "#/definitions/relationship.ErrorBody"
                         }
                     }
                 }
@@ -2480,31 +2775,31 @@ const docTemplate = `{
                     "200": {
                         "description": "查询成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.WordCountSuccessResponse"
+                            "$ref": "#/definitions/chapter.WordCountSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "404": {
                         "description": "小说不存在",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ErrorBody"
+                            "$ref": "#/definitions/chapter.ErrorBody"
                         }
                     }
                 }
@@ -2529,25 +2824,25 @@ const docTemplate = `{
                     "200": {
                         "description": "更新已开始",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_system.UpdateSuccessResponse"
+                            "$ref": "#/definitions/system.UpdateSuccessResponse"
                         }
                     },
                     "401": {
                         "description": "未登录或登录过期",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "409": {
                         "description": "更新冲突或工作区存在未提交改动",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "系统更新失败",
                         "schema": {
-                            "$ref": "#/definitions/novels_ai_gen_internal_api_response.ErrorBody"
+                            "$ref": "#/definitions/response.ErrorBody"
                         }
                     }
                 }
@@ -2595,25 +2890,25 @@ const docTemplate = `{
                     "200": {
                         "description": "上传成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_upload.UploadImageSuccessResponse"
+                            "$ref": "#/definitions/upload.UploadImageSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_upload.ErrorBody"
+                            "$ref": "#/definitions/upload.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_upload.ErrorBody"
+                            "$ref": "#/definitions/upload.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_upload.ErrorBody"
+                            "$ref": "#/definitions/upload.ErrorBody"
                         }
                     }
                 }
@@ -2650,25 +2945,25 @@ const docTemplate = `{
                     "200": {
                         "description": "刷新成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_upload.PreviewSuccessResponse"
+                            "$ref": "#/definitions/upload.PreviewSuccessResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_upload.ErrorBody"
+                            "$ref": "#/definitions/upload.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "未登录或登录已过期",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_upload.ErrorBody"
+                            "$ref": "#/definitions/upload.ErrorBody"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler_upload.ErrorBody"
+                            "$ref": "#/definitions/upload.ErrorBody"
                         }
                     }
                 }
@@ -2676,79 +2971,85 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "internal_api_handler_aiprovider.CreateRequest": {
+        "aiprovider.ModelData": {
             "type": "object",
-            "required": [
-                "api_key",
-                "model",
-                "name",
-                "provider_type"
-            ],
             "properties": {
-                "api_key": {
-                    "description": "APIKey 表示 AI 提供商 API Key，创建时不能为空。",
+                "created_at": {
+                    "description": "CreatedAt 表示模型创建时间。",
                     "type": "string",
-                    "example": "sk-xxx"
+                    "example": "2026-06-18T12:00:00Z"
                 },
-                "api_type": {
-                    "description": "APIType 表示 AI 接口类型，未传时默认 response。",
+                "display_name": {
+                    "description": "DisplayName 表示模型展示名称。",
                     "type": "string",
-                    "example": "response"
+                    "example": "GPT-5"
                 },
-                "base_url": {
-                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
-                    "type": "string",
-                    "example": "https://api.openai.com/v1"
-                },
-                "enabled": {
-                    "description": "Enabled 表示是否启用该 AI 提供商；未传时默认 true。",
-                    "type": "boolean",
-                    "example": true
-                },
-                "max_tokens": {
-                    "description": "MaxTokens 表示最大输出 token 数；未传时默认 1024。",
-                    "type": "integer",
-                    "example": 1024
-                },
-                "model": {
-                    "description": "Model 表示 AI 模型名称，不能为空。",
+                "id": {
+                    "description": "ID 表示模型标识。",
                     "type": "string",
                     "example": "gpt-5"
                 },
-                "name": {
-                    "description": "Name 表示 AI 提供商名称，不能为空且唯一。",
-                    "type": "string",
-                    "example": "默认 OpenAI"
-                },
-                "provider_type": {
-                    "description": "ProviderType 表示 AI 提供商类型，例如 openai。",
+                "owned_by": {
+                    "description": "OwnedBy 表示模型归属方。",
                     "type": "string",
                     "example": "openai"
                 },
-                "temperature": {
-                    "description": "Temperature 表示采样温度；未传时默认 0.5。",
-                    "type": "number",
-                    "example": 0.5
-                },
-                "thinking_level": {
-                    "description": "ThinkingLevel 表示思考等级；未传时默认 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "top_p": {
-                    "description": "TopP 表示 nucleus sampling 参数；未传时默认 0.5。",
-                    "type": "number",
-                    "example": 0.5
+                "supported_generation_methods": {
+                    "description": "SupportedGenerationMethods 表示模型支持的生成能力。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
-        "internal_api_handler_aiprovider.ProviderData": {
+        "aiprovider.ModelListData": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items 表示模型列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/aiprovider.ModelData"
+                    }
+                }
+            }
+        },
+        "aiprovider.ModelListSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示模型列表响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/aiprovider.ModelListData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "aiprovider.ProviderData": {
             "type": "object",
             "properties": {
                 "api_type": {
                     "description": "APIType 表示 AI 接口类型。",
                     "type": "string",
-                    "example": "response"
+                    "example": "completions"
                 },
                 "base_url": {
                     "description": "BaseURL 表示 AI 提供商接口基础地址。",
@@ -2775,16 +3076,6 @@ const docTemplate = `{
                     "type": "string",
                     "example": "sk-p...abcd"
                 },
-                "max_tokens": {
-                    "description": "MaxTokens 表示最大输出 token 数。",
-                    "type": "integer",
-                    "example": 1024
-                },
-                "model": {
-                    "description": "Model 表示 AI 模型名称。",
-                    "type": "string",
-                    "example": "gpt-5"
-                },
                 "name": {
                     "description": "Name 表示 AI 提供商名称。",
                     "type": "string",
@@ -2795,21 +3086,6 @@ const docTemplate = `{
                     "type": "string",
                     "example": "openai"
                 },
-                "temperature": {
-                    "description": "Temperature 表示采样温度。",
-                    "type": "number",
-                    "example": 0.5
-                },
-                "thinking_level": {
-                    "description": "ThinkingLevel 表示思考等级。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "top_p": {
-                    "description": "TopP 表示 nucleus sampling 参数。",
-                    "type": "number",
-                    "example": 0.5
-                },
                 "updated_at": {
                     "description": "UpdatedAt 表示更新时间。",
                     "type": "string",
@@ -2817,7 +3093,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_aiprovider.ProviderDeleteData": {
+        "aiprovider.ProviderDeleteData": {
             "type": "object",
             "properties": {
                 "deleted": {
@@ -2827,7 +3103,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_aiprovider.ProviderDeleteSuccessResponse": {
+        "aiprovider.ProviderDeleteSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -2839,7 +3115,7 @@ const docTemplate = `{
                     "description": "Data 表示删除结果。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.ProviderDeleteData"
+                            "$ref": "#/definitions/aiprovider.ProviderDeleteData"
                         }
                     ]
                 },
@@ -2855,14 +3131,14 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_aiprovider.ProviderListData": {
+        "aiprovider.ProviderListData": {
             "type": "object",
             "properties": {
                 "items": {
                     "description": "Items 表示当前页 AI 提供商列表。",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_api_handler_aiprovider.ProviderData"
+                        "$ref": "#/definitions/aiprovider.ProviderData"
                     }
                 },
                 "page": {
@@ -2882,7 +3158,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_aiprovider.ProviderListSuccessResponse": {
+        "aiprovider.ProviderListSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -2894,7 +3170,7 @@ const docTemplate = `{
                     "description": "Data 表示 AI 提供商分页列表响应数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.ProviderListData"
+                            "$ref": "#/definitions/aiprovider.ProviderListData"
                         }
                     ]
                 },
@@ -2910,7 +3186,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_aiprovider.ProviderSuccessResponse": {
+        "aiprovider.ProviderSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -2922,7 +3198,7 @@ const docTemplate = `{
                     "description": "Data 表示 AI 提供商响应数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_aiprovider.ProviderData"
+                            "$ref": "#/definitions/aiprovider.ProviderData"
                         }
                     ]
                 },
@@ -2938,72 +3214,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_aiprovider.UpdateRequest": {
-            "type": "object",
-            "required": [
-                "model",
-                "name",
-                "provider_type"
-            ],
-            "properties": {
-                "api_key": {
-                    "description": "APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。",
-                    "type": "string",
-                    "example": "sk-xxx"
-                },
-                "api_type": {
-                    "description": "APIType 表示 AI 接口类型；为空时保留原值。",
-                    "type": "string",
-                    "example": "response"
-                },
-                "base_url": {
-                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
-                    "type": "string",
-                    "example": "https://api.openai.com/v1"
-                },
-                "enabled": {
-                    "description": "Enabled 表示是否启用该 AI 提供商；未传时保留原值。",
-                    "type": "boolean",
-                    "example": true
-                },
-                "max_tokens": {
-                    "description": "MaxTokens 表示最大输出 token 数；未传时保留原值。",
-                    "type": "integer",
-                    "example": 1024
-                },
-                "model": {
-                    "description": "Model 表示 AI 模型名称，不能为空。",
-                    "type": "string",
-                    "example": "gpt-5"
-                },
-                "name": {
-                    "description": "Name 表示 AI 提供商名称，不能为空且唯一。",
-                    "type": "string",
-                    "example": "默认 OpenAI"
-                },
-                "provider_type": {
-                    "description": "ProviderType 表示 AI 提供商类型，例如 openai。",
-                    "type": "string",
-                    "example": "openai"
-                },
-                "temperature": {
-                    "description": "Temperature 表示采样温度；未传时保留原值。",
-                    "type": "number",
-                    "example": 0.5
-                },
-                "thinking_level": {
-                    "description": "ThinkingLevel 表示思考等级；未传时保留原值。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "top_p": {
-                    "description": "TopP 表示 nucleus sampling 参数；未传时保留原值。",
-                    "type": "number",
-                    "example": 0.5
-                }
-            }
-        },
-        "internal_api_handler_auth.ErrorBody": {
+        "auth.ErrorBody": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3023,7 +3234,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_auth.LoginData": {
+        "auth.LoginData": {
             "type": "object",
             "properties": {
                 "expires_at": {
@@ -3043,20 +3254,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_auth.LoginRequest": {
-            "type": "object",
-            "required": [
-                "password"
-            ],
-            "properties": {
-                "password": {
-                    "description": "Password 表示系统登录密码。",
-                    "type": "string",
-                    "example": "admin123"
-                }
-            }
-        },
-        "internal_api_handler_auth.LoginSuccessResponse": {
+        "auth.LoginSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3068,7 +3266,7 @@ const docTemplate = `{
                     "description": "Data 表示登录成功后的令牌数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_auth.LoginData"
+                            "$ref": "#/definitions/auth.LoginData"
                         }
                     ]
                 },
@@ -3084,7 +3282,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.ChapterData": {
+        "chapter.ChapterData": {
             "type": "object",
             "properties": {
                 "chapter_number": {
@@ -3129,7 +3327,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.ChapterSummaryData": {
+        "chapter.ChapterSummaryData": {
             "type": "object",
             "properties": {
                 "chapter_number": {
@@ -3169,32 +3367,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.CreateRequest": {
-            "type": "object",
-            "required": [
-                "chapter_number",
-                "title"
-            ],
-            "properties": {
-                "chapter_number": {
-                    "description": "ChapterNumber 表示章节号，必须由客户端传入且大于 0。",
-                    "type": "integer",
-                    "minimum": 1,
-                    "example": 1
-                },
-                "content": {
-                    "description": "Content 表示章节正文，可以为空。",
-                    "type": "string",
-                    "example": "夜色像墨一样铺开。"
-                },
-                "title": {
-                    "description": "Title 表示章节名，不能为空。",
-                    "type": "string",
-                    "example": "初入长夜"
-                }
-            }
-        },
-        "internal_api_handler_chapter.DeleteData": {
+        "chapter.DeleteData": {
             "type": "object",
             "properties": {
                 "deleted": {
@@ -3204,7 +3377,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.DeleteSuccessResponse": {
+        "chapter.DeleteSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3216,7 +3389,7 @@ const docTemplate = `{
                     "description": "Data 表示删除结果。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_chapter.DeleteData"
+                            "$ref": "#/definitions/chapter.DeleteData"
                         }
                     ]
                 },
@@ -3232,7 +3405,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.ErrorBody": {
+        "chapter.ErrorBody": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3252,14 +3425,14 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.ListData": {
+        "chapter.ListData": {
             "type": "object",
             "properties": {
                 "items": {
                     "description": "Items 表示当前页章节摘要列表。",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_api_handler_chapter.ChapterSummaryData"
+                        "$ref": "#/definitions/chapter.ChapterSummaryData"
                     }
                 },
                 "page": {
@@ -3279,7 +3452,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.ListSuccessResponse": {
+        "chapter.ListSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3291,7 +3464,7 @@ const docTemplate = `{
                     "description": "Data 表示章节分页列表响应数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ListData"
+                            "$ref": "#/definitions/chapter.ListData"
                         }
                     ]
                 },
@@ -3307,7 +3480,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.NextChapterNumberData": {
+        "chapter.NextChapterNumberData": {
             "type": "object",
             "properties": {
                 "next_chapter_number": {
@@ -3322,7 +3495,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.NextChapterNumberSuccessResponse": {
+        "chapter.NextChapterNumberSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3334,7 +3507,7 @@ const docTemplate = `{
                     "description": "Data 表示下一章节号响应数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_chapter.NextChapterNumberData"
+                            "$ref": "#/definitions/chapter.NextChapterNumberData"
                         }
                     ]
                 },
@@ -3350,7 +3523,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.SuccessResponse": {
+        "chapter.SuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3362,7 +3535,7 @@ const docTemplate = `{
                     "description": "Data 表示章节响应数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_chapter.ChapterData"
+                            "$ref": "#/definitions/chapter.ChapterData"
                         }
                     ]
                 },
@@ -3378,25 +3551,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.UpdateRequest": {
-            "type": "object",
-            "required": [
-                "title"
-            ],
-            "properties": {
-                "content": {
-                    "description": "Content 表示章节正文，可以为空。",
-                    "type": "string",
-                    "example": "夜色像墨一样铺开。"
-                },
-                "title": {
-                    "description": "Title 表示章节名，不能为空。",
-                    "type": "string",
-                    "example": "初入长夜"
-                }
-            }
-        },
-        "internal_api_handler_chapter.WordCountData": {
+        "chapter.WordCountData": {
             "type": "object",
             "properties": {
                 "novel_id": {
@@ -3411,7 +3566,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_chapter.WordCountSuccessResponse": {
+        "chapter.WordCountSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3423,7 +3578,7 @@ const docTemplate = `{
                     "description": "Data 表示小说总字数响应数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_chapter.WordCountData"
+                            "$ref": "#/definitions/chapter.WordCountData"
                         }
                     ]
                 },
@@ -3439,7 +3594,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_character.CharacterData": {
+        "character.CharacterData": {
             "type": "object",
             "properties": {
                 "ability": {
@@ -3504,7 +3659,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_character.CharacterSummaryData": {
+        "character.CharacterSummaryData": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -3549,55 +3704,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_character.CreateRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "ability": {
-                    "description": "Ability 表示角色能力，可以为空。",
-                    "type": "string",
-                    "example": "擅长御剑与阵法。"
-                },
-                "background": {
-                    "description": "Background 表示角色背景，可以为空。",
-                    "type": "string",
-                    "example": "出身边城旧族。"
-                },
-                "gender": {
-                    "description": "Gender 表示角色性别，可以为空。",
-                    "type": "string",
-                    "example": "女"
-                },
-                "goal": {
-                    "description": "Goal 表示角色目的，可以为空。",
-                    "type": "string",
-                    "example": "寻找失踪的兄长。"
-                },
-                "name": {
-                    "description": "Name 表示角色姓名，不能为空。",
-                    "type": "string",
-                    "example": "林知夏"
-                },
-                "personality": {
-                    "description": "Personality 表示角色性格，可以为空。",
-                    "type": "string",
-                    "example": "冷静克制，重诺。"
-                },
-                "portrait_url": {
-                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
-                    "type": "string",
-                    "example": "covers/character-a.webp"
-                },
-                "tags": {
-                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
-                    "type": "string",
-                    "example": "主角,剑修"
-                }
-            }
-        },
-        "internal_api_handler_character.DeleteData": {
+        "character.DeleteData": {
             "type": "object",
             "properties": {
                 "deleted": {
@@ -3607,7 +3714,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_character.DeleteSuccessResponse": {
+        "character.DeleteSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3619,7 +3726,7 @@ const docTemplate = `{
                     "description": "Data 表示删除结果。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_character.DeleteData"
+                            "$ref": "#/definitions/character.DeleteData"
                         }
                     ]
                 },
@@ -3635,7 +3742,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_character.ErrorBody": {
+        "character.ErrorBody": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3655,14 +3762,14 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_character.ListData": {
+        "character.ListData": {
             "type": "object",
             "properties": {
                 "items": {
                     "description": "Items 表示当前页角色卡摘要列表。",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_api_handler_character.CharacterSummaryData"
+                        "$ref": "#/definitions/character.CharacterSummaryData"
                     }
                 },
                 "page": {
@@ -3682,7 +3789,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_character.ListSuccessResponse": {
+        "character.ListSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3694,7 +3801,7 @@ const docTemplate = `{
                     "description": "Data 表示角色卡分页列表响应数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_character.ListData"
+                            "$ref": "#/definitions/character.ListData"
                         }
                     ]
                 },
@@ -3710,7 +3817,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_character.SuccessResponse": {
+        "character.SuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3722,7 +3829,7 @@ const docTemplate = `{
                     "description": "Data 表示角色卡响应数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_character.CharacterData"
+                            "$ref": "#/definitions/character.CharacterData"
                         }
                     ]
                 },
@@ -3738,55 +3845,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_character.UpdateRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "ability": {
-                    "description": "Ability 表示角色能力，可以为空。",
-                    "type": "string",
-                    "example": "擅长御剑与阵法。"
-                },
-                "background": {
-                    "description": "Background 表示角色背景，可以为空。",
-                    "type": "string",
-                    "example": "出身边城旧族。"
-                },
-                "gender": {
-                    "description": "Gender 表示角色性别，可以为空。",
-                    "type": "string",
-                    "example": "女"
-                },
-                "goal": {
-                    "description": "Goal 表示角色目的，可以为空。",
-                    "type": "string",
-                    "example": "寻找失踪的兄长。"
-                },
-                "name": {
-                    "description": "Name 表示角色姓名，不能为空。",
-                    "type": "string",
-                    "example": "林知夏"
-                },
-                "personality": {
-                    "description": "Personality 表示角色性格，可以为空。",
-                    "type": "string",
-                    "example": "冷静克制，重诺。"
-                },
-                "portrait_url": {
-                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
-                    "type": "string",
-                    "example": "covers/character-a.webp"
-                },
-                "tags": {
-                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
-                    "type": "string",
-                    "example": "主角,剑修"
-                }
-            }
-        },
-        "internal_api_handler_config.FileData": {
+        "config.FileData": {
             "type": "object",
             "properties": {
                 "config_file": {
@@ -3811,7 +3870,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_config.FileSuccessResponse": {
+        "config.FileSuccessResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3823,7 +3882,7 @@ const docTemplate = `{
                     "description": "Data 表示配置文件文本和加载状态。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler_config.FileData"
+                            "$ref": "#/definitions/config.FileData"
                         }
                     ]
                 },
@@ -3839,7 +3898,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_config.UpdateFileRequest": {
+        "config.UpdateFileRequest": {
             "type": "object",
             "properties": {
                 "content": {
@@ -3849,7 +3908,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_event.ErrorBody": {
+        "event.ErrorBody": {
             "type": "object",
             "properties": {
                 "code": {
@@ -3869,767 +3928,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler_event.RelationDeleteData": {
-            "type": "object",
-            "properties": {
-                "deleted": {
-                    "description": "Deleted 表示后端是否已经删除该事件关系线。",
-                    "type": "boolean",
-                    "example": true
-                }
-            }
-        },
-        "internal_api_handler_log.DeleteFilesRequest": {
-            "type": "object",
-            "required": [
-                "paths"
-            ],
-            "properties": {
-                "paths": {
-                    "description": "Paths 表示需要删除的日志文件相对路径列表。",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "internal_api_handler_log.LogEntry": {
-            "type": "object",
-            "properties": {
-                "attrs": {
-                    "description": "Attrs 表示除标准字段外的结构化日志属性。",
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "level": {
-                    "description": "Level 表示日志等级。",
-                    "type": "string"
-                },
-                "message": {
-                    "description": "Message 表示日志消息。",
-                    "type": "string"
-                },
-                "raw": {
-                    "description": "Raw 表示原始日志文本。",
-                    "type": "string"
-                },
-                "request_id": {
-                    "description": "RequestID 表示日志关联的请求追踪标识。",
-                    "type": "string"
-                },
-                "source": {
-                    "description": "Source 表示日志来源位置。",
-                    "type": "string"
-                },
-                "time": {
-                    "description": "Time 表示日志记录时间。",
-                    "type": "string"
-                }
-            }
-        },
-        "internal_api_handler_log.streamEvent": {
-            "type": "object",
-            "properties": {
-                "entry": {
-                    "description": "Entry 表示日志条目事件中的日志内容。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_api_handler_log.LogEntry"
-                        }
-                    ]
-                },
-                "follow": {
-                    "description": "Follow 表示日志流是否会继续跟随文件追加。",
-                    "type": "boolean"
-                },
-                "message": {
-                    "description": "Message 表示错误事件中的用户可读提示。",
-                    "type": "string"
-                },
-                "path": {
-                    "description": "Path 表示当前跟随的日志文件路径。",
-                    "type": "string"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次日志流请求的追踪标识。",
-                    "type": "string"
-                },
-                "type": {
-                    "description": "Type 表示事件类型，支持 meta、entry、error。",
-                    "type": "string"
-                }
-            }
-        },
-        "internal_api_handler_novel.CreateRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "author_name": {
-                    "description": "AuthorName 表示作者名，可以为空。",
-                    "type": "string",
-                    "example": "爱潜水的乌贼"
-                },
-                "cover_url": {
-                    "description": "CoverURL 表示封面链接，可以为空。",
-                    "type": "string",
-                    "example": "https://example.com/cover.jpg"
-                },
-                "description": {
-                    "description": "Description 表示简介，可以为空。",
-                    "type": "string",
-                    "example": "一部关于废土冒险的小说"
-                },
-                "name": {
-                    "description": "Name 表示小说名，不能为空。",
-                    "type": "string",
-                    "example": "长夜余火"
-                },
-                "status": {
-                    "description": "Status 表示小说状态，只允许连载中或已完结，未传时默认连载中。",
-                    "type": "string",
-                    "enum": [
-                        "连载中",
-                        "已完结"
-                    ],
-                    "example": "连载中"
-                },
-                "tags": {
-                    "description": "Tags 表示标签，可以为空，多个标签使用英文逗号分隔。",
-                    "type": "string",
-                    "example": "玄幻,冒险"
-                }
-            }
-        },
-        "internal_api_handler_novel.DeleteData": {
-            "type": "object",
-            "properties": {
-                "deleted": {
-                    "description": "Deleted 表示是否已经删除。",
-                    "type": "boolean",
-                    "example": true
-                }
-            }
-        },
-        "internal_api_handler_novel.DeleteSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示删除结果。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_api_handler_novel.DeleteData"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "internal_api_handler_novel.ErrorBody": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
-                    "type": "integer",
-                    "example": 400
-                },
-                "message": {
-                    "description": "Message 表示用户可理解的错误提示。",
-                    "type": "string",
-                    "example": "请求参数错误"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "internal_api_handler_novel.ListData": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "description": "Items 表示当前页小说列表。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_api_handler_novel.NovelData"
-                    }
-                },
-                "page": {
-                    "description": "Page 表示当前页码。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "page_size": {
-                    "description": "PageSize 表示每页数量。",
-                    "type": "integer",
-                    "example": 20
-                },
-                "total": {
-                    "description": "Total 表示符合条件的小说总数。",
-                    "type": "integer",
-                    "example": 1
-                }
-            }
-        },
-        "internal_api_handler_novel.ListSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示小说分页列表响应数据。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_api_handler_novel.ListData"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "internal_api_handler_novel.NovelData": {
-            "type": "object",
-            "properties": {
-                "author_name": {
-                    "description": "AuthorName 表示作者名。",
-                    "type": "string",
-                    "example": "爱潜水的乌贼"
-                },
-                "cover_url": {
-                    "description": "CoverURL 表示封面链接。",
-                    "type": "string",
-                    "example": "https://example.com/cover.jpg"
-                },
-                "created_at": {
-                    "description": "CreatedAt 表示创建时间。",
-                    "type": "string",
-                    "example": "2026-06-13T22:00:00+08:00"
-                },
-                "description": {
-                    "description": "Description 表示简介。",
-                    "type": "string",
-                    "example": "一部关于废土冒险的小说"
-                },
-                "id": {
-                    "description": "ID 表示小说主键 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "name": {
-                    "description": "Name 表示小说名。",
-                    "type": "string",
-                    "example": "长夜余火"
-                },
-                "status": {
-                    "description": "Status 表示小说状态，只允许连载中或已完结。",
-                    "type": "string",
-                    "enum": [
-                        "连载中",
-                        "已完结"
-                    ],
-                    "example": "连载中"
-                },
-                "tags": {
-                    "description": "Tags 表示标签，多个标签使用英文逗号分隔。",
-                    "type": "string",
-                    "example": "玄幻,冒险"
-                },
-                "updated_at": {
-                    "description": "UpdatedAt 表示更新时间。",
-                    "type": "string",
-                    "example": "2026-06-13T22:00:00+08:00"
-                }
-            }
-        },
-        "internal_api_handler_novel.SuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示小说响应数据。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_api_handler_novel.NovelData"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "internal_api_handler_novel.UpdateRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "author_name": {
-                    "description": "AuthorName 表示作者名，可以为空。",
-                    "type": "string",
-                    "example": "爱潜水的乌贼"
-                },
-                "cover_url": {
-                    "description": "CoverURL 表示封面链接，可以为空。",
-                    "type": "string",
-                    "example": "https://example.com/cover.jpg"
-                },
-                "description": {
-                    "description": "Description 表示简介，可以为空。",
-                    "type": "string",
-                    "example": "一部关于废土冒险的小说"
-                },
-                "name": {
-                    "description": "Name 表示小说名，不能为空。",
-                    "type": "string",
-                    "example": "长夜余火"
-                },
-                "status": {
-                    "description": "Status 表示小说状态，只允许连载中或已完结，未传或空字符串时保留原状态。",
-                    "type": "string",
-                    "enum": [
-                        "连载中",
-                        "已完结"
-                    ],
-                    "example": "连载中"
-                },
-                "tags": {
-                    "description": "Tags 表示标签，可以为空，多个标签使用英文逗号分隔。",
-                    "type": "string",
-                    "example": "玄幻,冒险"
-                }
-            }
-        },
-        "internal_api_handler_relationship.EdgeData": {
-            "type": "object",
-            "properties": {
-                "character_a_id": {
-                    "description": "CharacterAID 表示无方向关系线中较小的角色卡 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "character_b_id": {
-                    "description": "CharacterBID 表示无方向关系线中较大的角色卡 ID。",
-                    "type": "integer",
-                    "example": 2
-                },
-                "id": {
-                    "description": "ID 表示关系线稳定 ID，由两个角色 ID 计算得到。",
-                    "type": "string",
-                    "example": "rel-1-2"
-                },
-                "note": {
-                    "description": "Note 表示关系线备注，用于描述两个角色之间的关系。",
-                    "type": "string",
-                    "example": "旧友"
-                },
-                "source_handle": {
-                    "description": "SourceHandle 表示较小角色卡端使用的连接点 ID。",
-                    "type": "string",
-                    "example": "right"
-                },
-                "target_handle": {
-                    "description": "TargetHandle 表示较大角色卡端使用的连接点 ID。",
-                    "type": "string",
-                    "example": "left"
-                }
-            }
-        },
-        "internal_api_handler_relationship.ErrorBody": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
-                    "type": "integer",
-                    "example": 400
-                },
-                "message": {
-                    "description": "Message 表示用户可理解的错误提示。",
-                    "type": "string",
-                    "example": "请求参数错误"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "internal_api_handler_relationship.GraphData": {
-            "type": "object",
-            "properties": {
-                "edges": {
-                    "description": "Edges 表示当前画布中的无方向关系线列表。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_api_handler_relationship.EdgeData"
-                    }
-                },
-                "nodes": {
-                    "description": "Nodes 表示当前画布中的角色节点列表。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_api_handler_relationship.NodeData"
-                    }
-                },
-                "novel_id": {
-                    "description": "NovelID 表示小说主键 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "updated_at": {
-                    "description": "UpdatedAt 表示关系图最后更新时间；关系图尚未保存时为空。",
-                    "type": "string",
-                    "example": "2026-06-15T10:00:00+08:00"
-                },
-                "viewport": {
-                    "description": "Viewport 表示画布视口。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ViewportData"
-                        }
-                    ]
-                }
-            }
-        },
-        "internal_api_handler_relationship.NodeData": {
-            "type": "object",
-            "properties": {
-                "character_id": {
-                    "description": "CharacterID 表示画布节点引用的角色卡 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "position_x": {
-                    "description": "PositionX 表示节点在画布中的 X 坐标。",
-                    "type": "number",
-                    "example": 120
-                },
-                "position_y": {
-                    "description": "PositionY 表示节点在画布中的 Y 坐标。",
-                    "type": "number",
-                    "example": 80
-                }
-            }
-        },
-        "internal_api_handler_relationship.SaveRequest": {
-            "type": "object",
-            "properties": {
-                "edges": {
-                    "description": "Edges 表示当前画布中的无方向关系线列表。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_api_handler_relationship.EdgeData"
-                    }
-                },
-                "nodes": {
-                    "description": "Nodes 表示当前画布中的角色节点列表。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_api_handler_relationship.NodeData"
-                    }
-                },
-                "viewport": {
-                    "description": "Viewport 表示画布视口。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_api_handler_relationship.ViewportData"
-                        }
-                    ]
-                }
-            }
-        },
-        "internal_api_handler_relationship.SuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示角色关系图响应数据。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_api_handler_relationship.GraphData"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "internal_api_handler_relationship.ViewportData": {
-            "type": "object",
-            "properties": {
-                "x": {
-                    "description": "X 表示画布视口 X 坐标。",
-                    "type": "number",
-                    "example": 0
-                },
-                "y": {
-                    "description": "Y 表示画布视口 Y 坐标。",
-                    "type": "number",
-                    "example": 0
-                },
-                "zoom": {
-                    "description": "Zoom 表示画布视口缩放比例。",
-                    "type": "number",
-                    "example": 1
-                }
-            }
-        },
-        "internal_api_handler_system.UpdateSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示系统更新结果。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_system.UpdateResult"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "internal_api_handler_upload.ErrorBody": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
-                    "type": "integer",
-                    "example": 400
-                },
-                "message": {
-                    "description": "Message 表示用户可理解的错误提示。",
-                    "type": "string",
-                    "example": "请求参数错误"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "internal_api_handler_upload.PreviewData": {
-            "type": "object",
-            "properties": {
-                "object_key": {
-                    "description": "ObjectKey 表示图片保存在对象存储中的对象 key。",
-                    "type": "string",
-                    "example": "covers/2026/06/9f1c1c0a1b2c3d4e.png"
-                },
-                "preview_expires_at": {
-                    "description": "PreviewExpiresAt 表示预签名预览链接过期时间。",
-                    "type": "string",
-                    "example": "2026-06-15T22:00:00+08:00"
-                },
-                "preview_url": {
-                    "description": "PreviewURL 表示可直接预览私有图片的预签名链接。",
-                    "type": "string",
-                    "example": "https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=..."
-                }
-            }
-        },
-        "internal_api_handler_upload.PreviewSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示刷新预览链接后的响应数据。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_api_handler_upload.PreviewData"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "internal_api_handler_upload.UploadImageData": {
-            "type": "object",
-            "properties": {
-                "content_type": {
-                    "description": "ContentType 表示根据文件内容探测出的 MIME 类型。",
-                    "type": "string",
-                    "example": "image/png"
-                },
-                "object_key": {
-                    "description": "ObjectKey 表示图片保存在对象存储中的对象 key。",
-                    "type": "string",
-                    "example": "covers/2026/06/9f1c1c0a1b2c3d4e.png"
-                },
-                "original_filename": {
-                    "description": "OriginalFilename 表示用户上传文件的原始文件名。",
-                    "type": "string",
-                    "example": "cover.png"
-                },
-                "preview_expires_at": {
-                    "description": "PreviewExpiresAt 表示预签名预览链接过期时间。",
-                    "type": "string",
-                    "example": "2026-06-15T22:00:00+08:00"
-                },
-                "preview_url": {
-                    "description": "PreviewURL 表示可直接预览私有图片的预签名链接。",
-                    "type": "string",
-                    "example": "https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=..."
-                },
-                "size": {
-                    "description": "Size 表示上传文件大小，单位为字节。",
-                    "type": "integer",
-                    "example": 1024
-                }
-            }
-        },
-        "internal_api_handler_upload.UploadImageSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示图片上传成功后的响应数据。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/internal_api_handler_upload.UploadImageData"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_response.Body": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0，失败使用 HTTP 状态码。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示响应数据内容。"
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "novels_ai_gen_internal_api_response.ErrorBody": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
-                    "type": "integer",
-                    "example": 400
-                },
-                "message": {
-                    "description": "Message 表示用户可理解的错误提示。",
-                    "type": "string",
-                    "example": "请求参数错误"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "novels_ai_gen_internal_biz_event.CreateRequest": {
+        "event.EventCreateRequest": {
             "type": "object",
             "required": [
                 "name"
@@ -4688,22 +3987,7 @@ const docTemplate = `{
                 }
             }
         },
-        "novels_ai_gen_internal_biz_event.DeleteResponse": {
-            "type": "object",
-            "properties": {
-                "deleted": {
-                    "description": "Deleted 表示后端是否已经删除该事件。",
-                    "type": "boolean",
-                    "example": true
-                },
-                "deleted_relation_count": {
-                    "description": "DeletedRelationCount 表示随事件一并删除的关系线数量。",
-                    "type": "integer",
-                    "example": 2
-                }
-            }
-        },
-        "novels_ai_gen_internal_biz_event.EventResponse": {
+        "event.EventData": {
             "type": "object",
             "properties": {
                 "cause": {
@@ -4745,7 +4029,7 @@ const docTemplate = `{
                     "description": "Participants 表示参与该事件的角色卡摘要列表。",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/novels_ai_gen_internal_biz_event.ParticipantResponse"
+                        "$ref": "#/definitions/event.ParticipantData"
                     }
                 },
                 "position_x": {
@@ -4775,21 +4059,64 @@ const docTemplate = `{
                 }
             }
         },
-        "novels_ai_gen_internal_biz_event.GraphResponse": {
+        "event.EventDeleteData": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "description": "Deleted 表示后端是否已经删除该事件。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "deleted_relation_count": {
+                    "description": "DeletedRelationCount 表示随事件一并删除的关系线数量。",
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "event.EventDeleteSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示删除事件响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/event.EventDeleteData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "event.EventGraphData": {
             "type": "object",
             "properties": {
                 "edges": {
                     "description": "Edges 表示事件图中的有向关系线列表。",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/novels_ai_gen_internal_biz_event.RelationResponse"
+                        "$ref": "#/definitions/event.RelationData"
                     }
                 },
                 "nodes": {
                     "description": "Nodes 表示事件图中的事件节点列表。",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/novels_ai_gen_internal_biz_event.EventResponse"
+                        "$ref": "#/definitions/event.EventData"
                     }
                 },
                 "novel_id": {
@@ -4806,63 +4133,48 @@ const docTemplate = `{
                     "description": "Viewport 表示事件图画布视口。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.Viewport"
+                            "$ref": "#/definitions/event.ViewportData"
                         }
                     ]
                 }
             }
         },
-        "novels_ai_gen_internal_biz_event.LayoutNodeRequest": {
+        "event.EventGraphSuccessResponse": {
             "type": "object",
-            "required": [
-                "event_id"
-            ],
             "properties": {
-                "event_id": {
-                    "description": "EventID 表示需要保存坐标的事件 ID。",
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
                     "type": "integer",
-                    "example": 1
+                    "example": 0
                 },
-                "position_x": {
-                    "description": "PositionX 表示节点在画布中的 X 坐标。",
-                    "type": "number",
-                    "example": 120
-                },
-                "position_y": {
-                    "description": "PositionY 表示节点在画布中的 Y 坐标。",
-                    "type": "number",
-                    "example": 80
-                }
-            }
-        },
-        "novels_ai_gen_internal_biz_event.LayoutRequest": {
-            "type": "object",
-            "properties": {
-                "nodes": {
-                    "description": "Nodes 表示需要保存坐标的事件节点列表。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/novels_ai_gen_internal_biz_event.LayoutNodeRequest"
-                    }
-                },
-                "viewport": {
-                    "description": "Viewport 表示事件图画布视口。",
+                "data": {
+                    "description": "Data 表示事件图响应数据。",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/novels_ai_gen_internal_biz_event.Viewport"
+                            "$ref": "#/definitions/event.EventGraphData"
                         }
                     ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
                 }
             }
         },
-        "novels_ai_gen_internal_biz_event.ListResponse": {
+        "event.EventListData": {
             "type": "object",
             "properties": {
                 "items": {
                     "description": "Items 表示当前页事件列表。",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/novels_ai_gen_internal_biz_event.EventResponse"
+                        "$ref": "#/definitions/event.EventData"
                     }
                 },
                 "page": {
@@ -4882,106 +4194,91 @@ const docTemplate = `{
                 }
             }
         },
-        "novels_ai_gen_internal_biz_event.ParticipantResponse": {
+        "event.EventListSuccessResponse": {
             "type": "object",
             "properties": {
-                "gender": {
-                    "description": "Gender 表示角色性别。",
-                    "type": "string",
-                    "example": "男"
-                },
-                "id": {
-                    "description": "ID 表示角色卡主键 ID。",
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
                     "type": "integer",
-                    "example": 1
+                    "example": 0
                 },
-                "name": {
-                    "description": "Name 表示角色姓名。",
+                "data": {
+                    "description": "Data 表示事件列表响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/event.EventListData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
                     "type": "string",
-                    "example": "林霜夜"
+                    "example": "ok"
                 },
-                "novel_id": {
-                    "description": "NovelID 表示所属小说 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "tags": {
-                    "description": "Tags 表示角色标签，多个标签使用英文逗号分隔。",
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
                     "type": "string",
-                    "example": "主角,剑修"
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
                 }
             }
         },
-        "novels_ai_gen_internal_biz_event.RelationCreateRequest": {
+        "event.EventRelationSuccessResponse": {
             "type": "object",
-            "required": [
-                "source_event_id",
-                "target_event_id"
-            ],
             "properties": {
-                "note": {
-                    "description": "Note 表示关系线备注，可以为空。",
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示事件关系线响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/event.RelationData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
                     "type": "string",
-                    "example": "直接导致"
+                    "example": "ok"
                 },
-                "source_event_id": {
-                    "description": "SourceEventID 表示前置事件 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "target_event_id": {
-                    "description": "TargetEventID 表示后续事件 ID。",
-                    "type": "integer",
-                    "example": 2
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
                 }
             }
         },
-        "novels_ai_gen_internal_biz_event.RelationResponse": {
+        "event.EventSuccessResponse": {
             "type": "object",
             "properties": {
-                "created_at": {
-                    "description": "CreatedAt 表示创建时间。",
-                    "type": "string",
-                    "example": "2026-06-16T10:00:00+08:00"
-                },
-                "id": {
-                    "description": "ID 表示事件关系线主键 ID。",
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
                     "type": "integer",
-                    "example": 1
+                    "example": 0
                 },
-                "note": {
-                    "description": "Note 表示事件关系线备注。",
+                "data": {
+                    "description": "Data 表示事件响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/event.EventData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
                     "type": "string",
-                    "example": "直接导致"
+                    "example": "ok"
                 },
-                "source_event_id": {
-                    "description": "SourceEventID 表示前置事件 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "target_event_id": {
-                    "description": "TargetEventID 表示后续事件 ID。",
-                    "type": "integer",
-                    "example": 2
-                },
-                "updated_at": {
-                    "description": "UpdatedAt 表示更新时间。",
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
                     "type": "string",
-                    "example": "2026-06-16T10:00:00+08:00"
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
                 }
             }
         },
-        "novels_ai_gen_internal_biz_event.RelationUpdateRequest": {
-            "type": "object",
-            "properties": {
-                "note": {
-                    "description": "Note 表示关系线备注，可以为空。",
-                    "type": "string",
-                    "example": "直接导致"
-                }
-            }
-        },
-        "novels_ai_gen_internal_biz_event.UpdateRequest": {
+        "event.EventUpdateRequest": {
             "type": "object",
             "required": [
                 "name"
@@ -5040,7 +4337,110 @@ const docTemplate = `{
                 }
             }
         },
-        "novels_ai_gen_internal_biz_event.Viewport": {
+        "event.ParticipantData": {
+            "type": "object",
+            "properties": {
+                "gender": {
+                    "description": "Gender 表示角色性别。",
+                    "type": "string",
+                    "example": "男"
+                },
+                "id": {
+                    "description": "ID 表示角色卡主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 表示角色姓名。",
+                    "type": "string",
+                    "example": "林霜夜"
+                },
+                "novel_id": {
+                    "description": "NovelID 表示所属小说 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "tags": {
+                    "description": "Tags 表示角色标签，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "主角,剑修"
+                }
+            }
+        },
+        "event.RelationData": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-16T10:00:00+08:00"
+                },
+                "id": {
+                    "description": "ID 表示事件关系线主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "note": {
+                    "description": "Note 表示事件关系线备注。",
+                    "type": "string",
+                    "example": "直接导致"
+                },
+                "source_event_id": {
+                    "description": "SourceEventID 表示前置事件 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "target_event_id": {
+                    "description": "TargetEventID 表示后续事件 ID。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示更新时间。",
+                    "type": "string",
+                    "example": "2026-06-16T10:00:00+08:00"
+                }
+            }
+        },
+        "event.RelationDeleteData": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "description": "Deleted 表示后端是否已经删除该事件关系线。",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "event.RelationDeleteSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示删除事件关系线响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/event.RelationDeleteData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "event.ViewportData": {
             "type": "object",
             "properties": {
                 "x": {
@@ -5060,7 +4460,1110 @@ const docTemplate = `{
                 }
             }
         },
-        "novels_ai_gen_internal_biz_system.UpdateResult": {
+        "log.DeleteFilesRequest": {
+            "type": "object",
+            "required": [
+                "paths"
+            ],
+            "properties": {
+                "paths": {
+                    "description": "Paths 表示需要删除的日志文件相对路径列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "log.LogEntry": {
+            "type": "object",
+            "properties": {
+                "attrs": {
+                    "description": "Attrs 表示除标准字段外的结构化日志属性。",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "level": {
+                    "description": "Level 表示日志等级。",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "Message 表示日志消息。",
+                    "type": "string"
+                },
+                "raw": {
+                    "description": "Raw 表示原始日志文本。",
+                    "type": "string"
+                },
+                "request_id": {
+                    "description": "RequestID 表示日志关联的请求追踪标识。",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "Source 表示日志来源位置。",
+                    "type": "string"
+                },
+                "time": {
+                    "description": "Time 表示日志记录时间。",
+                    "type": "string"
+                }
+            }
+        },
+        "log.streamEvent": {
+            "type": "object",
+            "properties": {
+                "entry": {
+                    "description": "Entry 表示日志条目事件中的日志内容。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/log.LogEntry"
+                        }
+                    ]
+                },
+                "follow": {
+                    "description": "Follow 表示日志流是否会继续跟随文件追加。",
+                    "type": "boolean"
+                },
+                "message": {
+                    "description": "Message 表示错误事件中的用户可读提示。",
+                    "type": "string"
+                },
+                "path": {
+                    "description": "Path 表示当前跟随的日志文件路径。",
+                    "type": "string"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次日志流请求的追踪标识。",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Type 表示事件类型，支持 meta、entry、error。",
+                    "type": "string"
+                }
+            }
+        },
+        "novel.DeleteData": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "description": "Deleted 表示是否已经删除。",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "novel.DeleteSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示删除结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novel.DeleteData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novel.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
+                    "type": "integer",
+                    "example": 400
+                },
+                "message": {
+                    "description": "Message 表示用户可理解的错误提示。",
+                    "type": "string",
+                    "example": "请求参数错误"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novel.ListData": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items 表示当前页小说列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/novel.NovelData"
+                    }
+                },
+                "page": {
+                    "description": "Page 表示当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 表示每页数量。",
+                    "type": "integer",
+                    "example": 20
+                },
+                "total": {
+                    "description": "Total 表示符合条件的小说总数。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "novel.ListSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示小说分页列表响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novel.ListData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novel.NovelData": {
+            "type": "object",
+            "properties": {
+                "author_name": {
+                    "description": "AuthorName 表示作者名。",
+                    "type": "string",
+                    "example": "爱潜水的乌贼"
+                },
+                "cover_url": {
+                    "description": "CoverURL 表示封面链接。",
+                    "type": "string",
+                    "example": "https://example.com/cover.jpg"
+                },
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-13T22:00:00+08:00"
+                },
+                "description": {
+                    "description": "Description 表示简介。",
+                    "type": "string",
+                    "example": "一部关于废土冒险的小说"
+                },
+                "id": {
+                    "description": "ID 表示小说主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 表示小说名。",
+                    "type": "string",
+                    "example": "长夜余火"
+                },
+                "status": {
+                    "description": "Status 表示小说状态，只允许连载中或已完结。",
+                    "type": "string",
+                    "enum": [
+                        "连载中",
+                        "已完结"
+                    ],
+                    "example": "连载中"
+                },
+                "tags": {
+                    "description": "Tags 表示标签，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "玄幻,冒险"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示更新时间。",
+                    "type": "string",
+                    "example": "2026-06-13T22:00:00+08:00"
+                }
+            }
+        },
+        "novel.SuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示小说响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novel.NovelData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novelagent.ClearMessagesData": {
+            "type": "object",
+            "properties": {
+                "cleared": {
+                    "description": "Cleared 表示本次清空的消息数量。",
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "novelagent.ClearMessagesSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示清空结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novelagent.ClearMessagesData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novelagent.MessageData": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "description": "ChapterID 表示本轮消息关联的章节 ID，普通小说级对话可为空。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content 表示消息正文。",
+                    "type": "string",
+                    "example": "帮我润色这一章"
+                },
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-19T22:00:00+08:00"
+                },
+                "id": {
+                    "description": "ID 表示 Agent 消息主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "novel_id": {
+                    "description": "NovelID 表示消息所属小说 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "role": {
+                    "description": "Role 表示消息角色，仅包含 user 或 assistant。",
+                    "type": "string",
+                    "example": "user"
+                },
+                "task": {
+                    "description": "Task 表示产生助手消息的任务类型，用户消息为空。",
+                    "type": "string",
+                    "example": "polish"
+                }
+            }
+        },
+        "novelagent.MessageListData": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items 表示最近的 Agent 历史消息列表，按时间正序排列。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/novelagent.MessageData"
+                    }
+                }
+            }
+        },
+        "novelagent.MessageListSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示 Agent 历史消息列表。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novelagent.MessageListData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_aiprovider.CreateRequest": {
+            "type": "object",
+            "required": [
+                "api_key",
+                "name",
+                "provider_type"
+            ],
+            "properties": {
+                "api_key": {
+                    "description": "APIKey 表示 AI 提供商 API Key，创建时不能为空。",
+                    "type": "string",
+                    "example": "sk-xxx"
+                },
+                "api_type": {
+                    "description": "APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。",
+                    "type": "string",
+                    "example": "completions"
+                },
+                "base_url": {
+                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
+                    "type": "string",
+                    "example": "https://api.openai.com/v1"
+                },
+                "enabled": {
+                    "description": "Enabled 表示是否启用该 AI 提供商；未传时默认 true。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "name": {
+                    "description": "Name 表示 AI 提供商名称，不能为空且唯一。",
+                    "type": "string",
+                    "example": "默认 OpenAI"
+                },
+                "provider_type": {
+                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
+                    "type": "string",
+                    "example": "openai"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_aiprovider.ModelListRequest": {
+            "type": "object",
+            "required": [
+                "api_key",
+                "provider_type"
+            ],
+            "properties": {
+                "api_key": {
+                    "description": "APIKey 表示用于请求官方模型列表接口的 API Key。",
+                    "type": "string",
+                    "example": "sk-xxx"
+                },
+                "base_url": {
+                    "description": "BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。",
+                    "type": "string",
+                    "example": "https://api.openai.com/v1"
+                },
+                "provider_type": {
+                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
+                    "type": "string",
+                    "example": "openai"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_aiprovider.UpdateRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "provider_type"
+            ],
+            "properties": {
+                "api_key": {
+                    "description": "APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。",
+                    "type": "string",
+                    "example": "sk-xxx"
+                },
+                "api_type": {
+                    "description": "APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。",
+                    "type": "string",
+                    "example": "completions"
+                },
+                "base_url": {
+                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
+                    "type": "string",
+                    "example": "https://api.openai.com/v1"
+                },
+                "enabled": {
+                    "description": "Enabled 表示是否启用该 AI 提供商；未传时保留原值。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "name": {
+                    "description": "Name 表示 AI 提供商名称，不能为空且唯一。",
+                    "type": "string",
+                    "example": "默认 OpenAI"
+                },
+                "provider_type": {
+                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。",
+                    "type": "string",
+                    "example": "openai"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_auth.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password"
+            ],
+            "properties": {
+                "password": {
+                    "description": "Password 表示系统登录密码。",
+                    "type": "string",
+                    "example": "admin123"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_chapter.CreateRequest": {
+            "type": "object",
+            "required": [
+                "chapter_number",
+                "title"
+            ],
+            "properties": {
+                "chapter_number": {
+                    "description": "ChapterNumber 表示章节号，必须由客户端传入且大于 0。",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content 表示章节正文，可以为空。",
+                    "type": "string",
+                    "example": "夜色像墨一样铺开。"
+                },
+                "title": {
+                    "description": "Title 表示章节名，不能为空。",
+                    "type": "string",
+                    "example": "初入长夜"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_chapter.UpdateRequest": {
+            "type": "object",
+            "required": [
+                "title"
+            ],
+            "properties": {
+                "content": {
+                    "description": "Content 表示章节正文，可以为空。",
+                    "type": "string",
+                    "example": "夜色像墨一样铺开。"
+                },
+                "title": {
+                    "description": "Title 表示章节名，不能为空。",
+                    "type": "string",
+                    "example": "初入长夜"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_character.CreateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "ability": {
+                    "description": "Ability 表示角色能力，可以为空。",
+                    "type": "string",
+                    "example": "擅长御剑与阵法。"
+                },
+                "background": {
+                    "description": "Background 表示角色背景，可以为空。",
+                    "type": "string",
+                    "example": "出身边城旧族。"
+                },
+                "gender": {
+                    "description": "Gender 表示角色性别，可以为空。",
+                    "type": "string",
+                    "example": "女"
+                },
+                "goal": {
+                    "description": "Goal 表示角色目的，可以为空。",
+                    "type": "string",
+                    "example": "寻找失踪的兄长。"
+                },
+                "name": {
+                    "description": "Name 表示角色姓名，不能为空。",
+                    "type": "string",
+                    "example": "林知夏"
+                },
+                "personality": {
+                    "description": "Personality 表示角色性格，可以为空。",
+                    "type": "string",
+                    "example": "冷静克制，重诺。"
+                },
+                "portrait_url": {
+                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
+                    "type": "string",
+                    "example": "covers/character-a.webp"
+                },
+                "tags": {
+                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "主角,剑修"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_character.UpdateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "ability": {
+                    "description": "Ability 表示角色能力，可以为空。",
+                    "type": "string",
+                    "example": "擅长御剑与阵法。"
+                },
+                "background": {
+                    "description": "Background 表示角色背景，可以为空。",
+                    "type": "string",
+                    "example": "出身边城旧族。"
+                },
+                "gender": {
+                    "description": "Gender 表示角色性别，可以为空。",
+                    "type": "string",
+                    "example": "女"
+                },
+                "goal": {
+                    "description": "Goal 表示角色目的，可以为空。",
+                    "type": "string",
+                    "example": "寻找失踪的兄长。"
+                },
+                "name": {
+                    "description": "Name 表示角色姓名，不能为空。",
+                    "type": "string",
+                    "example": "林知夏"
+                },
+                "personality": {
+                    "description": "Personality 表示角色性格，可以为空。",
+                    "type": "string",
+                    "example": "冷静克制，重诺。"
+                },
+                "portrait_url": {
+                    "description": "PortraitURL 表示肖像图链接或对象存储 key，可以为空。",
+                    "type": "string",
+                    "example": "covers/character-a.webp"
+                },
+                "tags": {
+                    "description": "Tags 表示角色标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "主角,剑修"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_event.LayoutNodeRequest": {
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "description": "EventID 表示事件主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "position_x": {
+                    "description": "PositionX 表示事件节点画布 X 坐标。",
+                    "type": "number",
+                    "example": 120
+                },
+                "position_y": {
+                    "description": "PositionY 表示事件节点画布 Y 坐标。",
+                    "type": "number",
+                    "example": 80
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_event.LayoutRequest": {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "description": "Nodes 表示需要保存坐标的事件节点列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/novels_ai_gen_internal_api_handler_event.LayoutNodeRequest"
+                    }
+                },
+                "viewport": {
+                    "description": "Viewport 表示事件图画布视口。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/event.ViewportData"
+                        }
+                    ]
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_event.RelationCreateRequest": {
+            "type": "object",
+            "required": [
+                "source_event_id",
+                "target_event_id"
+            ],
+            "properties": {
+                "note": {
+                    "description": "Note 表示关系线备注，可以为空。",
+                    "type": "string",
+                    "example": "直接导致"
+                },
+                "source_event_id": {
+                    "description": "SourceEventID 表示前置事件 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "target_event_id": {
+                    "description": "TargetEventID 表示后续事件 ID。",
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_event.RelationUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "description": "Note 表示关系线备注，可以为空。",
+                    "type": "string",
+                    "example": "直接导致"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_novel.CreateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "author_name": {
+                    "description": "AuthorName 表示作者名，可以为空。",
+                    "type": "string",
+                    "example": "爱潜水的乌贼"
+                },
+                "cover_url": {
+                    "description": "CoverURL 表示封面链接，可以为空。",
+                    "type": "string",
+                    "example": "https://example.com/cover.jpg"
+                },
+                "description": {
+                    "description": "Description 表示简介，可以为空。",
+                    "type": "string",
+                    "example": "一部关于废土冒险的小说"
+                },
+                "name": {
+                    "description": "Name 表示小说名，不能为空。",
+                    "type": "string",
+                    "example": "长夜余火"
+                },
+                "status": {
+                    "description": "Status 表示小说状态，只允许连载中或已完结，未传时默认连载中。",
+                    "type": "string",
+                    "enum": [
+                        "连载中",
+                        "已完结"
+                    ],
+                    "example": "连载中"
+                },
+                "tags": {
+                    "description": "Tags 表示标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "玄幻,冒险"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_novel.UpdateRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "author_name": {
+                    "description": "AuthorName 表示作者名，可以为空。",
+                    "type": "string",
+                    "example": "爱潜水的乌贼"
+                },
+                "cover_url": {
+                    "description": "CoverURL 表示封面链接，可以为空。",
+                    "type": "string",
+                    "example": "https://example.com/cover.jpg"
+                },
+                "description": {
+                    "description": "Description 表示简介，可以为空。",
+                    "type": "string",
+                    "example": "一部关于废土冒险的小说"
+                },
+                "name": {
+                    "description": "Name 表示小说名，不能为空。",
+                    "type": "string",
+                    "example": "长夜余火"
+                },
+                "status": {
+                    "description": "Status 表示小说状态，只允许连载中或已完结，未传或空字符串时保留原状态。",
+                    "type": "string",
+                    "enum": [
+                        "连载中",
+                        "已完结"
+                    ],
+                    "example": "连载中"
+                },
+                "tags": {
+                    "description": "Tags 表示标签，可以为空，多个标签使用英文逗号分隔。",
+                    "type": "string",
+                    "example": "玄幻,冒险"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_novelagent.ChatRequest": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "description": "ChapterID 表示当前请求关联的章节 ID，普通对话可为空。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "message": {
+                    "description": "Message 表示用户输入的写作需求或问题。",
+                    "type": "string",
+                    "example": "帮我润色这一段，让语气更紧张"
+                },
+                "model": {
+                    "description": "Model 表示本次对话使用的模型标识。",
+                    "type": "string",
+                    "example": "gpt-5"
+                },
+                "novel_id": {
+                    "description": "NovelID 表示当前请求关联的小说 ID，普通对话可为空。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "provider_id": {
+                    "description": "ProviderID 表示本次对话使用的 AI 提供商 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_novelagent.StreamEvent": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示增量文本或完整文本内容。",
+                    "type": "string",
+                    "example": "雨夜里，门外的脚步声一点点逼近。"
+                },
+                "message": {
+                    "description": "Message 表示错误或状态说明。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                },
+                "stage": {
+                    "description": "Stage 表示 meta 事件所处阶段。",
+                    "type": "string",
+                    "example": "routed"
+                },
+                "task": {
+                    "description": "Task 表示顶层 Agent 选择的任务类型。",
+                    "type": "string",
+                    "example": "polish"
+                },
+                "type": {
+                    "description": "Type 表示事件类型，支持 meta、delta、done、error。",
+                    "type": "string",
+                    "example": "delta"
+                }
+            }
+        },
+        "novels_ai_gen_internal_api_handler_relationship.SaveRequest": {
+            "type": "object",
+            "properties": {
+                "edges": {
+                    "description": "Edges 表示当前画布中的无方向关系线列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.EdgeData"
+                    }
+                },
+                "nodes": {
+                    "description": "Nodes 表示当前画布中的角色节点列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.NodeData"
+                    }
+                },
+                "viewport": {
+                    "description": "Viewport 表示画布视口。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/relationship.ViewportData"
+                        }
+                    ]
+                }
+            }
+        },
+        "relationship.EdgeData": {
+            "type": "object",
+            "properties": {
+                "character_a_id": {
+                    "description": "CharacterAID 表示无方向关系线中较小的角色卡 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "character_b_id": {
+                    "description": "CharacterBID 表示无方向关系线中较大的角色卡 ID。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "id": {
+                    "description": "ID 表示关系线稳定 ID，由两个角色 ID 计算得到。",
+                    "type": "string",
+                    "example": "rel-1-2"
+                },
+                "note": {
+                    "description": "Note 表示关系线备注，用于描述两个角色之间的关系。",
+                    "type": "string",
+                    "example": "旧友"
+                },
+                "source_handle": {
+                    "description": "SourceHandle 表示较小角色卡端使用的连接点 ID。",
+                    "type": "string",
+                    "example": "right"
+                },
+                "target_handle": {
+                    "description": "TargetHandle 表示较大角色卡端使用的连接点 ID。",
+                    "type": "string",
+                    "example": "left"
+                }
+            }
+        },
+        "relationship.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
+                    "type": "integer",
+                    "example": 400
+                },
+                "message": {
+                    "description": "Message 表示用户可理解的错误提示。",
+                    "type": "string",
+                    "example": "请求参数错误"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "relationship.GraphData": {
+            "type": "object",
+            "properties": {
+                "edges": {
+                    "description": "Edges 表示当前画布中的无方向关系线列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.EdgeData"
+                    }
+                },
+                "nodes": {
+                    "description": "Nodes 表示当前画布中的角色节点列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/relationship.NodeData"
+                    }
+                },
+                "novel_id": {
+                    "description": "NovelID 表示小说主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示关系图最后更新时间；关系图尚未保存时为空。",
+                    "type": "string",
+                    "example": "2026-06-15T10:00:00+08:00"
+                },
+                "viewport": {
+                    "description": "Viewport 表示画布视口。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/relationship.ViewportData"
+                        }
+                    ]
+                }
+            }
+        },
+        "relationship.NodeData": {
+            "type": "object",
+            "properties": {
+                "character_id": {
+                    "description": "CharacterID 表示画布节点引用的角色卡 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "position_x": {
+                    "description": "PositionX 表示节点在画布中的 X 坐标。",
+                    "type": "number",
+                    "example": 120
+                },
+                "position_y": {
+                    "description": "PositionY 表示节点在画布中的 Y 坐标。",
+                    "type": "number",
+                    "example": 80
+                }
+            }
+        },
+        "relationship.SuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示角色关系图响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/relationship.GraphData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "relationship.ViewportData": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "description": "X 表示画布视口 X 坐标。",
+                    "type": "number",
+                    "example": 0
+                },
+                "y": {
+                    "description": "Y 表示画布视口 Y 坐标。",
+                    "type": "number",
+                    "example": 0
+                },
+                "zoom": {
+                    "description": "Zoom 表示画布视口缩放比例。",
+                    "type": "number",
+                    "example": 1
+                }
+            }
+        },
+        "response.Body": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0，失败使用 HTTP 状态码。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示响应数据内容。"
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "response.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
+                    "type": "integer",
+                    "example": 400
+                },
+                "message": {
+                    "description": "Message 表示用户可理解的错误提示。",
+                    "type": "string",
+                    "example": "请求参数错误"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "system.UpdateData": {
             "type": "object",
             "properties": {
                 "branch": {
@@ -5082,6 +5585,165 @@ const docTemplate = `{
                     "description": "Restarting 表示是否已经启动后台重启脚本。",
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "system.UpdateSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示系统更新结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/system.UpdateData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "upload.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示错误响应码，使用 HTTP 状态码。",
+                    "type": "integer",
+                    "example": 400
+                },
+                "message": {
+                    "description": "Message 表示用户可理解的错误提示。",
+                    "type": "string",
+                    "example": "请求参数错误"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "upload.PreviewData": {
+            "type": "object",
+            "properties": {
+                "object_key": {
+                    "description": "ObjectKey 表示图片保存在对象存储中的对象 key。",
+                    "type": "string",
+                    "example": "covers/2026/06/9f1c1c0a1b2c3d4e.png"
+                },
+                "preview_expires_at": {
+                    "description": "PreviewExpiresAt 表示预签名预览链接过期时间。",
+                    "type": "string",
+                    "example": "2026-06-15T22:00:00+08:00"
+                },
+                "preview_url": {
+                    "description": "PreviewURL 表示可直接预览私有图片的预签名链接。",
+                    "type": "string",
+                    "example": "https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=..."
+                }
+            }
+        },
+        "upload.PreviewSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示刷新预览链接后的响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/upload.PreviewData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "upload.UploadImageData": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "description": "ContentType 表示根据文件内容探测出的 MIME 类型。",
+                    "type": "string",
+                    "example": "image/png"
+                },
+                "object_key": {
+                    "description": "ObjectKey 表示图片保存在对象存储中的对象 key。",
+                    "type": "string",
+                    "example": "covers/2026/06/9f1c1c0a1b2c3d4e.png"
+                },
+                "original_filename": {
+                    "description": "OriginalFilename 表示用户上传文件的原始文件名。",
+                    "type": "string",
+                    "example": "cover.png"
+                },
+                "preview_expires_at": {
+                    "description": "PreviewExpiresAt 表示预签名预览链接过期时间。",
+                    "type": "string",
+                    "example": "2026-06-15T22:00:00+08:00"
+                },
+                "preview_url": {
+                    "description": "PreviewURL 表示可直接预览私有图片的预签名链接。",
+                    "type": "string",
+                    "example": "https://s3.example.com/bucket/covers/2026/06/example.png?X-Amz-Signature=..."
+                },
+                "size": {
+                    "description": "Size 表示上传文件大小，单位为字节。",
+                    "type": "integer",
+                    "example": 1024
+                }
+            }
+        },
+        "upload.UploadImageSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示图片上传成功后的响应数据。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/upload.UploadImageData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
                 }
             }
         }

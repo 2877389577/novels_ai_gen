@@ -7,19 +7,15 @@ import (
 )
 
 const (
-	defaultPage          = 1
-	defaultPageSize      = 20
-	maxPageSize          = 100
-	providerTypeOpenAI   = "openai"
-	providerTypeClaude   = "claude"
-	providerTypeGemini   = "gemini"
-	apiTypeResponse      = "response"
-	apiTypeCompletions   = "completions"
-	defaultAPIType       = apiTypeResponse
-	defaultMaxTokens     = 1024
-	defaultTemperature   = 0.5
-	defaultTopP          = 0.5
-	defaultThinkingLevel = 0
+	defaultPage        = 1
+	defaultPageSize    = 20
+	maxPageSize        = 100
+	providerTypeOpenAI = "openai"
+	providerTypeClaude = "claude"
+	providerTypeGemini = "gemini"
+	apiTypeResponse    = "response"
+	apiTypeCompletions = "completions"
+	defaultAPIType     = apiTypeCompletions
 )
 
 // Repository 表示 AI 提供商数据仓储接口。
@@ -41,20 +37,30 @@ type Repository interface {
 	Delete(ctx context.Context, id uint64) error
 }
 
+// ModelFetcher 表示按 AI 提供商官方协议查询模型列表的依赖。
+type ModelFetcher interface {
+	// ListModels 查询 AI 提供商官方模型列表。
+	// 参数 ctx 表示请求上下文；参数 req 表示模型列表查询请求参数。
+	ListModels(ctx context.Context, req ModelListRequest) (ModelListResponse, error)
+}
+
 // Service 表示 AI 提供商业务服务。
 type Service struct {
 	// repo 表示 AI 提供商数据仓储。
 	repo Repository
 	// cipher 表示 API Key 加解密器。
 	cipher *Cipher
+	// modelFetcher 表示官方模型列表查询依赖。
+	modelFetcher ModelFetcher
 }
 
 // NewService 创建 AI 提供商业务服务。
-// 参数 repo 表示 AI 提供商数据仓储；参数 cipher 表示 API Key 加解密器。
-func NewService(repo Repository, cipher *Cipher) *Service {
+// 参数 repo 表示 AI 提供商数据仓储；参数 cipher 表示 API Key 加解密器；参数 modelFetcher 表示官方模型列表查询依赖。
+func NewService(repo Repository, cipher *Cipher, modelFetcher ModelFetcher) *Service {
 	return &Service{
-		repo:   repo,
-		cipher: cipher,
+		repo:         repo,
+		cipher:       cipher,
+		modelFetcher: modelFetcher,
 	}
 }
 
@@ -63,11 +69,6 @@ func NewService(repo Repository, cipher *Cipher) *Service {
 func (s *Service) Create(ctx context.Context, req CreateRequest) (ProviderResponse, error) {
 	req = normalizeCreateRequest(req)
 	if err := validateCreateRequest(req); err != nil {
-		return ProviderResponse{}, err
-	}
-
-	values, err := createValuesFromRequest(req)
-	if err != nil {
 		return ProviderResponse{}, err
 	}
 
@@ -81,14 +82,9 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (ProviderRespon
 		ProviderType:     req.ProviderType,
 		APIKeyCiphertext: ciphertext,
 		APIKeyMask:       maskAPIKey(req.APIKey),
-		Model:            req.Model,
 		BaseURL:          req.BaseURL,
-		APIType:          values.apiType,
-		MaxTokens:        values.maxTokens,
-		Temperature:      values.temperature,
-		TopP:             values.topP,
-		ThinkingLevel:    values.thinkingLevel,
-		Enabled:          values.enabled,
+		APIType:          providerAPIType(req.ProviderType, req.APIType),
+		Enabled:          enabledFromCreateRequest(req),
 	}
 	if err := s.repo.Create(ctx, item); err != nil {
 		return ProviderResponse{}, fmt.Errorf("创建 AI 提供商失败: %w", err)
@@ -159,84 +155,22 @@ func (s *Service) Delete(ctx context.Context, id uint64) error {
 	return nil
 }
 
-// requestValues 表示从请求参数中解析出的 AI 提供商配置值。
-type requestValues struct {
-	// apiType 表示 AI 接口类型。
-	apiType string
-	// maxTokens 表示最大输出 token 数。
-	maxTokens int
-	// temperature 表示采样温度。
-	temperature float64
-	// topP 表示 nucleus sampling 参数。
-	topP float64
-	// thinkingLevel 表示思考等级。
-	thinkingLevel int
-	// enabled 表示是否启用该 AI 提供商。
-	enabled bool
-}
-
-// createValuesFromRequest 从创建请求中解析默认值和显式传入值。
-// 参数 req 表示已经标准化的创建 AI 提供商请求参数。
-func createValuesFromRequest(req CreateRequest) (requestValues, error) {
-	values := requestValues{
-		apiType:       defaultAPIType,
-		maxTokens:     defaultMaxTokens,
-		temperature:   defaultTemperature,
-		topP:          defaultTopP,
-		thinkingLevel: defaultThinkingLevel,
-		enabled:       true,
-	}
-	if req.APIType != "" {
-		values.apiType = req.APIType
-	}
-	if req.MaxTokens != nil {
-		values.maxTokens = *req.MaxTokens
-	}
-	if req.Temperature != nil {
-		values.temperature = *req.Temperature
-	}
-	if req.TopP != nil {
-		values.topP = *req.TopP
-	}
-	if req.ThinkingLevel != nil {
-		values.thinkingLevel = *req.ThinkingLevel
-	}
-	if req.Enabled != nil {
-		values.enabled = *req.Enabled
-	}
-	if err := validateValues(values); err != nil {
-		return requestValues{}, err
-	}
-	return values, nil
-}
-
 // applyUpdateRequest 将更新请求应用到已有 AI 提供商模型。
 // 参数 cipher 表示 API Key 加解密器；参数 item 表示已有 AI 提供商模型；参数 req 表示更新请求参数。
 func applyUpdateRequest(cipher *Cipher, item *Provider, req UpdateRequest) error {
 	item.Name = req.Name
 	item.ProviderType = req.ProviderType
-	item.Model = req.Model
 	item.BaseURL = req.BaseURL
-	if req.APIType != "" {
+	if item.ProviderType == providerTypeOpenAI {
+		item.APIType = apiTypeCompletions
+	} else if req.APIType != "" {
 		item.APIType = req.APIType
-	}
-	if req.MaxTokens != nil {
-		item.MaxTokens = *req.MaxTokens
-	}
-	if req.Temperature != nil {
-		item.Temperature = *req.Temperature
-	}
-	if req.TopP != nil {
-		item.TopP = *req.TopP
-	}
-	if req.ThinkingLevel != nil {
-		item.ThinkingLevel = *req.ThinkingLevel
 	}
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
 	}
-	if err := validateProviderValues(*item); err != nil {
-		return err
+	if !isAllowedAPIType(item.APIType) {
+		return ErrInvalidAPIType
 	}
 	if req.APIKey == "" {
 		return nil
@@ -251,13 +185,66 @@ func applyUpdateRequest(cipher *Cipher, item *Provider, req UpdateRequest) error
 	return nil
 }
 
+// ListModels 按 AI 提供商官方协议查询模型列表。
+// 参数 ctx 表示请求上下文；参数 req 表示模型列表查询请求参数。
+func (s *Service) ListModels(ctx context.Context, req ModelListRequest) (ModelListResponse, error) {
+	req = normalizeModelListRequest(req)
+	if err := validateModelListRequest(req); err != nil {
+		return ModelListResponse{}, err
+	}
+	if s.modelFetcher == nil {
+		return ModelListResponse{}, ErrModelListUnavailable
+	}
+	return s.modelFetcher.ListModels(ctx, req)
+}
+
+// ListModelsByProviderID 使用已保存 AI 提供商配置查询官方模型列表。
+// 参数 ctx 表示请求上下文；参数 id 表示 AI 提供商主键 ID。
+func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64) (ModelListResponse, error) {
+	item, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return ModelListResponse{}, fmt.Errorf("查询 AI 提供商失败: %w", err)
+	}
+
+	apiKey, err := s.cipher.Decrypt(item.APIKeyCiphertext)
+	if err != nil {
+		return ModelListResponse{}, fmt.Errorf("解密 AI 提供商 API Key 失败: %w", err)
+	}
+
+	return s.ListModels(ctx, ModelListRequest{
+		ProviderType: item.ProviderType,
+		APIKey:       apiKey,
+		BaseURL:      item.BaseURL,
+	})
+}
+
+// providerAPIType 根据 AI 提供商协议返回最终保存的接口类型。
+// 参数 providerType 表示 AI 提供商协议类型；参数 apiType 表示请求传入的接口类型。
+func providerAPIType(providerType string, apiType string) string {
+	if providerType == providerTypeOpenAI {
+		return apiTypeCompletions
+	}
+	if apiType == "" {
+		return defaultAPIType
+	}
+	return apiType
+}
+
+// enabledFromCreateRequest 返回创建请求中的启用状态默认值。
+// 参数 req 表示已经标准化的创建 AI 提供商请求参数。
+func enabledFromCreateRequest(req CreateRequest) bool {
+	if req.Enabled == nil {
+		return true
+	}
+	return *req.Enabled
+}
+
 // normalizeCreateRequest 标准化创建 AI 提供商请求参数。
 // 参数 req 表示创建 AI 提供商请求参数。
 func normalizeCreateRequest(req CreateRequest) CreateRequest {
 	req.Name = strings.TrimSpace(req.Name)
 	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
 	req.APIKey = strings.TrimSpace(req.APIKey)
-	req.Model = strings.TrimSpace(req.Model)
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
 	req.APIType = strings.ToLower(strings.TrimSpace(req.APIType))
 	return req
@@ -269,9 +256,17 @@ func normalizeUpdateRequest(req UpdateRequest) UpdateRequest {
 	req.Name = strings.TrimSpace(req.Name)
 	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
 	req.APIKey = strings.TrimSpace(req.APIKey)
-	req.Model = strings.TrimSpace(req.Model)
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
 	req.APIType = strings.ToLower(strings.TrimSpace(req.APIType))
+	return req
+}
+
+// normalizeModelListRequest 标准化模型列表查询请求参数。
+// 参数 req 表示模型列表查询请求参数。
+func normalizeModelListRequest(req ModelListRequest) ModelListRequest {
+	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
+	req.APIKey = strings.TrimSpace(req.APIKey)
+	req.BaseURL = strings.TrimSpace(req.BaseURL)
 	return req
 }
 
@@ -305,8 +300,8 @@ func validateCreateRequest(req CreateRequest) error {
 	if req.APIKey == "" {
 		return ErrAPIKeyRequired
 	}
-	if req.Model == "" {
-		return ErrModelRequired
+	if req.APIType != "" && !isAllowedAPIType(req.APIType) {
+		return ErrInvalidAPIType
 	}
 	return nil
 }
@@ -323,44 +318,25 @@ func validateUpdateRequest(req UpdateRequest) error {
 	if !isAllowedProviderType(req.ProviderType) {
 		return ErrInvalidProviderType
 	}
-	if req.Model == "" {
-		return ErrModelRequired
-	}
-	return nil
-}
-
-// validateValues 校验请求解析出的 AI 提供商配置值。
-// 参数 values 表示需要校验的 AI 提供商配置值。
-func validateValues(values requestValues) error {
-	if !isAllowedAPIType(values.apiType) {
+	if req.APIType != "" && !isAllowedAPIType(req.APIType) {
 		return ErrInvalidAPIType
 	}
-	if values.maxTokens <= 0 {
-		return ErrInvalidMaxTokens
-	}
-	if values.temperature < 0 {
-		return ErrInvalidTemperature
-	}
-	if values.topP < 0 || values.topP > 1 {
-		return ErrInvalidTopP
-	}
-	if values.thinkingLevel < 0 {
-		return ErrInvalidThinkingLevel
-	}
 	return nil
 }
 
-// validateProviderValues 校验 AI 提供商模型中的配置值。
-// 参数 provider 表示需要校验的 AI 提供商模型。
-func validateProviderValues(provider Provider) error {
-	return validateValues(requestValues{
-		apiType:       provider.APIType,
-		maxTokens:     provider.MaxTokens,
-		temperature:   provider.Temperature,
-		topP:          provider.TopP,
-		thinkingLevel: provider.ThinkingLevel,
-		enabled:       provider.Enabled,
-	})
+// validateModelListRequest 校验模型列表查询请求参数。
+// 参数 req 表示已经标准化的模型列表查询请求参数。
+func validateModelListRequest(req ModelListRequest) error {
+	if req.ProviderType == "" {
+		return ErrProviderTypeRequired
+	}
+	if !isAllowedProviderType(req.ProviderType) {
+		return ErrInvalidProviderType
+	}
+	if req.APIKey == "" {
+		return ErrAPIKeyRequired
+	}
+	return nil
 }
 
 // isAllowedProviderType 判断 AI 提供商类型是否在系统允许范围内。
@@ -399,20 +375,15 @@ func maskAPIKey(value string) string {
 // 参数 item 表示 AI 提供商模型。
 func toResponse(item Provider) ProviderResponse {
 	return ProviderResponse{
-		ID:            item.ID,
-		Name:          item.Name,
-		ProviderType:  item.ProviderType,
-		MaskedAPIKey:  item.APIKeyMask,
-		Model:         item.Model,
-		BaseURL:       item.BaseURL,
-		APIType:       item.APIType,
-		MaxTokens:     item.MaxTokens,
-		Temperature:   item.Temperature,
-		TopP:          item.TopP,
-		ThinkingLevel: item.ThinkingLevel,
-		Enabled:       item.Enabled,
-		CreatedAt:     item.CreatedAt,
-		UpdatedAt:     item.UpdatedAt,
+		ID:           item.ID,
+		Name:         item.Name,
+		ProviderType: item.ProviderType,
+		MaskedAPIKey: item.APIKeyMask,
+		BaseURL:      item.BaseURL,
+		APIType:      item.APIType,
+		Enabled:      item.Enabled,
+		CreatedAt:    item.CreatedAt,
+		UpdatedAt:    item.UpdatedAt,
 	}
 }
 

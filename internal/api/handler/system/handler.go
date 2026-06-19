@@ -16,6 +16,18 @@ type Handler struct {
 	service *bizsystem.Service
 }
 
+// UpdateData 表示系统更新接口 Swagger 响应数据。
+type UpdateData struct {
+	// Branch 表示本次更新拉取的目标分支。
+	Branch string `json:"branch" example:"main"`
+	// CommitBefore 表示更新前当前仓库的 commit。
+	CommitBefore string `json:"commit_before" example:"f3c2d1e"`
+	// CommitAfter 表示更新后当前仓库的 commit。
+	CommitAfter string `json:"commit_after" example:"a8b7c6d"`
+	// Restarting 表示是否已经启动后台重启脚本。
+	Restarting bool `json:"restarting" example:"true"`
+}
+
 // UpdateSuccessResponse 表示系统更新接口 Swagger 成功响应结构。
 type UpdateSuccessResponse struct {
 	// Code 表示业务响应码，成功固定为 0。
@@ -25,7 +37,7 @@ type UpdateSuccessResponse struct {
 	// RequestID 表示本次请求的追踪标识。
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示系统更新结果。
-	Data bizsystem.UpdateResult `json:"data"`
+	Data UpdateData `json:"data"`
 }
 
 // NewHandler 创建系统维护 HTTP 处理器。

@@ -14,20 +14,10 @@ type Provider struct {
 	APIKeyCiphertext string `json:"-" gorm:"column:api_key_ciphertext;type:text;not null;comment:加密后的API Key密文，接口不回显"`
 	// APIKeyMask 表示 API Key 掩码，仅用于列表和详情展示。
 	APIKeyMask string `json:"masked_api_key" gorm:"column:api_key_mask;type:varchar(255);not null;comment:API Key掩码，仅用于列表和详情展示" example:"sk-p...abcd"`
-	// Model 表示 AI 模型名称，不能为空。
-	Model string `json:"model" gorm:"column:model;type:varchar(255);not null;comment:AI模型名称，不能为空" example:"gpt-5"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" gorm:"column:base_url;type:varchar(1000);comment:AI提供商接口基础地址，可以为空" example:"https://api.openai.com/v1"`
-	// APIType 表示 AI 接口类型，只能是 response 或 completions，默认 response。
-	APIType string `json:"api_type" gorm:"column:api_type;type:varchar(64);not null;default:response;comment:AI接口类型，只能是response或completions，默认response" example:"response"`
-	// MaxTokens 表示最大输出 token 数，必须大于 0。
-	MaxTokens int `json:"max_tokens" gorm:"column:max_tokens;not null;default:1024;comment:最大输出token数，必须大于0" example:"1024"`
-	// Temperature 表示采样温度，不能小于 0。
-	Temperature float64 `json:"temperature" gorm:"column:temperature;not null;default:0.5;comment:采样温度，不能小于0" example:"0.5"`
-	// TopP 表示 nucleus sampling 参数，必须在 0 到 1 之间。
-	TopP float64 `json:"top_p" gorm:"column:top_p;not null;default:0.5;comment:nucleus sampling参数，必须在0到1之间" example:"0.5"`
-	// ThinkingLevel 表示思考等级，不能小于 0。
-	ThinkingLevel int `json:"thinking_level" gorm:"column:thinking_level;not null;default:0;comment:思考等级，不能小于0" example:"0"`
+	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
+	APIType string `json:"api_type" gorm:"column:api_type;type:varchar(64);not null;default:completions;comment:AI接口类型，只能是response或completions，OpenAI提供商固定使用completions" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。
 	Enabled bool `json:"enabled" gorm:"column:enabled;not null;default:true;index:idx_ai_providers_enabled;comment:是否启用该AI提供商" example:"true"`
 	// CreatedAt 表示创建时间。
@@ -49,20 +39,10 @@ type CreateRequest struct {
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示 AI 提供商 API Key，创建时不能为空。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
-	// Model 表示 AI 模型名称，不能为空。
-	Model string `json:"model" binding:"required" example:"gpt-5"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
-	// APIType 表示 AI 接口类型，只能是 response 或 completions，未传时默认 response。
-	APIType string `json:"api_type" example:"response"`
-	// MaxTokens 表示最大输出 token 数；nil 表示使用默认值。
-	MaxTokens *int `json:"max_tokens" example:"1024"`
-	// Temperature 表示采样温度；nil 表示使用默认值。
-	Temperature *float64 `json:"temperature" example:"0.5"`
-	// TopP 表示 nucleus sampling 参数；nil 表示使用默认值。
-	TopP *float64 `json:"top_p" example:"0.5"`
-	// ThinkingLevel 表示思考等级；nil 表示使用默认值。
-	ThinkingLevel *int `json:"thinking_level" example:"0"`
+	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
+	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；nil 表示默认启用。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -75,20 +55,10 @@ type UpdateRequest struct {
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。
 	APIKey string `json:"api_key" example:"sk-xxx"`
-	// Model 表示 AI 模型名称，不能为空。
-	Model string `json:"model" binding:"required" example:"gpt-5"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
-	APIType string `json:"api_type" example:"response"`
-	// MaxTokens 表示最大输出 token 数；nil 表示保留原值。
-	MaxTokens *int `json:"max_tokens" example:"1024"`
-	// Temperature 表示采样温度；nil 表示保留原值。
-	Temperature *float64 `json:"temperature" example:"0.5"`
-	// TopP 表示 nucleus sampling 参数；nil 表示保留原值。
-	TopP *float64 `json:"top_p" example:"0.5"`
-	// ThinkingLevel 表示思考等级；nil 表示保留原值。
-	ThinkingLevel *int `json:"thinking_level" example:"0"`
+	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；nil 表示保留原值。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -111,20 +81,10 @@ type ProviderResponse struct {
 	ProviderType string `json:"provider_type" example:"openai"`
 	// MaskedAPIKey 表示 API Key 掩码。
 	MaskedAPIKey string `json:"masked_api_key" example:"sk-p...abcd"`
-	// Model 表示 AI 模型名称。
-	Model string `json:"model" example:"gpt-5"`
 	// BaseURL 表示 AI 提供商接口基础地址。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// APIType 表示 AI 接口类型。
-	APIType string `json:"api_type" example:"response"`
-	// MaxTokens 表示最大输出 token 数。
-	MaxTokens int `json:"max_tokens" example:"1024"`
-	// Temperature 表示采样温度。
-	Temperature float64 `json:"temperature" example:"0.5"`
-	// TopP 表示 nucleus sampling 参数。
-	TopP float64 `json:"top_p" example:"0.5"`
-	// ThinkingLevel 表示思考等级。
-	ThinkingLevel int `json:"thinking_level" example:"0"`
+	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。
 	Enabled bool `json:"enabled" example:"true"`
 	// CreatedAt 表示创建时间。
@@ -143,4 +103,34 @@ type ListResponse struct {
 	Page int `json:"page" example:"1"`
 	// PageSize 表示每页数量。
 	PageSize int `json:"page_size" example:"20"`
+}
+
+// ModelListRequest 表示根据 AI 提供商官方协议查询模型列表的请求参数。
+type ModelListRequest struct {
+	// ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
+	// APIKey 表示用于请求官方模型列表接口的 API Key。
+	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
+	// BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。
+	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+}
+
+// ModelInfo 表示 AI 提供商官方模型列表中的单个模型。
+type ModelInfo struct {
+	// ID 表示模型标识。
+	ID string `json:"id" example:"gpt-5"`
+	// DisplayName 表示模型展示名称；官方未提供时使用模型标识。
+	DisplayName string `json:"display_name" example:"GPT-5"`
+	// OwnedBy 表示模型归属方；官方未提供时为空。
+	OwnedBy string `json:"owned_by" example:"openai"`
+	// CreatedAt 表示模型创建时间；官方未提供时为空。
+	CreatedAt string `json:"created_at" example:"2026-06-18T12:00:00Z"`
+	// SupportedGenerationMethods 表示 Gemini 等协议返回的模型生成能力。
+	SupportedGenerationMethods []string `json:"supported_generation_methods"`
+}
+
+// ModelListResponse 表示 AI 提供商官方模型列表响应数据。
+type ModelListResponse struct {
+	// Items 表示官方返回并标准化后的模型列表。
+	Items []ModelInfo `json:"items"`
 }

@@ -23,6 +23,7 @@ import (
 	bizcharacter "novels_ai_gen/internal/biz/character"
 	bizevent "novels_ai_gen/internal/biz/event"
 	biznovel "novels_ai_gen/internal/biz/novel"
+	biznovelagent "novels_ai_gen/internal/biz/novelagent"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
@@ -54,6 +55,17 @@ var migrationModels = []any{
 	&bizevent.Event{},
 	&bizevent.Participant{},
 	&bizevent.Relation{},
+	&biznovelagent.Conversation{},
+	&biznovelagent.MessageRecord{},
+}
+
+// obsoleteAIProviderColumns 表示需要从旧版 AI 提供商表中物理删除的历史配置字段。
+var obsoleteAIProviderColumns = []string{
+	"model",
+	"max_tokens",
+	"temperature",
+	"top_p",
+	"thinking_level",
 }
 
 // Provider 根据完整应用配置初始化全局数据库连接，并返回 Wire 清理函数。
@@ -142,6 +154,22 @@ func migrate(conn *gorm.DB) error {
 		)
 		return fmt.Errorf("自动迁移数据库表失败: %w", err)
 	}
+	if err := dropObsoleteAIProviderColumns(conn); err != nil {
+		slog.Error(
+			"数据库历史字段清理失败",
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"error", err,
+		)
+		return err
+	}
+	if err := syncOpenAIProviderAPIType(conn); err != nil {
+		slog.Error(
+			"AI 提供商接口类型迁移失败",
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"error", err,
+		)
+		return err
+	}
 
 	slog.Info(
 		"数据库自动迁移完成",
@@ -150,6 +178,63 @@ func migrate(conn *gorm.DB) error {
 		"missing_models", missingModels,
 		"duration_ms", time.Since(startedAt).Milliseconds(),
 	)
+	return nil
+}
+
+// syncOpenAIProviderAPIType 将 OpenAI 协议提供商统一迁移为 completions 接口类型。
+// 参数 conn 表示已经完成自动迁移的 GORM 数据库连接。
+func syncOpenAIProviderAPIType(conn *gorm.DB) error {
+	migrator := conn.Migrator()
+	if !migrator.HasTable(&bizaiprovider.Provider{}) || !migrator.HasColumn(&bizaiprovider.Provider{}, "api_type") {
+		return nil
+	}
+
+	if err := alterAIProviderAPITypeDefault(conn); err != nil {
+		return err
+	}
+	if err := conn.Model(&bizaiprovider.Provider{}).
+		Where("provider_type = ?", "openai").
+		Update("api_type", "completions").Error; err != nil {
+		return fmt.Errorf("更新 OpenAI 提供商接口类型失败: %w", err)
+	}
+	return nil
+}
+
+// alterAIProviderAPITypeDefault 将 AI 提供商 api_type 列默认值改为 completions。
+// 参数 conn 表示已经完成自动迁移的 GORM 数据库连接。
+func alterAIProviderAPITypeDefault(conn *gorm.DB) error {
+	switch conn.Dialector.Name() {
+	case string(databaseTypeMySQL):
+		if err := conn.Exec("ALTER TABLE ai_providers MODIFY api_type VARCHAR(64) NOT NULL DEFAULT 'completions' COMMENT 'AI接口类型，只能是response或completions，OpenAI提供商固定使用completions'").Error; err != nil {
+			return fmt.Errorf("更新 MySQL AI 提供商接口类型默认值失败: %w", err)
+		}
+	case string(databaseTypePostgres):
+		if err := conn.Exec("ALTER TABLE ai_providers ALTER COLUMN api_type SET DEFAULT 'completions'").Error; err != nil {
+			return fmt.Errorf("更新 PostgreSQL AI 提供商接口类型默认值失败: %w", err)
+		}
+		if err := conn.Exec("COMMENT ON COLUMN ai_providers.api_type IS 'AI接口类型，只能是response或completions，OpenAI提供商固定使用completions'").Error; err != nil {
+			return fmt.Errorf("更新 PostgreSQL AI 提供商接口类型注释失败: %w", err)
+		}
+	}
+	return nil
+}
+
+// dropObsoleteAIProviderColumns 删除旧版 AI 提供商表中已经废弃的提供商级配置字段。
+// 参数 conn 表示已经完成自动迁移的 GORM 数据库连接。
+func dropObsoleteAIProviderColumns(conn *gorm.DB) error {
+	migrator := conn.Migrator()
+	if !migrator.HasTable(&bizaiprovider.Provider{}) {
+		return nil
+	}
+
+	for _, column := range obsoleteAIProviderColumns {
+		if !migrator.HasColumn(&bizaiprovider.Provider{}, column) {
+			continue
+		}
+		if err := migrator.DropColumn(&bizaiprovider.Provider{}, column); err != nil {
+			return fmt.Errorf("删除 AI 提供商历史字段 %s 失败: %w", column, err)
+		}
+	}
 	return nil
 }
 

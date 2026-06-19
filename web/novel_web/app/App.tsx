@@ -218,6 +218,20 @@ export function App() {
     [],
   );
 
+  // handleChapterPersisted 处理新增章节首次保存后替换为编辑页路由。
+  // 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID。
+  const handleChapterPersisted = useCallback(
+    function handleChapterPersisted(novelId: number, chapterId: number) {
+      navigateToRoute(
+        setRoute,
+        { view: "chapterEditor", novelId, chapterId },
+        chapterEditRoutePath(novelId, chapterId),
+        "replace",
+      );
+    },
+    [],
+  );
+
   // handleBackToNovelDetail 处理从章节编辑页返回小说详情。
   const handleBackToNovelDetail = useCallback(
     function handleBackToNovelDetail(novelId: number) {
@@ -252,6 +266,7 @@ export function App() {
         onBackToNovelDetail: handleBackToNovelDetail,
         onChapterCreate: handleChapterCreate,
         onChapterEdit: handleChapterEdit,
+        onChapterPersisted: handleChapterPersisted,
         onLoginSuccess: handleLoginSuccess,
         onNovelDeleted: handleNovelDeleted,
         onNovelSelect: handleNovelSelect,
@@ -277,6 +292,8 @@ interface RouteHandlers {
   onChapterCreate: (novelId: number) => void;
   // onChapterEdit 表示进入章节编辑页时执行的回调。
   onChapterEdit: (novelId: number, chapterId: number) => void;
+  // onChapterPersisted 表示新增章节首次保存成功后执行的路由替换回调。
+  onChapterPersisted: (novelId: number, chapterId: number) => void;
   // onLoginSuccess 表示登录成功后执行的回调。
   onLoginSuccess: () => void;
   // onNovelDeleted 表示详情页删除小说成功后执行的回调。
@@ -333,6 +350,7 @@ function renderRoute(route: AppRoute, handlers: RouteHandlers) {
           novelId={route.novelId}
           chapterId={route.chapterId}
           onBackToNovelDetail={handlers.onBackToNovelDetail}
+          onChapterPersisted={handlers.onChapterPersisted}
           onUnauthorized={handlers.onUnauthorized}
         />
       );

@@ -87,13 +87,8 @@ func (r *Repository) Update(ctx context.Context, provider *bizaiprovider.Provide
 			"provider_type":      provider.ProviderType,
 			"api_key_ciphertext": provider.APIKeyCiphertext,
 			"api_key_mask":       provider.APIKeyMask,
-			"model":              provider.Model,
 			"base_url":           provider.BaseURL,
 			"api_type":           provider.APIType,
-			"max_tokens":         provider.MaxTokens,
-			"temperature":        provider.Temperature,
-			"top_p":              provider.TopP,
-			"thinking_level":     provider.ThinkingLevel,
 			"enabled":            provider.Enabled,
 		})
 	if result.Error != nil {

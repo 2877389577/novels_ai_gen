@@ -70,20 +70,10 @@ interface AIProviderFormState {
   providerType: string;
   // apiKey 表示 AI 提供商 API Key。
   apiKey: string;
-  // model 表示 AI 模型名称。
-  model: string;
   // baseURL 表示 AI 提供商接口基础地址。
   baseURL: string;
   // apiType 表示 AI 接口类型。
   apiType: string;
-  // maxTokens 表示最大输出 token 数输入值。
-  maxTokens: string;
-  // temperature 表示采样温度输入值。
-  temperature: string;
-  // topP 表示 nucleus sampling 参数输入值。
-  topP: string;
-  // thinkingLevel 表示思考等级输入值。
-  thinkingLevel: string;
   // enabled 表示是否启用该 AI 提供商。
   enabled: boolean;
 }
@@ -99,20 +89,15 @@ const aiProviderAPITypeOptions: {
   value: AIProviderAPIType;
   label: string;
 }[] = [
-  { value: "response", label: "response" },
   { value: "completions", label: "completions" },
+  { value: "response", label: "response" },
 ];
 const defaultAIProviderFormState: AIProviderFormState = {
   name: "",
   providerType: "openai",
   apiKey: "",
-  model: "gpt-5",
   baseURL: "",
-  apiType: "response",
-  maxTokens: "1024",
-  temperature: "0.5",
-  topP: "0.5",
-  thinkingLevel: "0",
+  apiType: "completions",
   enabled: true,
 };
 
@@ -546,23 +531,16 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
         case "name":
           return { ...current, name: value };
         case "providerType":
+          if (value === "openai") {
+            return { ...current, providerType: value, apiType: "completions" };
+          }
           return { ...current, providerType: value };
         case "apiKey":
           return { ...current, apiKey: value };
-        case "model":
-          return { ...current, model: value };
         case "baseURL":
           return { ...current, baseURL: value };
         case "apiType":
           return { ...current, apiType: value };
-        case "maxTokens":
-          return { ...current, maxTokens: value };
-        case "temperature":
-          return { ...current, temperature: value };
-        case "topP":
-          return { ...current, topP: value };
-        case "thinkingLevel":
-          return { ...current, thinkingLevel: value };
         default:
           return current;
       }
@@ -780,9 +758,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                     <div className="ai-provider-card-heading">
                       <div>
                         <h3>{provider.name}</h3>
-                        <p>
-                          {provider.provider_type} / {provider.model}
-                        </p>
+                        <p>{provider.provider_type}</p>
                       </div>
                       <span
                         className={
@@ -809,17 +785,6 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                         <dd title={provider.base_url}>
                           {formatOptionalText(provider.base_url)}
                         </dd>
-                      </div>
-                      <div>
-                        <dt>参数</dt>
-                        <dd>
-                          {provider.max_tokens} tokens / temp{" "}
-                          {provider.temperature} / top_p {provider.top_p}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>思考等级</dt>
-                        <dd>{provider.thinking_level}</dd>
                       </div>
                       <div>
                         <dt>更新</dt>
@@ -919,16 +884,6 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                 onChange={handleFormInputChange}
               />
             </label>
-            <label className="ai-provider-field">
-              <span>模型</span>
-              <input
-                name="model"
-                value={form.model}
-                disabled={submitting}
-                placeholder="gpt-5"
-                onChange={handleFormInputChange}
-              />
-            </label>
             <label className="ai-provider-field ai-provider-field-wide">
               <span>Base URL</span>
               <input
@@ -949,7 +904,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                       name="apiType"
                       value={option.value}
                       checked={form.apiType === option.value}
-                      disabled={submitting}
+                      disabled={submitting || form.providerType === "openai"}
                       onChange={handleFormInputChange}
                     />
                     <span>{option.label}</span>
@@ -957,55 +912,6 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                 ))}
               </div>
             </fieldset>
-            <label className="ai-provider-field">
-              <span>max tokens</span>
-              <input
-                name="maxTokens"
-                type="number"
-                min="1"
-                step="1"
-                value={form.maxTokens}
-                disabled={submitting}
-                onChange={handleFormInputChange}
-              />
-            </label>
-            <label className="ai-provider-field">
-              <span>temperature</span>
-              <input
-                name="temperature"
-                type="number"
-                min="0"
-                step="0.1"
-                value={form.temperature}
-                disabled={submitting}
-                onChange={handleFormInputChange}
-              />
-            </label>
-            <label className="ai-provider-field">
-              <span>top_p</span>
-              <input
-                name="topP"
-                type="number"
-                min="0"
-                max="1"
-                step="0.01"
-                value={form.topP}
-                disabled={submitting}
-                onChange={handleFormInputChange}
-              />
-            </label>
-            <label className="ai-provider-field">
-              <span>思考等级</span>
-              <input
-                name="thinkingLevel"
-                type="number"
-                min="0"
-                step="1"
-                value={form.thinkingLevel}
-                disabled={submitting}
-                onChange={handleFormInputChange}
-              />
-            </label>
             <label className="ai-provider-toggle-field">
               <input
                 type="checkbox"
@@ -1130,13 +1036,8 @@ function providerToAIProviderFormState(
     name: provider.name,
     providerType: provider.provider_type,
     apiKey: "",
-    model: provider.model,
     baseURL: provider.base_url,
-    apiType: provider.api_type,
-    maxTokens: String(provider.max_tokens),
-    temperature: String(provider.temperature),
-    topP: String(provider.top_p),
-    thinkingLevel: String(provider.thinking_level),
+    apiType: provider.provider_type === "openai" ? "completions" : provider.api_type,
     enabled: provider.enabled,
   };
 }
@@ -1159,41 +1060,9 @@ function validateAIProviderForm(
   if (mode === "create" && !form.apiKey.trim()) {
     return "AI 提供商 API Key 不能为空";
   }
-  if (!form.model.trim()) {
-    return "AI 模型名称不能为空";
-  }
   if (!isAIProviderAPIType(form.apiType)) {
     return "AI 接口类型只能是 response 或 completions";
   }
-
-  const maxTokens = Number(form.maxTokens.trim());
-  if (
-    !form.maxTokens.trim() ||
-    !Number.isInteger(maxTokens) ||
-    maxTokens <= 0
-  ) {
-    return "最大输出 token 数必须是大于 0 的整数";
-  }
-
-  const temperature = Number(form.temperature.trim());
-  if (!form.temperature.trim() || Number.isNaN(temperature) || temperature < 0) {
-    return "temperature 不能小于 0";
-  }
-
-  const topP = Number(form.topP.trim());
-  if (!form.topP.trim() || Number.isNaN(topP) || topP < 0 || topP > 1) {
-    return "top_p 必须在 0 到 1 之间";
-  }
-
-  const thinkingLevel = Number(form.thinkingLevel.trim());
-  if (
-    !form.thinkingLevel.trim() ||
-    !Number.isInteger(thinkingLevel) ||
-    thinkingLevel < 0
-  ) {
-    return "思考等级必须是大于等于 0 的整数";
-  }
-
   return "";
 }
 
@@ -1203,19 +1072,17 @@ function toAIProviderUpsertParams(
   form: AIProviderFormState,
 ): AIProviderUpsertParams {
   const providerType = form.providerType.trim() as AIProviderType;
-  const apiType = form.apiType.trim() as AIProviderAPIType;
+  const apiType =
+    providerType === "openai"
+      ? "completions"
+      : (form.apiType.trim() as AIProviderAPIType);
 
   return {
     name: form.name.trim(),
     provider_type: providerType,
     api_key: form.apiKey.trim(),
-    model: form.model.trim(),
     base_url: form.baseURL.trim(),
     api_type: apiType,
-    max_tokens: Number(form.maxTokens.trim()),
-    temperature: Number(form.temperature.trim()),
-    top_p: Number(form.topP.trim()),
-    thinking_level: Number(form.thinkingLevel.trim()),
     enabled: form.enabled,
   };
 }
