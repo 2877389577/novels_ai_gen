@@ -5042,6 +5042,11 @@
         "novels_ai_gen_internal_api_handler_novelagent.ChatRequest": {
             "type": "object",
             "properties": {
+                "chapter_id": {
+                    "description": "ChapterID 表示当前请求关联的章节 ID，普通对话可为空。",
+                    "type": "integer",
+                    "example": 1
+                },
                 "message": {
                     "description": "Message 表示用户输入的写作需求或问题。",
                     "type": "string",
@@ -5052,15 +5057,10 @@
                     "type": "string",
                     "example": "gpt-5"
                 },
-                "prompt_params": {
-                    "description": "PromptParams 表示前端传入的提示词占位符参数，键对应模板中的变量名。",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    },
-                    "example": {
-                        "text": "雨夜里，门外响起了脚步声。"
-                    }
+                "novel_id": {
+                    "description": "NovelID 表示当前请求关联的小说 ID，普通对话可为空。",
+                    "type": "integer",
+                    "example": 1
                 },
                 "provider_id": {
                     "description": "ProviderID 表示本次对话使用的 AI 提供商 ID。",

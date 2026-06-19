@@ -96,7 +96,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	modelClient := aiprovider2.NewModelClient()
 	aiproviderService := aiprovider2.NewService(aiproviderRepository, cipher, modelClient)
 	aiproviderHandler := aiprovider3.NewHandler(aiproviderService)
-	einoAgentRuntimeFactory := novelagent.NewEinoAgentRuntimeFactory()
+	einoAgentRuntimeFactory := novelagent.NewEinoAgentRuntimeFactory(chapterRepository)
 	novelagentService := novelagent.NewService(aiproviderRepository, cipher, configManager, einoAgentRuntimeFactory)
 	novelagentHandler := novelagent2.NewHandler(novelagentService)
 	client, err := objectstore.NewClient(appConfig)

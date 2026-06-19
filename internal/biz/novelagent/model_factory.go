@@ -20,6 +20,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"google.golang.org/genai"
 
+	agenttools "novels_ai_gen/internal/biz/novelagent/tools"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
 
@@ -34,11 +35,15 @@ const (
 )
 
 // EinoAgentRuntimeFactory 表示基于 Eino ADK 的多层 Agent 运行时工厂。
-type EinoAgentRuntimeFactory struct{}
+type EinoAgentRuntimeFactory struct {
+	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
+	chapterReader agenttools.ChapterReader
+}
 
 // NewEinoAgentRuntimeFactory 创建基于 Eino ADK 的多层 Agent 运行时工厂。
-func NewEinoAgentRuntimeFactory() *EinoAgentRuntimeFactory {
-	return &EinoAgentRuntimeFactory{}
+// 参数 chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
+func NewEinoAgentRuntimeFactory(chapterReader agenttools.ChapterReader) *EinoAgentRuntimeFactory {
+	return &EinoAgentRuntimeFactory{chapterReader: chapterReader}
 }
 
 // NewRuntime 按 AI 提供商协议创建 Eino 多层 Agent 运行时。
@@ -74,7 +79,7 @@ func (f *EinoAgentRuntimeFactory) newOpenAIRuntime(ctx context.Context, cfg Mode
 		if err != nil {
 			return nil, err
 		}
-		return agenticAgentRuntime{model: model}, nil
+		return agenticAgentRuntime{model: model, chapterReader: f.chapterReader}, nil
 	case "", apiTypeCompletions:
 		model, err := einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
 			APIKey:  cfg.APIKey,
@@ -85,7 +90,7 @@ func (f *EinoAgentRuntimeFactory) newOpenAIRuntime(ctx context.Context, cfg Mode
 		if err != nil {
 			return nil, err
 		}
-		return chatAgentRuntime{model: model}, nil
+		return chatAgentRuntime{model: model, chapterReader: f.chapterReader}, nil
 	default:
 		return nil, fmt.Errorf("不支持的 OpenAI API 类型: %s", cfg.APIType)
 	}
@@ -104,7 +109,7 @@ func (f *EinoAgentRuntimeFactory) newClaudeRuntime(ctx context.Context, cfg Mode
 	if err != nil {
 		return nil, err
 	}
-	return agenticAgentRuntime{model: model}, nil
+	return agenticAgentRuntime{model: model, chapterReader: f.chapterReader}, nil
 }
 
 // newGeminiRuntime 创建 Gemini 协议的 Eino Agent 运行时。
@@ -133,7 +138,7 @@ func (f *EinoAgentRuntimeFactory) newGeminiRuntime(ctx context.Context, cfg Mode
 	if err != nil {
 		return nil, err
 	}
-	return agenticAgentRuntime{model: model}, nil
+	return agenticAgentRuntime{model: model, chapterReader: f.chapterReader}, nil
 }
 
 // normalizeGeminiBaseURL 将系统保存的 Gemini API 根地址转换为 genai 客户端可用的基础地址。
@@ -152,17 +157,19 @@ func normalizeGeminiBaseURL(baseURL string) string {
 type chatAgentRuntime struct {
 	// model 表示支持 OpenAI completions 协议的 Eino ChatModel。
 	model einomodel.BaseChatModel
+	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
+	chapterReader agenttools.ChapterReader
 }
 
 // Stream 流式执行基于 schema.Message 的小说写作 Agent。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 emit 表示文本增量回调。
 func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, emit func(delta AgentDelta) error) (AgentResult, error) {
-	agentCfg, err := newAgentRuntimeConfig(cfg, req)
+	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
 
-	agent, err := newChatSupervisorAgent(ctx, r.model, agentCfg)
+	agent, err := newChatSupervisorAgent(ctx, r.model, agentCfg, req, r.chapterReader)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
@@ -178,17 +185,19 @@ func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, 
 type agenticAgentRuntime struct {
 	// model 表示 Eino AgenticModel。
 	model einomodel.AgenticModel
+	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
+	chapterReader agenttools.ChapterReader
 }
 
 // Stream 流式执行基于 schema.AgenticMessage 的小说写作 Agent。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 emit 表示文本增量回调。
 func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, emit func(delta AgentDelta) error) (AgentResult, error) {
-	agentCfg, err := newAgentRuntimeConfig(cfg, req)
+	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
 
-	agent, err := newAgenticSupervisorAgent(ctx, r.model, agentCfg)
+	agent, err := newAgenticSupervisorAgent(ctx, r.model, agentCfg, req, r.chapterReader)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
@@ -201,8 +210,8 @@ func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfi
 }
 
 // newChatSupervisorAgent 创建基于 schema.Message 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
-// 参数 ctx 表示请求上下文；参数 model 表示 Eino ChatModel；参数 cfg 表示运行时 Agent 配置。
-func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, cfg runtimeAgentConfig) (*adk.TypedChatModelAgent[*schema.Message], error) {
+// 参数 ctx 表示请求上下文；参数 model 表示 Eino ChatModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖。
+func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader) (*adk.TypedChatModelAgent[*schema.Message], error) {
 	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
 		return nil, err
 	}
@@ -210,17 +219,26 @@ func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, 
 	tools := make([]tool.BaseTool, 0, len(cfg.children))
 	returnDirectly := make(map[string]bool, len(cfg.children))
 	for _, child := range cfg.children {
+		childTools, err := configuredChildTools(req, child, chapterReader)
+		if err != nil {
+			return nil, err
+		}
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
 			Name:          child.name,
 			Description:   child.description,
 			Instruction:   child.instruction,
 			Model:         model,
+			ToolsConfig:   childToolsConfig(childTools),
 			MaxIterations: child.maxIterations,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("创建子 Agent %s 失败: %w", child.name, err)
 		}
-		tools = append(tools, adk.NewAgentTool(ctx, childAgent))
+		tools = append(tools, adk.NewAgentTool(
+			ctx,
+			childAgent,
+			adk.WithAgentInputSchema(schema.NewParamsOneOfByParams(child.parameters)),
+		))
 		returnDirectly[child.name] = true
 	}
 
@@ -242,8 +260,8 @@ func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, 
 }
 
 // newAgenticSupervisorAgent 创建基于 schema.AgenticMessage 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
-// 参数 ctx 表示请求上下文；参数 model 表示 Eino AgenticModel；参数 cfg 表示运行时 Agent 配置。
-func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel, cfg runtimeAgentConfig) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
+// 参数 ctx 表示请求上下文；参数 model 表示 Eino AgenticModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖。
+func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
 	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
 		return nil, err
 	}
@@ -251,17 +269,26 @@ func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel
 	tools := make([]tool.BaseTool, 0, len(cfg.children))
 	returnDirectly := make(map[string]bool, len(cfg.children))
 	for _, child := range cfg.children {
+		childTools, err := configuredChildTools(req, child, chapterReader)
+		if err != nil {
+			return nil, err
+		}
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
 			Name:          child.name,
 			Description:   child.description,
 			Instruction:   child.instruction,
 			Model:         model,
+			ToolsConfig:   childToolsConfig(childTools),
 			MaxIterations: child.maxIterations,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("创建子 Agent %s 失败: %w", child.name, err)
 		}
-		tools = append(tools, adk.NewTypedAgentTool[*schema.AgenticMessage](ctx, childAgent))
+		tools = append(tools, adk.NewTypedAgentTool[*schema.AgenticMessage](
+			ctx,
+			childAgent,
+			adk.WithAgentInputSchema(schema.NewParamsOneOfByParams(child.parameters)),
+		))
 		returnDirectly[child.name] = true
 	}
 
@@ -280,6 +307,40 @@ func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel
 		},
 		MaxIterations: cfg.supervisor.maxIterations,
 	})
+}
+
+// configuredChildTools 根据子 Agent 配置创建本次请求可用的普通工具。
+// 参数 req 表示流式聊天请求；参数 child 表示子 Agent 运行时配置；参数 chapterReader 表示章节读取依赖。
+func configuredChildTools(req ChatRequest, child runtimeAgentDefinition, chapterReader agenttools.ChapterReader) ([]tool.BaseTool, error) {
+	if len(child.toolNames) == 0 {
+		return nil, nil
+	}
+
+	tools := make([]tool.BaseTool, 0, len(child.toolNames))
+	for _, name := range child.toolNames {
+		switch name {
+		case agenttools.ToolNameGetContent:
+			getContentTool, err := agenttools.NewGetContentTool(chapterReader, req.NovelID, req.ChapterID)
+			if err != nil {
+				return nil, fmt.Errorf("创建子 Agent %s 的工具 %s 失败: %w", child.name, name, err)
+			}
+			tools = append(tools, getContentTool)
+		default:
+			return nil, fmt.Errorf("%w: 未知子 Agent tool %s", ErrAgentConfigInvalid, name)
+		}
+	}
+	return tools, nil
+}
+
+// childToolsConfig 创建子 Agent 自身使用的普通工具配置。
+// 参数 tools 表示本次请求为子 Agent 创建的普通工具列表。
+func childToolsConfig(tools []tool.BaseTool) adk.ToolsConfig {
+	return adk.ToolsConfig{
+		ToolsNodeConfig: compose.ToolsNodeConfig{
+			Tools:               tools,
+			ExecuteSequentially: true,
+		},
+	}
 }
 
 // streamChatAgentEvents 将 schema.Message Agent 事件转换为统一文本结果。

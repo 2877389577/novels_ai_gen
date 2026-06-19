@@ -136,8 +136,10 @@ export interface NovelAgentChatParams {
   model: string;
   // message 表示用户输入的写作需求或问题。
   message: string;
-  // promptParams 表示提交给后端用于渲染提示词模板的变量集合。
-  promptParams: Record<string, string>;
+  // novelId 表示当前请求关联的小说 ID，普通对话可为空。
+  novelId?: number;
+  // chapterId 表示当前请求关联的章节 ID，普通对话可为空。
+  chapterId?: number;
   // signal 表示用于取消 AI 流式请求的浏览器 AbortSignal。
   signal?: AbortSignal;
 }
@@ -1329,7 +1331,8 @@ export async function streamNovelAgentChat(
       provider_id: params.providerId,
       model: params.model,
       message: params.message,
-      prompt_params: params.promptParams,
+      novel_id: params.novelId,
+      chapter_id: params.chapterId,
     }),
     signal: params.signal,
   });

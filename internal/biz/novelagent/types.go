@@ -14,8 +14,10 @@ type ChatRequest struct {
 	Model string `json:"model" binding:"required" example:"gpt-5"`
 	// Message 表示用户输入的写作需求或问题。
 	Message string `json:"message" binding:"required" example:"帮我润色这一段，让语气更紧张"`
-	// PromptParams 表示前端传入的提示词占位符参数，键对应模板中的变量名。
-	PromptParams map[string]string `json:"prompt_params" example:"text:雨夜里，门外响起了脚步声。"`
+	// NovelID 表示当前请求关联的小说 ID，普通对话可为空。
+	NovelID uint64 `json:"novel_id,omitempty" example:"1"`
+	// ChapterID 表示当前请求关联的章节 ID，普通对话可为空。
+	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
 }
 
 // StreamEvent 表示小说写作 Agent NDJSON 流事件。

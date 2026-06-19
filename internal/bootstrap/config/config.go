@@ -79,8 +79,8 @@ type AIConfig struct {
 type AgentConfig struct {
 	// Supervisor 表示顶层 Agent 配置。
 	Supervisor AgentDefinition `mapstructure:"supervisor"`
-	// Children 表示可被顶层 Agent 当成工具调用的子 Agent 配置列表。
-	Children []AgentDefinition `mapstructure:"children"`
+	// Agent 表示可被顶层 Agent 当成工具调用的子 Agent 配置列表。
+	Agent []AgentDefinition `mapstructure:"agent"`
 }
 
 // AgentDefinition 表示单个小说写作 Agent 的配置。
@@ -91,12 +91,30 @@ type AgentDefinition struct {
 	Task string `mapstructure:"task"`
 	// Description 表示 Agent 能力描述，供顶层 Agent 判断是否调用该子 Agent。
 	Description string `mapstructure:"description"`
-	// Instruction 表示 Agent 系统提示词，子 Agent 支持 {变量名} 占位符。
+	// Instruction 表示 Agent 系统提示词，内容会按原文传给 Eino。
 	Instruction string `mapstructure:"instruction"`
 	// MaxIterations 表示 Eino ADK Agent 最大生成循环次数，小于等于 0 时使用业务默认值。
 	MaxIterations int `mapstructure:"max_iterations"`
-	// Tools 表示预留的子 Agent 工具名称列表，当前版本暂不启用。
+	// Tools 表示子 Agent 可使用的普通工具名称列表，当前仅支持 get_content。
 	Tools []string `mapstructure:"tools"`
+	// Parameters 表示子 Agent 作为工具被调用时的入参定义，键为参数名。
+	Parameters map[string]AgentParameterDefinition `mapstructure:"parameters"`
+}
+
+// AgentParameterDefinition 表示子 Agent 工具参数定义。
+type AgentParameterDefinition struct {
+	// Type 表示参数类型，支持 string、number、integer、boolean、array、object、null，空值默认 string。
+	Type string `mapstructure:"type"`
+	// Description 表示参数用途说明。
+	Description string `mapstructure:"description"`
+	// Required 表示调用工具时该参数是否必填。
+	Required bool `mapstructure:"required"`
+	// Enum 表示 string 参数允许的枚举值。
+	Enum []string `mapstructure:"enum"`
+	// Items 表示 array 参数的元素类型定义。
+	Items *AgentParameterDefinition `mapstructure:"items"`
+	// Properties 表示 object 参数的子参数定义，键为子参数名。
+	Properties map[string]AgentParameterDefinition `mapstructure:"properties"`
 }
 
 // StorageConfig 表示文件对象存储配置集合。

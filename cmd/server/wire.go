@@ -24,6 +24,7 @@ import (
 	bizevent "novels_ai_gen/internal/biz/event"
 	biznovel "novels_ai_gen/internal/biz/novel"
 	biznovelagent "novels_ai_gen/internal/biz/novelagent"
+	agenttools "novels_ai_gen/internal/biz/novelagent/tools"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	bizsystem "novels_ai_gen/internal/biz/system"
 	bizupload "novels_ai_gen/internal/biz/upload"
@@ -56,6 +57,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		biznovel.NewService,
 		datachapter.NewRepository,
 		wire.Bind(new(bizchapter.Repository), new(*datachapter.Repository)),
+		wire.Bind(new(agenttools.ChapterReader), new(*datachapter.Repository)),
 		bizchapter.NewService,
 		datacharacter.NewRepository,
 		wire.Bind(new(bizcharacter.Repository), new(*datacharacter.Repository)),

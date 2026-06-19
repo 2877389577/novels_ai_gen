@@ -1596,6 +1596,10 @@ definitions:
     type: object
   novels_ai_gen_internal_api_handler_novelagent.ChatRequest:
     properties:
+      chapter_id:
+        description: ChapterID 表示当前请求关联的章节 ID，普通对话可为空。
+        example: 1
+        type: integer
       message:
         description: Message 表示用户输入的写作需求或问题。
         example: 帮我润色这一段，让语气更紧张
@@ -1604,13 +1608,10 @@ definitions:
         description: Model 表示本次对话使用的模型标识。
         example: gpt-5
         type: string
-      prompt_params:
-        additionalProperties:
-          type: string
-        description: PromptParams 表示前端传入的提示词占位符参数，键对应模板中的变量名。
-        example:
-          text: 雨夜里，门外响起了脚步声。
-        type: object
+      novel_id:
+        description: NovelID 表示当前请求关联的小说 ID，普通对话可为空。
+        example: 1
+        type: integer
       provider_id:
         description: ProviderID 表示本次对话使用的 AI 提供商 ID。
         example: 1

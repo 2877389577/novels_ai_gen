@@ -37,6 +37,7 @@ import { normalizeText } from "./novel-utils";
 
 const chapterEditorScrollbarHiddenClass = "chapter-editor-scrollbar-hidden";
 const chapterAiProviderPageSize = 100;
+const chapterAutoSaveIntervalMs = 5000;
 
 const emptyChapterFormValues: ChapterFormValues = {
   title: "",
@@ -48,7 +49,7 @@ const chapterAiAssistantMessages: Message[] = [
     id: "chapter-ai-assistant-welcome",
     role: "assistant",
     content:
-      "你好，我是章节写作助手。你可以选择提供商和模型，把润色需求发给我，我会结合当前章节正文给出修改建议。",
+      "你好，我是章节写作助手。你可以选择提供商和模型，把润色需求发给我，我会在需要时读取当前章节正文。",
   },
   {
     id: "chapter-ai-assistant-suggestion",
@@ -79,6 +80,24 @@ interface ChapterFormValues {
   content: string;
 }
 
+// ChapterSaveSnapshot 表示最近一次成功保存到后端的章节内容快照。
+interface ChapterSaveSnapshot {
+  // chapterId 表示最近一次成功保存的章节主键 ID，新增章节未落库时为空。
+  chapterId: number | null;
+  // title 表示最近一次成功保存的章节名。
+  title: string;
+  // content 表示最近一次成功保存的章节正文。
+  content: string;
+}
+
+// ChapterSaveOptions 表示执行章节保存时的行为选项。
+interface ChapterSaveOptions {
+  // force 表示是否即使当前存在保存请求也等待并确保本次保存完成。
+  force: boolean;
+  // showTitleError 表示标题为空时是否展示表单错误和提示。
+  showTitleError?: boolean;
+}
+
 // ChapterEditorPageProps 表示章节编辑页需要的外部参数和回调。
 interface ChapterEditorPageProps {
   // novelId 表示当前章节所属小说主键 ID。
@@ -87,6 +106,8 @@ interface ChapterEditorPageProps {
   chapterId: number | null;
   // onBackToNovelDetail 表示返回小说详情页时执行的回调。
   onBackToNovelDetail: (novelId: number) => void;
+  // onChapterPersisted 表示新增章节首次保存成功后执行的路由替换回调。
+  onChapterPersisted: (novelId: number, chapterId: number) => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
@@ -96,8 +117,10 @@ type ChapterEditorState = "loading" | "ready" | "error";
 
 // ChapterAiAssistantPanelProps 表示章节 AI 助手侧栏需要的回调。
 interface ChapterAiAssistantPanelProps {
-  // chapterContent 表示当前章节编辑器中的正文内容。
-  chapterContent: string;
+  // novelId 表示当前章节所属小说主键 ID。
+  novelId: number;
+  // ensureChapterSavedForAgent 表示发送 AI 前确保章节已保存并返回章节 ID 的方法。
+  ensureChapterSavedForAgent: () => Promise<number | null>;
   // onClose 表示关闭章节 AI 助手侧栏时执行的回调。
   onClose: () => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
@@ -107,11 +130,14 @@ interface ChapterAiAssistantPanelProps {
 // ChapterEditorPage 渲染章节创建和编辑共用页面。
 // 参数 props 表示章节编辑页需要的外部参数和回调。
 export function ChapterEditorPage(props: ChapterEditorPageProps) {
-  const isEditMode = props.chapterId !== null;
   const [state, setState] = useState<ChapterEditorState>("loading");
   const [message, setMessage] = useState("");
   const [chapter, setChapter] = useState<ChapterDetailItem | null>(null);
   const [chapterNumber, setChapterNumber] = useState<number | null>(null);
+  const [persistedChapterID, setPersistedChapterID] = useState<number | null>(
+    props.chapterId,
+  );
+  const isEditMode = persistedChapterID !== null;
   const [titleValue, setTitleValue] = useState(emptyChapterFormValues.title);
   const [contentValue, setContentValue] = useState(
     emptyChapterFormValues.content,
@@ -122,12 +148,37 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLDivElement | null>(null);
+  const persistedChapterIDRef = useRef<number | null>(props.chapterId);
+  const chapterNumberRef = useRef<number | null>(null);
+  const titleValueRef = useRef(emptyChapterFormValues.title);
+  const contentValueRef = useRef(emptyChapterFormValues.content);
+  const stateRef = useRef<ChapterEditorState>("loading");
+  const savingPromiseRef = useRef<Promise<ChapterDetailItem | null> | null>(
+    null,
+  );
+  const skipRouteLoadChapterIDRef = useRef<number | null>(null);
+  const lastSavedSnapshotRef = useRef<ChapterSaveSnapshot>({
+    chapterId: props.chapterId,
+    title: emptyChapterFormValues.title,
+    content: emptyChapterFormValues.content,
+  });
   const onUnauthorized = props.onUnauthorized;
   const liveWordCount = useMemo(
     function calculateLiveWordCount() {
       return countNonWhitespaceCharacters(contentValue);
     },
     [contentValue],
+  );
+
+  // syncChapterEditorRefs 将频繁变化的编辑状态同步到自动保存使用的 ref。
+  useEffect(
+    function syncChapterEditorRefs() {
+      stateRef.current = state;
+      chapterNumberRef.current = chapterNumber;
+      titleValueRef.current = titleValue;
+      contentValueRef.current = contentValue;
+    },
+    [chapterNumber, contentValue, state, titleValue],
   );
 
   // installScrollbarHiding 在章节编辑页隐藏全页滚动条视觉但保留滚动能力。
@@ -155,6 +206,187 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     [contentSnapshotId, state],
   );
 
+  // syncPersistedChapterID 同步当前已经落库的章节 ID。
+  // 参数 chapterID 表示已经落库的章节主键 ID，新增章节未保存时为空。
+  const syncPersistedChapterID = useCallback(function syncPersistedChapterID(
+    chapterID: number | null,
+  ) {
+    persistedChapterIDRef.current = chapterID;
+    setPersistedChapterID(chapterID);
+  }, []);
+
+  // resetLastSavedSnapshot 重置最近一次成功保存的章节内容快照。
+  // 参数 chapterID 表示最近一次成功保存的章节 ID；参数 values 表示最近一次成功保存的标题和正文。
+  const resetLastSavedSnapshot = useCallback(function resetLastSavedSnapshot(
+    chapterID: number | null,
+    values: ChapterFormValues,
+  ) {
+    lastSavedSnapshotRef.current = {
+      chapterId: chapterID,
+      title: normalizeText(values.title),
+      content: normalizeText(values.content),
+    };
+  }, []);
+
+  // readCurrentChapterValues 读取当前编辑器中的章节标题和正文。
+  const readCurrentChapterValues = useCallback(function readCurrentChapterValues() {
+    return normalizeChapterFormValues({
+      title: titleValueRef.current,
+      content: contentEditorRef.current
+        ? readContentEditorText(contentEditorRef.current)
+        : contentValueRef.current,
+    });
+  }, []);
+
+  // hasUnsavedChapterChanges 判断当前章节内容是否相对最近保存快照发生变化。
+  // 参数 values 表示当前编辑器中的章节标题和正文。
+  const hasUnsavedChapterChanges = useCallback(
+    function hasUnsavedChapterChanges(values: ChapterUpdateParams) {
+      const snapshot = lastSavedSnapshotRef.current;
+      return (
+        snapshot.chapterId !== persistedChapterIDRef.current ||
+        snapshot.title !== values.title ||
+        snapshot.content !== values.content
+      );
+    },
+    [],
+  );
+
+  // persistChapterValues 将指定章节内容保存到后端。
+  // 参数 values 表示已经清理过的章节标题和正文。
+  const persistChapterValues = useCallback(
+    async function persistChapterValues(
+      values: ChapterUpdateParams,
+    ): Promise<ChapterDetailItem> {
+      const currentChapterID = persistedChapterIDRef.current;
+      let savedChapter: ChapterDetailItem;
+
+      if (currentChapterID === null) {
+        const currentChapterNumber = chapterNumberRef.current;
+        if (currentChapterNumber === null) {
+          throw new Error("章节号尚未加载，请稍后再试");
+        }
+
+        savedChapter = await createChapter(
+          props.novelId,
+          normalizeChapterCreateValues(values, currentChapterNumber),
+        );
+        syncPersistedChapterID(savedChapter.id);
+        skipRouteLoadChapterIDRef.current = savedChapter.id;
+        props.onChapterPersisted(props.novelId, savedChapter.id);
+      } else {
+        savedChapter = await updateChapter(
+          props.novelId,
+          currentChapterID,
+          values,
+        );
+      }
+
+      setChapter({
+        ...savedChapter,
+        title: values.title,
+        content: values.content,
+      });
+      setChapterNumber(savedChapter.chapter_number);
+      chapterNumberRef.current = savedChapter.chapter_number;
+      resetLastSavedSnapshot(savedChapter.id, values);
+      return savedChapter;
+    },
+    [
+      props.novelId,
+      props.onChapterPersisted,
+      resetLastSavedSnapshot,
+      syncPersistedChapterID,
+    ],
+  );
+
+  // saveCurrentChapter 保存当前编辑器中的章节内容。
+  // 参数 options 表示本次保存的行为选项。
+  const saveCurrentChapter = useCallback(
+    async function saveCurrentChapter(
+      options: ChapterSaveOptions,
+    ): Promise<ChapterDetailItem | null> {
+      for (;;) {
+        const savingPromise = savingPromiseRef.current;
+        if (savingPromise) {
+          if (!options.force) {
+            return null;
+          }
+          await savingPromise;
+          continue;
+        }
+
+        const values = readCurrentChapterValues();
+        if (!values.title) {
+          if (options.showTitleError) {
+            setTitleError("请输入章节名");
+            titleInputRef.current?.focus();
+            Toast.warning("请先输入章节名");
+          }
+          return null;
+        }
+        if (!hasUnsavedChapterChanges(values)) {
+          return null;
+        }
+
+        setTitleError("");
+        const nextSavingPromise = persistChapterValues(values);
+        savingPromiseRef.current = nextSavingPromise;
+        try {
+          return await nextSavingPromise;
+        } finally {
+          if (savingPromiseRef.current === nextSavingPromise) {
+            savingPromiseRef.current = null;
+          }
+        }
+      }
+    },
+    [hasUnsavedChapterChanges, persistChapterValues, readCurrentChapterValues],
+  );
+
+  // ensureChapterSavedForAgent 在发送 AI 请求前确保当前章节已经保存到后端。
+  const ensureChapterSavedForAgent = useCallback(
+    async function ensureChapterSavedForAgent(): Promise<number | null> {
+      if (stateRef.current !== "ready") {
+        Toast.info("章节仍在加载，请稍后再试");
+        return null;
+      }
+
+      await saveCurrentChapter({ force: true, showTitleError: true });
+      if (!readCurrentChapterValues().title) {
+        return null;
+      }
+      return persistedChapterIDRef.current;
+    },
+    [readCurrentChapterValues, saveCurrentChapter],
+  );
+
+  // startChapterAutoSave 定时自动保存已经发生变化的章节内容。
+  useEffect(
+    function startChapterAutoSave() {
+      const timer = window.setInterval(function autoSaveChangedChapter() {
+        if (stateRef.current !== "ready") {
+          return;
+        }
+
+        void saveCurrentChapter({ force: false }).catch(function handleAutoSaveError(
+          error,
+        ) {
+          if (error instanceof UnauthorizedError) {
+            onUnauthorized();
+            return;
+          }
+          Toast.error(getErrorMessage(error, "章节自动保存失败，请稍后再试"));
+        });
+      }, chapterAutoSaveIntervalMs);
+
+      return function stopChapterAutoSave() {
+        window.clearInterval(timer);
+      };
+    },
+    [onUnauthorized, saveCurrentChapter],
+  );
+
   // loadNextChapterNumber 加载创建模式下后端建议的下一章节号。
   // 参数 signal 表示可选的请求取消信号；参数 preserveEditor 表示是否保留当前编辑内容。
   const loadNextChapterNumber = useCallback(
@@ -171,6 +403,9 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         const data = await fetchNextChapterNumber(props.novelId, signal);
         setChapter(null);
         setChapterNumber(data.next_chapter_number);
+        chapterNumberRef.current = data.next_chapter_number;
+        syncPersistedChapterID(null);
+        resetLastSavedSnapshot(null, emptyChapterFormValues);
         setState("ready");
       } catch (error) {
         if (signal?.aborted) {
@@ -188,7 +423,12 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         );
       }
     },
-    [onUnauthorized, props.novelId],
+    [
+      onUnauthorized,
+      props.novelId,
+      resetLastSavedSnapshot,
+      syncPersistedChapterID,
+    ],
   );
 
   // loadChapterDetail 在编辑模式下加载章节详情。
@@ -211,6 +451,10 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         const values = chapterToFormValues(data);
         setChapter(data);
         setChapterNumber(data.chapter_number);
+        chapterNumberRef.current = data.chapter_number;
+        syncPersistedChapterID(data.id);
+        resetLastSavedSnapshot(data.id, values);
+        titleValueRef.current = values.title;
         setTitleValue(values.title);
         replaceEditorContent(values.content);
         setTitleError("");
@@ -231,7 +475,13 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         );
       }
     },
-    [onUnauthorized, props.chapterId, props.novelId],
+    [
+      onUnauthorized,
+      props.chapterId,
+      props.novelId,
+      resetLastSavedSnapshot,
+      syncPersistedChapterID,
+    ],
   );
 
   // loadChapterWhenRouteChanges 在路由参数变化时同步章节数据。
@@ -241,9 +491,24 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
       setTitleError("");
       setSubmitting(false);
 
+      if (
+        props.chapterId !== null &&
+        skipRouteLoadChapterIDRef.current === props.chapterId
+      ) {
+        skipRouteLoadChapterIDRef.current = null;
+        syncPersistedChapterID(props.chapterId);
+        return function cancelSkippedChapterLoad() {
+          controller.abort();
+        };
+      }
+
       if (props.chapterId === null) {
         setChapter(null);
         setChapterNumber(null);
+        chapterNumberRef.current = null;
+        syncPersistedChapterID(null);
+        resetLastSavedSnapshot(null, emptyChapterFormValues);
+        titleValueRef.current = emptyChapterFormValues.title;
         setTitleValue(emptyChapterFormValues.title);
         replaceEditorContent(emptyChapterFormValues.content);
         void loadNextChapterNumber(controller.signal);
@@ -255,7 +520,13 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         controller.abort();
       };
     },
-    [loadChapterDetail, loadNextChapterNumber, props.chapterId],
+    [
+      loadChapterDetail,
+      loadNextChapterNumber,
+      props.chapterId,
+      resetLastSavedSnapshot,
+      syncPersistedChapterID,
+    ],
   );
 
   // handleBack 处理返回小说详情页。
@@ -302,6 +573,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   // 参数 event 表示标题输入框变更事件。
   function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
     const nextValue = event.target.value;
+    titleValueRef.current = nextValue;
     setTitleValue(nextValue);
     if (titleError && normalizeText(nextValue)) {
       setTitleError("");
@@ -311,7 +583,9 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   // handleContentChange 同步章节正文输入。
   // 参数 event 表示正文段落编辑器输入事件。
   function handleContentChange(event: FormEvent<HTMLDivElement>) {
-    setContentValue(readContentEditorText(event.currentTarget));
+    const nextContent = readContentEditorText(event.currentTarget);
+    contentValueRef.current = nextContent;
+    setContentValue(nextContent);
   }
 
   // handleContentFocus 在空正文获得焦点时创建可输入段落。
@@ -325,12 +599,14 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   function handleContentBlur(event: FocusEvent<HTMLDivElement>) {
     const nextContent = readContentEditorText(event.currentTarget);
     if (normalizeText(nextContent)) {
+      contentValueRef.current = nextContent;
       setContentValue(nextContent);
       renderContentEditorText(event.currentTarget, nextContent);
       return;
     }
 
     event.currentTarget.innerHTML = "";
+    contentValueRef.current = "";
     setContentValue("");
   }
 
@@ -344,6 +620,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     const target = event.currentTarget;
     window.setTimeout(function syncContentAfterPaste() {
       const nextContent = readContentEditorText(target);
+      contentValueRef.current = nextContent;
       setContentValue(nextContent);
       renderContentEditorText(target, nextContent);
       moveCaretToEnd(target);
@@ -359,7 +636,9 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
 
     event.preventDefault();
     insertPlainTextAtSelection("　　");
-    setContentValue(readContentEditorText(event.currentTarget));
+    const nextContent = readContentEditorText(event.currentTarget);
+    contentValueRef.current = nextContent;
+    setContentValue(nextContent);
   }
 
   // handleContentMouseDown 将编辑器空白区域点击固定为移动到正文末尾。
@@ -383,35 +662,18 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
       return;
     }
 
-    const normalizedValues = normalizeChapterFormValues({
-      title: titleValue,
-      content: readContentEditorText(contentEditorRef.current),
-    });
-    if (!normalizedValues.title) {
-      setTitleError("请输入章节名");
-      titleInputRef.current?.focus();
-      return;
-    }
-
-    if (props.chapterId === null && chapterNumber === null) {
-      Toast.error("章节号尚未加载，请稍后再试");
-      return;
-    }
-
     setSubmitting(true);
 
     try {
-      if (props.chapterId === null) {
-        await createChapter(
-          props.novelId,
-          normalizeChapterCreateValues(normalizedValues, chapterNumber),
-        );
-        Toast.success("章节已创建");
-      } else {
-        await updateChapter(props.novelId, props.chapterId, normalizedValues);
-        Toast.success("章节已保存");
+      await saveCurrentChapter({ force: true, showTitleError: true });
+      if (
+        !readCurrentChapterValues().title ||
+        persistedChapterIDRef.current === null
+      ) {
+        return;
       }
 
+      Toast.success("章节已保存");
       props.onBackToNovelDetail(props.novelId);
     } catch (error) {
       if (error instanceof UnauthorizedError) {
@@ -420,7 +682,10 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
       }
 
       Toast.error(getErrorMessage(error, "章节保存失败，请稍后再试"));
-      if (props.chapterId === null && isChapterNumberConflictError(error)) {
+      if (
+        persistedChapterIDRef.current === null &&
+        isChapterNumberConflictError(error)
+      ) {
         void loadNextChapterNumber(undefined, true);
       }
     } finally {
@@ -431,6 +696,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   // replaceEditorContent 使用指定正文替换编辑器内容快照。
   // 参数 value 表示需要写入编辑器的纯文本正文。
   function replaceEditorContent(value: string) {
+    contentValueRef.current = value;
     setContentValue(value);
     setContentSnapshotId(function nextContentSnapshotId(currentValue) {
       return currentValue + 1;
@@ -542,7 +808,8 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
 
         {aiPanelOpen ? (
           <ChapterAiAssistantPanel
-            chapterContent={contentValue}
+            novelId={props.novelId}
+            ensureChapterSavedForAgent={ensureChapterSavedForAgent}
             onClose={handleAiAssistantClose}
             onUnauthorized={props.onUnauthorized}
           />
@@ -794,6 +1061,25 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       return;
     }
 
+    setAssistantSending(true);
+    let savedChapterID: number | null;
+    try {
+      savedChapterID = await props.ensureChapterSavedForAgent();
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        setAssistantSending(false);
+        onUnauthorized();
+        return;
+      }
+      Toast.error(getErrorMessage(error, "章节保存失败，请稍后再试"));
+      setAssistantSending(false);
+      return;
+    }
+    if (savedChapterID === null) {
+      setAssistantSending(false);
+      return;
+    }
+
     const providerName = selectedProvider?.name ?? "当前提供商";
     const modelName = formatAIModelName(selectedModel);
     const createdAt = Date.now();
@@ -820,7 +1106,6 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     const controller = new AbortController();
     streamControllerRef.current?.abort();
     streamControllerRef.current = controller;
-    setAssistantSending(true);
 
     let assistantContent = "";
     try {
@@ -828,11 +1113,9 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         {
           providerId: Number(selectedProviderID),
           model: selectedModelID,
-          message: normalizedInput,
-          promptParams: {
-            text: props.chapterContent.trim(),
-            userMsg: normalizedInput,
-          },
+          message: buildChapterAgentMessage(normalizedInput),
+          novelId: props.novelId,
+          chapterId: savedChapterID,
           signal: controller.signal,
         },
         {
@@ -1009,6 +1292,13 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       </div>
     </aside>
   );
+}
+
+// buildChapterAgentMessage 生成不包含章节全文的 Agent 用户消息。
+// 参数 userMessage 表示用户在 AI 输入框中提交的需求。
+function buildChapterAgentMessage(userMessage: string): string {
+  const normalizedUserMessage = userMessage.trim();
+  return `用户需求：\n${normalizedUserMessage}\n\n当前请求关联章节，如需正文请使用 get_content。`;
 }
 
 // createChapterAiMessageID 创建章节 AI 对话本地消息 ID。
