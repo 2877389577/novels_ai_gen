@@ -7756,6 +7756,20 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
   color: var(--color-on-surface);
   box-shadow: 0 6px 18px rgba(40, 52, 70, 0.08);
   overflow-wrap: anywhere;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble .semi-typography,
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble .semi-typography {
+  color: inherit;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble .semi-markdownRender-component-p,
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble .semi-markdownRender-component-p {
+  white-space: pre-line;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-user.semi-ai-chat-dialogue-content-bubble .semi-markdownRender-component-p,
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble .semi-markdownRender-component-p {
   white-space: pre-wrap;
 }
 
