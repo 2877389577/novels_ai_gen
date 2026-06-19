@@ -85,6 +85,10 @@ definitions:
         description: Name 表示 AI 提供商名称。
         example: 默认 OpenAI
         type: string
+      priority:
+        description: Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+        example: 1
+        type: integer
       provider_type:
         description: ProviderType 表示 AI 提供商类型。
         example: openai
@@ -1116,6 +1120,10 @@ definitions:
         description: Name 表示 AI 提供商名称，不能为空且唯一。
         example: 默认 OpenAI
         type: string
+      priority:
+        description: Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+        example: 1
+        type: integer
       provider_type:
         description: ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
         example: openai
@@ -1169,6 +1177,10 @@ definitions:
         description: Name 表示 AI 提供商名称，不能为空且唯一。
         example: 默认 OpenAI
         type: string
+      priority:
+        description: Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+        example: 1
+        type: integer
       provider_type:
         description: ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
         example: openai

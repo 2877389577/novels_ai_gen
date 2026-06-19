@@ -18,6 +18,8 @@ type Provider struct {
 	BaseURL string `json:"base_url" gorm:"column:base_url;type:varchar(1000);comment:AI提供商接口基础地址，可以为空" example:"https://api.openai.com/v1"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" gorm:"column:default_model;type:varchar(255);comment:模型列表不可用时使用的默认模型标识，可以为空" example:"gpt-5"`
+	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+	Priority int `json:"priority" gorm:"column:priority;not null;default:0;index:idx_ai_providers_priority;comment:AI提供商排序优先级，0最低，数值越大优先级越高" example:"1"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
 	APIType string `json:"api_type" gorm:"column:api_type;type:varchar(64);not null;default:completions;comment:AI接口类型，只能是response或completions，OpenAI提供商固定使用completions" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。
@@ -45,6 +47,8 @@ type CreateRequest struct {
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
+	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+	Priority int `json:"priority" example:"1"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；nil 表示默认启用。
@@ -63,6 +67,8 @@ type UpdateRequest struct {
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
+	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+	Priority int `json:"priority" example:"1"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；nil 表示保留原值。
@@ -91,6 +97,8 @@ type ProviderResponse struct {
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
+	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
+	Priority int `json:"priority" example:"1"`
 	// APIType 表示 AI 接口类型。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。

@@ -84,6 +84,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (ProviderRespon
 		APIKeyMask:       maskAPIKey(req.APIKey),
 		BaseURL:          req.BaseURL,
 		DefaultModel:     req.DefaultModel,
+		Priority:         req.Priority,
 		APIType:          providerAPIType(req.ProviderType, req.APIType),
 		Enabled:          enabledFromCreateRequest(req),
 	}
@@ -163,6 +164,7 @@ func applyUpdateRequest(cipher *Cipher, item *Provider, req UpdateRequest) error
 	item.ProviderType = req.ProviderType
 	item.BaseURL = req.BaseURL
 	item.DefaultModel = req.DefaultModel
+	item.Priority = req.Priority
 	if item.ProviderType == providerTypeOpenAI {
 		item.APIType = apiTypeCompletions
 	} else if req.APIType != "" {
@@ -319,6 +321,9 @@ func validateCreateRequest(req CreateRequest) error {
 	if req.APIType != "" && !isAllowedAPIType(req.APIType) {
 		return ErrInvalidAPIType
 	}
+	if req.Priority < 0 {
+		return ErrInvalidPriority
+	}
 	return nil
 }
 
@@ -336,6 +341,9 @@ func validateUpdateRequest(req UpdateRequest) error {
 	}
 	if req.APIType != "" && !isAllowedAPIType(req.APIType) {
 		return ErrInvalidAPIType
+	}
+	if req.Priority < 0 {
+		return ErrInvalidPriority
 	}
 	return nil
 }
@@ -414,6 +422,7 @@ func toResponse(item Provider) ProviderResponse {
 		MaskedAPIKey: item.APIKeyMask,
 		BaseURL:      item.BaseURL,
 		DefaultModel: item.DefaultModel,
+		Priority:     item.Priority,
 		APIType:      item.APIType,
 		Enabled:      item.Enabled,
 		CreatedAt:    item.CreatedAt,
