@@ -7755,6 +7755,8 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
   border-radius: 8px;
   color: var(--color-on-surface);
   box-shadow: 0 6px 18px rgba(40, 52, 70, 0.08);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble:not(.semi-ai-chat-dialogue-content-user) {

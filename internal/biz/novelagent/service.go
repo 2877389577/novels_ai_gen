@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"strings"
 	"time"
-	"unicode"
 
 	bizaiprovider "novels_ai_gen/internal/biz/aiprovider"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
@@ -160,8 +159,6 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: friendlyError(err)})
 		return fmt.Errorf("%w: %v", ErrModelStreamFailed, err)
 	}
-	result.Content = normalizeAssistantContentLineBreaks(result.Content)
-
 	if err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, provider.ID); err != nil {
 		slog.ErrorContext(ctx, "小说写作 Agent 记忆保存失败",
 			"error", err,
@@ -200,99 +197,6 @@ func (s *Service) ListMessages(ctx context.Context, novelID uint64) (MessageList
 		return MessageListResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
 	return MessageListResponse{Items: messageResponses(messages)}, nil
-}
-
-// normalizeAssistantContentLineBreaks 规范化助手最终回复中的换行，保证进入记忆和 done 事件的内容可按段落展示。
-// 参数 content 表示 Agent 生成的完整助手回复。
-func normalizeAssistantContentLineBreaks(content string) string {
-	normalized := strings.ReplaceAll(content, "\r\n", "\n")
-	normalized = strings.ReplaceAll(normalized, "\r", "\n")
-	normalized = strings.ReplaceAll(normalized, "\\r\\n", "\n")
-	normalized = strings.ReplaceAll(normalized, "\\n", "\n")
-	if strings.Contains(normalized, "```") {
-		return normalized
-	}
-	if strings.Contains(normalized, "\n") {
-		return normalizeAssistantParagraphBreaks(normalized)
-	}
-	return paragraphizeSingleLineAssistantContent(normalized)
-}
-
-// normalizeAssistantParagraphBreaks 将已有换行统一为 Markdown 可见的段落分隔。
-// 参数 content 表示已经包含真实换行的助手回复。
-func normalizeAssistantParagraphBreaks(content string) string {
-	lines := strings.Split(content, "\n")
-	paragraphs := make([]string, 0, len(lines))
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		paragraphs = append(paragraphs, trimmed)
-	}
-	if len(paragraphs) == 0 {
-		return strings.TrimSpace(content)
-	}
-	return strings.Join(paragraphs, "\n\n")
-}
-
-// paragraphizeSingleLineAssistantContent 将完全没有换行的中文回复按句末标点拆成段落。
-// 参数 content 表示不包含真实换行的助手回复。
-func paragraphizeSingleLineAssistantContent(content string) string {
-	text := strings.TrimSpace(content)
-	if text == "" {
-		return text
-	}
-
-	var builder strings.Builder
-	builder.Grow(len(text) + 16)
-	pendingBreak := false
-	insertedBreak := false
-	for _, char := range text {
-		if pendingBreak && !isAssistantSentenceCloser(char) {
-			if unicode.IsSpace(char) {
-				continue
-			}
-			builder.WriteString("\n\n")
-			insertedBreak = true
-			pendingBreak = false
-		}
-
-		builder.WriteRune(char)
-		if isAssistantSentenceTerminator(char) {
-			pendingBreak = true
-			continue
-		}
-		if !isAssistantSentenceCloser(char) && !unicode.IsSpace(char) {
-			pendingBreak = false
-		}
-	}
-	if !insertedBreak {
-		return text
-	}
-	return builder.String()
-}
-
-// isAssistantSentenceTerminator 判断字符是否适合作为中文段落拆分的句末标点。
-// 参数 char 表示待判断字符。
-func isAssistantSentenceTerminator(char rune) bool {
-	switch char {
-	case '。', '！', '？', '；', '…':
-		return true
-	default:
-		return false
-	}
-}
-
-// isAssistantSentenceCloser 判断字符是否为句末标点后的右侧闭合符号。
-// 参数 char 表示待判断字符。
-func isAssistantSentenceCloser(char rune) bool {
-	switch char {
-	case '”', '’', '"', '\'', '）', ')', '】', ']', '》', '}', '」', '』':
-		return true
-	default:
-		return false
-	}
 }
 
 // ClearMessages 清空指定小说的 Agent 历史消息。
