@@ -71,14 +71,32 @@ type AuthConfig struct {
 type AIConfig struct {
 	// ProviderSecretKey 表示 AI 提供商 API Key 应用层加密密钥，可填写任意非空字符串。
 	ProviderSecretKey string `mapstructure:"provider_secret_key"`
-	// Prompt 表示 AI 智能体提示词模板配置，键为任务名称。
-	Prompt map[string]PromptTemplate `mapstructure:"prompt"`
+	// Agent 表示小说写作多层 Agent 配置。
+	Agent AgentConfig `mapstructure:"agent"`
 }
 
-// PromptTemplate 表示单个 AI 智能体提示词模板。
-type PromptTemplate struct {
-	// Prompt 表示实际发送给模型的提示词模板，支持 {变量名} 占位符。
-	Prompt string `mapstructure:"prompt"`
+// AgentConfig 表示小说写作多层 Agent 配置集合。
+type AgentConfig struct {
+	// Supervisor 表示顶层 Agent 配置。
+	Supervisor AgentDefinition `mapstructure:"supervisor"`
+	// Children 表示可被顶层 Agent 当成工具调用的子 Agent 配置列表。
+	Children []AgentDefinition `mapstructure:"children"`
+}
+
+// AgentDefinition 表示单个小说写作 Agent 的配置。
+type AgentDefinition struct {
+	// Name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
+	Name string `mapstructure:"name"`
+	// Task 表示子 Agent 产生流式事件时返回给前端的任务标识，顶层 Agent 可留空。
+	Task string `mapstructure:"task"`
+	// Description 表示 Agent 能力描述，供顶层 Agent 判断是否调用该子 Agent。
+	Description string `mapstructure:"description"`
+	// Instruction 表示 Agent 系统提示词，子 Agent 支持 {变量名} 占位符。
+	Instruction string `mapstructure:"instruction"`
+	// MaxIterations 表示 Eino ADK Agent 最大生成循环次数，小于等于 0 时使用业务默认值。
+	MaxIterations int `mapstructure:"max_iterations"`
+	// Tools 表示预留的子 Agent 工具名称列表，当前版本暂不启用。
+	Tools []string `mapstructure:"tools"`
 }
 
 // StorageConfig 表示文件对象存储配置集合。

@@ -1,6 +1,8 @@
 config/config-dev.yaml
 .trae/
 *_test.go
+!internal/bootstrap/config/config_test.go
+!internal/biz/novelagent/agents_test.go
 !internal/biz/system/service_test.go
 logs/
 .idea/

@@ -4,25 +4,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
 
 var promptVariablePattern = regexp.MustCompile(`\{([a-zA-Z][a-zA-Z0-9_]*)\}`)
-
-// promptTemplate 读取指定任务的提示词模板。
-// 参数 cfg 表示当前应用配置快照；参数 task 表示任务名称。
-func promptTemplate(cfg *appconfig.AppConfig, task string) (string, error) {
-	if cfg == nil || cfg.AI.Prompt == nil {
-		return "", ErrPromptNotConfigured
-	}
-
-	template, ok := cfg.AI.Prompt[task]
-	if !ok || strings.TrimSpace(template.Prompt) == "" {
-		return "", ErrPromptNotConfigured
-	}
-	return template.Prompt, nil
-}
 
 // renderPrompt 渲染提示词模板中的 {变量名} 占位符。
 // 参数 template 表示提示词模板；参数 values 表示占位符变量值。

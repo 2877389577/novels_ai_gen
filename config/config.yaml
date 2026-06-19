@@ -93,15 +93,24 @@ ai:
   # AI 提供商 API Key 的应用层加密密钥；可填写任意非空字符串。
   # 可通过环境变量 AI_PROVIDER_SECRET_KEY 覆盖；修改后旧密钥加密的数据将无法解密。
   provider_secret_key: "46468"
-  prompt:
-    # 顶层 Agent 任务调度提示词。
-    router:
-      prompt: |
+  # 小说写作多层 Agent 配置。
+  agent:
+    # 顶层 Agent 配置；顶层 Agent 不放入 children 数组。
+    supervisor:
+      name: novel_supervisor
+      description: 负责理解用户意图，并决定直接回答或调用小说写作子 Agent。
+      instruction: |
         你是小说写作智能体的顶层 Agent，负责理解用户意图并决定下一步行动。
         你需要根据用户当前问题提供清晰、有帮助的小说写作建议或结果。
-    # 润色专用的提示词。
-    polish:
-      prompt: |
-        根据用户的需求，润色这段小说：
-        用户需求：{userMsg}
-        小说内容：{text}
+      max_iterations: 8
+    # 子 Agent 配置列表；每个子 Agent 会作为工具提供给顶层 Agent 调用。
+    children:
+      - name: polish
+        task: polish
+        description: 负责小说章节正文润色的机器人工具，用户需要对小说、句子等进行润色时使用。但仅支持润色，不支持扩写、续写等功能。
+        instruction: |
+          根据用户的需求，润色这段小说：
+          用户需求：{userMsg}
+          小说内容：{text}
+        max_iterations: 6
+        tools: []

@@ -157,7 +157,12 @@ type chatAgentRuntime struct {
 // Stream 流式执行基于 schema.Message 的小说写作 Agent。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 emit 表示文本增量回调。
 func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, emit func(delta AgentDelta) error) (AgentResult, error) {
-	agent, err := newChatSupervisorAgent(ctx, r.model, cfg, req)
+	agentCfg, err := newAgentRuntimeConfig(cfg, req)
+	if err != nil {
+		return AgentResult{Task: taskDirect}, err
+	}
+
+	agent, err := newChatSupervisorAgent(ctx, r.model, agentCfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
@@ -166,7 +171,7 @@ func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, 
 		Agent:           agent,
 		EnableStreaming: true,
 	})
-	return streamChatAgentEvents(runner.Run(ctx, []*schema.Message{schema.UserMessage(req.Message)}), emit)
+	return streamChatAgentEvents(runner.Run(ctx, []*schema.Message{schema.UserMessage(req.Message)}), agentCfg.taskByAgent, emit)
 }
 
 // agenticAgentRuntime 表示基于 schema.AgenticMessage 的 Eino ADK 多层 Agent 运行时。
@@ -178,7 +183,12 @@ type agenticAgentRuntime struct {
 // Stream 流式执行基于 schema.AgenticMessage 的小说写作 Agent。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 emit 表示文本增量回调。
 func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, emit func(delta AgentDelta) error) (AgentResult, error) {
-	agent, err := newAgenticSupervisorAgent(ctx, r.model, cfg, req)
+	agentCfg, err := newAgentRuntimeConfig(cfg, req)
+	if err != nil {
+		return AgentResult{Task: taskDirect}, err
+	}
+
+	agent, err := newAgenticSupervisorAgent(ctx, r.model, agentCfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
@@ -187,105 +197,94 @@ func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfi
 		Agent:           agent,
 		EnableStreaming: true,
 	})
-	return streamAgenticAgentEvents(runner.Run(ctx, []*schema.AgenticMessage{schema.UserAgenticMessage(req.Message)}), emit)
+	return streamAgenticAgentEvents(runner.Run(ctx, []*schema.AgenticMessage{schema.UserAgenticMessage(req.Message)}), agentCfg.taskByAgent, emit)
 }
 
-// newChatSupervisorAgent 创建基于 schema.Message 的顶层 Agent，并把润色子 Agent 包装为 tool。
-// 参数 ctx 表示请求上下文；参数 model 表示 Eino ChatModel；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求。
-func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, cfg *appconfig.AppConfig, req ChatRequest) (*adk.TypedChatModelAgent[*schema.Message], error) {
+// newChatSupervisorAgent 创建基于 schema.Message 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
+// 参数 ctx 表示请求上下文；参数 model 表示 Eino ChatModel；参数 cfg 表示运行时 Agent 配置。
+func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, cfg runtimeAgentConfig) (*adk.TypedChatModelAgent[*schema.Message], error) {
 	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
 		return nil, err
 	}
-	supervisorPrompt, err := supervisorInstruction(cfg)
-	if err != nil {
-		return nil, err
-	}
-	polishPrompt, err := polishInstruction(cfg, req)
-	if err != nil {
-		return nil, err
-	}
 
-	polishAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
-		Name:          agentNamePolish,
-		Description:   "负责小说章节正文润色的机器人工具，用户需要对小说、句子等进行润色时使用。但仅支持润色，不支持扩写、续写等功能。",
-		Instruction:   strings.TrimSpace(polishPrompt),
-		Model:         model,
-		MaxIterations: 6,
-	})
-	if err != nil {
-		return nil, err
+	tools := make([]tool.BaseTool, 0, len(cfg.children))
+	returnDirectly := make(map[string]bool, len(cfg.children))
+	for _, child := range cfg.children {
+		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
+			Name:          child.name,
+			Description:   child.description,
+			Instruction:   child.instruction,
+			Model:         model,
+			MaxIterations: child.maxIterations,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("创建子 Agent %s 失败: %w", child.name, err)
+		}
+		tools = append(tools, adk.NewAgentTool(ctx, childAgent))
+		returnDirectly[child.name] = true
 	}
-
-	polishTool := adk.NewAgentTool(ctx, polishAgent)
 
 	return adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
-		Name:        agentNameSupervisor,
-		Description: "负责理解用户意图，并决定直接回答或调用小说写作子 Agent。",
-		Instruction: strings.TrimSpace(supervisorPrompt),
+		Name:        cfg.supervisor.name,
+		Description: cfg.supervisor.description,
+		Instruction: cfg.supervisor.instruction,
 		Model:       model,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools:               []tool.BaseTool{polishTool},
+				Tools:               tools,
 				ExecuteSequentially: true,
 			},
 			EmitInternalEvents: true,
-			ReturnDirectly: map[string]bool{
-				agentNamePolish: true,
-			},
+			ReturnDirectly:     returnDirectly,
 		},
-		MaxIterations: 8,
+		MaxIterations: cfg.supervisor.maxIterations,
 	})
 }
 
-// newAgenticSupervisorAgent 创建基于 schema.AgenticMessage 的顶层 Agent，并把润色子 Agent 包装为 tool。
-// 参数 ctx 表示请求上下文；参数 model 表示 Eino AgenticModel；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求。
-func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel, cfg *appconfig.AppConfig, req ChatRequest) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
+// newAgenticSupervisorAgent 创建基于 schema.AgenticMessage 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
+// 参数 ctx 表示请求上下文；参数 model 表示 Eino AgenticModel；参数 cfg 表示运行时 Agent 配置。
+func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel, cfg runtimeAgentConfig) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
 	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
 		return nil, err
 	}
-	supervisorPrompt, err := supervisorInstruction(cfg)
-	if err != nil {
-		return nil, err
-	}
-	polishPrompt, err := polishInstruction(cfg, req)
-	if err != nil {
-		return nil, err
+
+	tools := make([]tool.BaseTool, 0, len(cfg.children))
+	returnDirectly := make(map[string]bool, len(cfg.children))
+	for _, child := range cfg.children {
+		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
+			Name:          child.name,
+			Description:   child.description,
+			Instruction:   child.instruction,
+			Model:         model,
+			MaxIterations: child.maxIterations,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("创建子 Agent %s 失败: %w", child.name, err)
+		}
+		tools = append(tools, adk.NewTypedAgentTool[*schema.AgenticMessage](ctx, childAgent))
+		returnDirectly[child.name] = true
 	}
 
-	polishAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
-		Name:          agentNamePolish,
-		Description:   "负责小说章节正文润色的机器人工具，用户需要对小说、句子等进行润色时使用。但仅支持润色，不支持扩写、续写等功能。",
-		Instruction:   strings.TrimSpace(polishPrompt),
-		Model:         model,
-		MaxIterations: 6,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	polishTool := adk.NewTypedAgentTool[*schema.AgenticMessage](ctx, polishAgent)
 	return adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
-		Name:        agentNameSupervisor,
-		Description: "负责理解用户意图，并决定直接回答或调用小说写作子 Agent。",
-		Instruction: strings.TrimSpace(supervisorPrompt),
+		Name:        cfg.supervisor.name,
+		Description: cfg.supervisor.description,
+		Instruction: cfg.supervisor.instruction,
 		Model:       model,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools:               []tool.BaseTool{polishTool},
+				Tools:               tools,
 				ExecuteSequentially: true,
 			},
 			EmitInternalEvents: true,
-			ReturnDirectly: map[string]bool{
-				agentNamePolish: true,
-			},
+			ReturnDirectly:     returnDirectly,
 		},
-		MaxIterations: 8,
+		MaxIterations: cfg.supervisor.maxIterations,
 	})
 }
 
 // streamChatAgentEvents 将 schema.Message Agent 事件转换为统一文本结果。
-// 参数 iterator 表示 Eino ADK 事件迭代器；参数 emit 表示文本增量回调。
-func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.Message]], emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 iterator 表示 Eino ADK 事件迭代器；参数 taskByAgent 表示子 Agent 名称到任务标识的映射；参数 emit 表示文本增量回调。
+func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.Message]], taskByAgent map[string]string, emit func(delta AgentDelta) error) (AgentResult, error) {
 	result := AgentResult{Task: taskDirect}
 	var full strings.Builder
 	childSeen := false
@@ -301,8 +300,8 @@ func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*sch
 			continue
 		}
 
-		task := taskForAgent(event.AgentName)
-		if task == taskPolish {
+		task := taskForAgent(event.AgentName, taskByAgent)
+		if task != taskDirect {
 			childSeen = true
 		}
 		if task == taskDirect && childSeen {
@@ -316,8 +315,8 @@ func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*sch
 }
 
 // streamAgenticAgentEvents 将 schema.AgenticMessage Agent 事件转换为统一文本结果。
-// 参数 iterator 表示 Eino ADK 事件迭代器；参数 emit 表示文本增量回调。
-func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.AgenticMessage]], emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 iterator 表示 Eino ADK 事件迭代器；参数 taskByAgent 表示子 Agent 名称到任务标识的映射；参数 emit 表示文本增量回调。
+func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.AgenticMessage]], taskByAgent map[string]string, emit func(delta AgentDelta) error) (AgentResult, error) {
 	result := AgentResult{Task: taskDirect}
 	var full strings.Builder
 	childSeen := false
@@ -333,8 +332,8 @@ func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*
 			continue
 		}
 
-		task := taskForAgent(event.AgentName)
-		if task == taskPolish {
+		task := taskForAgent(event.AgentName, taskByAgent)
+		if task != taskDirect {
 			childSeen = true
 		}
 		if task == taskDirect && childSeen {
@@ -450,10 +449,10 @@ func emitTextDelta(task string, content string, full *strings.Builder, result *A
 }
 
 // taskForAgent 根据 Eino Agent 名称映射前端展示任务。
-// 参数 agentName 表示 Eino ADK 事件来源 Agent 名称。
-func taskForAgent(agentName string) string {
-	if agentName == agentNamePolish {
-		return taskPolish
+// 参数 agentName 表示 Eino ADK 事件来源 Agent 名称；参数 taskByAgent 表示子 Agent 名称到任务标识的映射。
+func taskForAgent(agentName string, taskByAgent map[string]string) string {
+	if task, ok := taskByAgent[agentName]; ok && strings.TrimSpace(task) != "" {
+		return task
 	}
 	return taskDirect
 }

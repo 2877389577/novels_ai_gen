@@ -140,6 +140,8 @@ func agentErrorMessage(err error) string {
 		return "AI 写作提示词未配置"
 	case errors.Is(err, biznovelagent.ErrPromptVariableMissing):
 		return "AI 写作提示词变量缺失"
+	case errors.Is(err, biznovelagent.ErrAgentNotConfigured), errors.Is(err, biznovelagent.ErrAgentConfigInvalid), errors.Is(err, biznovelagent.ErrAgentToolsUnsupported):
+		return "AI 写作智能体配置错误"
 	default:
 		return "AI 写作助手暂时不可用，请稍后再试"
 	}
