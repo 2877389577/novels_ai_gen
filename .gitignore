@@ -2,6 +2,7 @@ config/config-dev.yaml
 .trae/
 *_test.go
 !internal/bootstrap/config/config_test.go
+!internal/biz/aiprovider/service_test.go
 !internal/biz/novelagent/agents_test.go
 !internal/biz/novelagent/service_test.go
 !internal/biz/novelagent/tools/get_content_test.go

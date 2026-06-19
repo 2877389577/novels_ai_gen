@@ -51,6 +51,10 @@ import { normalizeText } from "./novel-utils";
 const chapterEditorScrollbarHiddenClass = "chapter-editor-scrollbar-hidden";
 const chapterAiProviderPageSize = 100;
 const chapterAutoSaveIntervalMs = 5000;
+const chapterSelectionAIActionWidth = 112;
+const chapterSelectionAIActionHeight = 36;
+const chapterSelectionAIActionOffset = 10;
+const chapterSelectionAIActionViewportPadding = 8;
 
 const emptyChapterFormValues: ChapterFormValues = {
   title: "",
@@ -138,6 +142,24 @@ interface ChapterAiStreamRequest {
   retryPayload: ChapterAiRetryPayload;
 }
 
+// ChapterAiPrefillMessage 表示一次从正文选区填入 AI 输入框的请求。
+interface ChapterAiPrefillMessage {
+  // id 表示预填请求的唯一标识，用于避免重复消费。
+  id: number;
+  // content 表示需要填入 AI 输入框的正文选中文本。
+  content: string;
+}
+
+// ChapterSelectionAIAction 表示正文选区 AI 操作按钮的展示状态。
+interface ChapterSelectionAIAction {
+  // content 表示当前正文选中的纯文本内容。
+  content: string;
+  // top 表示按钮相对视口顶部的定位。
+  top: number;
+  // left 表示按钮相对视口左侧的定位。
+  left: number;
+}
+
 // ChapterSaveSnapshot 表示最近一次成功保存到后端的章节内容快照。
 interface ChapterSaveSnapshot {
   // chapterId 表示最近一次成功保存的章节主键 ID，新增章节未落库时为空。
@@ -179,6 +201,8 @@ interface ChapterAiAssistantPanelProps {
   novelId: number;
   // ensureChapterSavedForAgent 表示发送 AI 前确保章节已保存并返回章节 ID 的方法。
   ensureChapterSavedForAgent: () => Promise<number | null>;
+  // prefillMessage 表示需要填入 AI 输入框的一次性正文选中文本。
+  prefillMessage: ChapterAiPrefillMessage | null;
   // onClose 表示关闭章节 AI 助手侧栏时执行的回调。
   onClose: () => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
@@ -204,8 +228,13 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   const [submitting, setSubmitting] = useState(false);
   const [contentSnapshotId, setContentSnapshotId] = useState(0);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [selectionAIAction, setSelectionAIAction] =
+    useState<ChapterSelectionAIAction | null>(null);
+  const [aiPrefillMessage, setAiPrefillMessage] =
+    useState<ChapterAiPrefillMessage | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLDivElement | null>(null);
+  const aiPrefillMessageIDRef = useRef(0);
   const persistedChapterIDRef = useRef<number | null>(props.chapterId);
   const chapterNumberRef = useRef<number | null>(null);
   const titleValueRef = useRef(emptyChapterFormValues.title);
@@ -262,6 +291,16 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
       renderContentEditorText(contentEditorRef.current, contentValue);
     },
     [contentSnapshotId, state],
+  );
+
+  // hideSelectionAIActionWhenNotReady 在章节离开可编辑状态时隐藏正文选区 AI 修改按钮。
+  useEffect(
+    function hideSelectionAIActionWhenNotReady() {
+      if (state !== "ready") {
+        setSelectionAIAction(null);
+      }
+    },
+    [state],
   );
 
   // syncPersistedChapterID 同步当前已经落库的章节 ID。
@@ -443,6 +482,58 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
       };
     },
     [onUnauthorized, saveCurrentChapter],
+  );
+
+  // hideSelectionAIAction 隐藏正文选区 AI 修改按钮。
+  const hideSelectionAIAction = useCallback(function hideSelectionAIAction() {
+    setSelectionAIAction(null);
+  }, []);
+
+  // refreshSelectionAIAction 根据当前正文选区刷新 AI 修改按钮位置。
+  const refreshSelectionAIAction = useCallback(function refreshSelectionAIAction() {
+    setSelectionAIAction(
+      getChapterSelectionAIAction(contentEditorRef.current),
+    );
+  }, []);
+
+  // refreshSelectionAIActionAfterSelection 延迟刷新正文选区按钮，等待浏览器完成选区更新。
+  const refreshSelectionAIActionAfterSelection = useCallback(
+    function refreshSelectionAIActionAfterSelection() {
+      window.setTimeout(refreshSelectionAIAction, 0);
+    },
+    [refreshSelectionAIAction],
+  );
+
+  // syncSelectionAIActionOnViewportChange 在滚动或窗口变化时同步正文选区 AI 修改按钮。
+  useEffect(
+    function syncSelectionAIActionOnViewportChange() {
+      if (!selectionAIAction) {
+        return;
+      }
+
+      window.addEventListener("scroll", refreshSelectionAIAction, true);
+      window.addEventListener("resize", refreshSelectionAIAction);
+      return function removeSelectionAIActionViewportListeners() {
+        window.removeEventListener("scroll", refreshSelectionAIAction, true);
+        window.removeEventListener("resize", refreshSelectionAIAction);
+      };
+    },
+    [refreshSelectionAIAction, selectionAIAction],
+  );
+
+  // syncSelectionAIActionOnDocumentSelectionChange 在页面选区变化时同步正文选区 AI 修改按钮。
+  useEffect(
+    function syncSelectionAIActionOnDocumentSelectionChange() {
+      if (state !== "ready") {
+        return;
+      }
+
+      document.addEventListener("selectionchange", refreshSelectionAIAction);
+      return function removeSelectionAIActionSelectionListener() {
+        document.removeEventListener("selectionchange", refreshSelectionAIAction);
+      };
+    },
+    [refreshSelectionAIAction, state],
   );
 
   // loadNextChapterNumber 加载创建模式下后端建议的下一章节号。
@@ -641,6 +732,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   // handleContentChange 同步章节正文输入。
   // 参数 event 表示正文段落编辑器输入事件。
   function handleContentChange(event: FormEvent<HTMLDivElement>) {
+    hideSelectionAIAction();
     const nextContent = readContentEditorText(event.currentTarget);
     contentValueRef.current = nextContent;
     setContentValue(nextContent);
@@ -655,6 +747,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   // handleContentBlur 在空正文失焦时恢复 placeholder 显示。
   // 参数 event 表示正文段落编辑器失焦事件。
   function handleContentBlur(event: FocusEvent<HTMLDivElement>) {
+    hideSelectionAIAction();
     const nextContent = readContentEditorText(event.currentTarget);
     if (normalizeText(nextContent)) {
       contentValueRef.current = nextContent;
@@ -672,6 +765,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   // 参数 event 表示正文段落编辑器粘贴事件。
   function handleContentPaste(event: ClipboardEvent<HTMLDivElement>) {
     event.preventDefault();
+    hideSelectionAIAction();
     const text = event.clipboardData.getData("text/plain");
     insertPlainTextAtSelection(text);
 
@@ -693,15 +787,22 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     }
 
     event.preventDefault();
+    hideSelectionAIAction();
     insertPlainTextAtSelection("　　");
     const nextContent = readContentEditorText(event.currentTarget);
     contentValueRef.current = nextContent;
     setContentValue(nextContent);
   }
 
+  // handleContentKeyUp 在键盘调整正文选区后刷新 AI 修改按钮。
+  function handleContentKeyUp() {
+    refreshSelectionAIActionAfterSelection();
+  }
+
   // handleContentMouseDown 将编辑器空白区域点击固定为移动到正文末尾。
   // 参数 event 表示正文段落编辑器鼠标按下事件。
   function handleContentMouseDown(event: MouseEvent<HTMLDivElement>) {
+    hideSelectionAIAction();
     if (event.target !== event.currentTarget) {
       return;
     }
@@ -710,6 +811,31 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     event.currentTarget.focus();
     ensureContentEditorHasParagraph(event.currentTarget);
     moveCaretToEnd(getContentEditorTailNode(event.currentTarget));
+  }
+
+  // handleContentMouseUp 在鼠标完成正文选区后刷新 AI 修改按钮。
+  function handleContentMouseUp() {
+    refreshSelectionAIActionAfterSelection();
+  }
+
+  // handleSelectionAIActionMouseDown 保持正文选区不被 AI 修改按钮抢走焦点。
+  // 参数 event 表示 AI 修改按钮鼠标按下事件。
+  function handleSelectionAIActionMouseDown(event: MouseEvent<HTMLElement>) {
+    event.preventDefault();
+  }
+
+  // handleSelectionAIActionClick 将当前正文选中文本填入 AI 输入框。
+  function handleSelectionAIActionClick() {
+    if (!selectionAIAction) {
+      return;
+    }
+    aiPrefillMessageIDRef.current += 1;
+    setAiPanelOpen(true);
+    setAiPrefillMessage({
+      id: aiPrefillMessageIDRef.current,
+      content: selectionAIAction.content,
+    });
+    hideSelectionAIAction();
   }
 
   // handleSubmit 校验章节表单并提交创建或更新请求。
@@ -843,7 +969,9 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
                   onFocus={handleContentFocus}
                   onInput={handleContentChange}
                   onKeyDown={handleContentKeyDown}
+                  onKeyUp={handleContentKeyUp}
                   onMouseDown={handleContentMouseDown}
+                  onMouseUp={handleContentMouseUp}
                   onPaste={handleContentPaste}
                 />
               </div>
@@ -868,11 +996,33 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
           <ChapterAiAssistantPanel
             novelId={props.novelId}
             ensureChapterSavedForAgent={ensureChapterSavedForAgent}
+            prefillMessage={aiPrefillMessage}
             onClose={handleAiAssistantClose}
             onUnauthorized={props.onUnauthorized}
           />
         ) : null}
       </div>
+
+      {selectionAIAction ? (
+        <Button
+          aria-label="用 AI 修改选中的正文"
+          className="chapter-selection-ai-action"
+          colorful
+          htmlType="button"
+          icon={<IconAIEditLevel1 aria-hidden="true" />}
+          onClick={handleSelectionAIActionClick}
+          onMouseDown={handleSelectionAIActionMouseDown}
+          size="small"
+          style={{
+            left: selectionAIAction.left,
+            top: selectionAIAction.top,
+          }}
+          theme="solid"
+          type="primary"
+        >
+          AI修改
+        </Button>
+      ) : null}
 
       <div
         aria-controls="chapter-ai-assistant-panel"
@@ -911,6 +1061,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const [historyClearing, setHistoryClearing] = useState(false);
   const [assistantSending, setAssistantSending] = useState(false);
   const streamControllerRef = useRef<AbortController | null>(null);
+  const consumedPrefillMessageIDRef = useRef<number | null>(null);
   const onUnauthorized = props.onUnauthorized;
 
   const selectedProvider = useMemo(
@@ -1047,6 +1198,23 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   );
 
   useEffect(
+    function consumePrefillMessage() {
+      const prefillMessage = props.prefillMessage;
+      if (!prefillMessage || consumedPrefillMessageIDRef.current === prefillMessage.id) {
+        return;
+      }
+
+      consumedPrefillMessageIDRef.current = prefillMessage.id;
+      if (inputValue.trim()) {
+        Toast.warning("AI 输入框已有内容，请先发送或清空后再使用 AI 修改");
+        return;
+      }
+      setInputValue(prefillMessage.content);
+    },
+    [inputValue, props.prefillMessage],
+  );
+
+  useEffect(
     function loadProviderModels() {
       if (!selectedProviderID) {
         setModels([]);
@@ -1055,6 +1223,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       }
 
       const controller = new AbortController();
+      const defaultModel = selectedProvider?.default_model?.trim() ?? "";
       setModelLoading(true);
       setModels([]);
       setSelectedModelID("");
@@ -1069,14 +1238,22 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             return;
           }
 
-          setModels(data.items);
-          setSelectedModelID(data.items[0]?.id ?? "");
+          const nextModels = modelsWithDefaultModel(data.items, defaultModel);
+          setModels(nextModels);
+          setSelectedModelID(preferredModelID(nextModels, defaultModel));
         } catch (error) {
           if (controller.signal.aborted) {
             return;
           }
           if (error instanceof UnauthorizedError) {
             onUnauthorized();
+            return;
+          }
+          if (defaultModel) {
+            const fallbackModels = [defaultAIProviderModel(defaultModel)];
+            setModels(fallbackModels);
+            setSelectedModelID(defaultModel);
+            Toast.warning("AI 模型列表获取失败，已使用默认模型");
             return;
           }
           Toast.error(getErrorMessage(error, "AI 模型列表获取失败，请稍后再试"));
@@ -1092,7 +1269,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         controller.abort();
       };
     },
-    [onUnauthorized, selectedProviderID],
+    [onUnauthorized, selectedProvider?.default_model, selectedProviderID],
   );
 
   // handleProviderChange 切换当前用于查询模型的 AI 提供商。
@@ -1680,6 +1857,96 @@ function createChapterAiRenderMessageID(
   return `${messageID}-${status}-${contentLength}`;
 }
 
+// getChapterSelectionAIAction 根据正文编辑器选区生成 AI 修改按钮状态。
+// 参数 editor 表示章节正文段落编辑器。
+function getChapterSelectionAIAction(
+  editor: HTMLDivElement | null,
+): ChapterSelectionAIAction | null {
+  if (!editor || typeof window === "undefined") {
+    return null;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return null;
+  }
+  if (!selectionBelongsToEditor(selection, editor)) {
+    return null;
+  }
+
+  const content = selection.toString();
+  if (!content.trim()) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  const rect = firstVisibleSelectionRect(range);
+  if (!rect) {
+    return null;
+  }
+
+  const topCandidate =
+    rect.top - chapterSelectionAIActionHeight - chapterSelectionAIActionOffset;
+  const top =
+    topCandidate >= chapterSelectionAIActionViewportPadding
+      ? topCandidate
+      : rect.bottom + chapterSelectionAIActionOffset;
+  const centeredLeft = rect.left + rect.width / 2 - chapterSelectionAIActionWidth / 2;
+  return {
+    content,
+    top: clampToViewport(
+      top,
+      chapterSelectionAIActionViewportPadding,
+      window.innerHeight -
+        chapterSelectionAIActionHeight -
+        chapterSelectionAIActionViewportPadding,
+    ),
+    left: clampToViewport(
+      centeredLeft,
+      chapterSelectionAIActionViewportPadding,
+      window.innerWidth -
+        chapterSelectionAIActionWidth -
+        chapterSelectionAIActionViewportPadding,
+    ),
+  };
+}
+
+// selectionBelongsToEditor 判断当前浏览器选区是否完全位于正文编辑器内。
+// 参数 selection 表示浏览器当前选区；参数 editor 表示章节正文段落编辑器。
+function selectionBelongsToEditor(selection: Selection, editor: HTMLDivElement): boolean {
+  const anchorNode = selection.anchorNode;
+  const focusNode = selection.focusNode;
+  if (!anchorNode || !focusNode) {
+    return false;
+  }
+  return editor.contains(anchorNode) && editor.contains(focusNode);
+}
+
+// firstVisibleSelectionRect 返回选区中第一个可用于定位的矩形。
+// 参数 range 表示浏览器当前选区范围。
+function firstVisibleSelectionRect(range: Range): DOMRect | null {
+  const boundingRect = range.getBoundingClientRect();
+  if (boundingRect.width > 0 || boundingRect.height > 0) {
+    return boundingRect;
+  }
+
+  for (const rect of Array.from(range.getClientRects())) {
+    if (rect.width > 0 || rect.height > 0) {
+      return rect;
+    }
+  }
+  return null;
+}
+
+// clampToViewport 将数值限制在指定视口范围内。
+// 参数 value 表示原始坐标；参数 min 表示允许的最小值；参数 max 表示允许的最大值。
+function clampToViewport(value: number, min: number, max: number): number {
+  if (max < min) {
+    return min;
+  }
+  return Math.min(Math.max(value, min), max);
+}
+
 // formatAIModelName 返回 AI 模型在对话提示中的展示名。
 // 参数 model 表示当前选择的 AI 模型，可以为空。
 function formatAIModelName(model?: AIProviderModelItem): string {
@@ -1687,6 +1954,52 @@ function formatAIModelName(model?: AIProviderModelItem): string {
     return "当前模型";
   }
   return model.display_name || model.id;
+}
+
+// defaultAIProviderModel 根据手动填写的默认模型标识构造前端模型选项。
+// 参数 modelID 表示 AI 提供商配置的默认模型标识。
+function defaultAIProviderModel(modelID: string): AIProviderModelItem {
+  return {
+    id: modelID,
+    display_name: modelID,
+    owned_by: "",
+    created_at: "",
+    supported_generation_methods: [],
+  };
+}
+
+// modelsWithDefaultModel 合并官方模型列表和 AI 提供商默认模型。
+// 参数 items 表示模型列表接口返回的模型选项；参数 defaultModel 表示 AI 提供商配置的默认模型标识。
+function modelsWithDefaultModel(
+  items: AIProviderModelItem[],
+  defaultModel: string,
+): AIProviderModelItem[] {
+  const normalizedDefaultModel = defaultModel.trim();
+  if (!normalizedDefaultModel) {
+    return items;
+  }
+  const hasDefaultModel = items.some(function matchDefaultModel(model) {
+    return model.id === normalizedDefaultModel;
+  });
+  if (hasDefaultModel) {
+    return items;
+  }
+  return [defaultAIProviderModel(normalizedDefaultModel), ...items];
+}
+
+// preferredModelID 返回模型列表加载完成后应优先选中的模型标识。
+// 参数 items 表示可选模型列表；参数 defaultModel 表示 AI 提供商配置的默认模型标识。
+function preferredModelID(items: AIProviderModelItem[], defaultModel: string): string {
+  const normalizedDefaultModel = defaultModel.trim();
+  if (
+    normalizedDefaultModel &&
+    items.some(function matchDefaultModel(model) {
+      return model.id === normalizedDefaultModel;
+    })
+  ) {
+    return normalizedDefaultModel;
+  }
+  return items[0]?.id ?? "";
 }
 
 // formatAIModelOption 返回 AI 模型下拉选项展示文本。

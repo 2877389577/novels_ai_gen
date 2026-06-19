@@ -26,6 +26,8 @@ type CreateRequest struct {
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
+	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时默认 true。
@@ -42,6 +44,8 @@ type UpdateRequest struct {
 	APIKey string `json:"api_key" example:"sk-xxx"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
+	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时保留原值。
@@ -60,6 +64,8 @@ type ProviderData struct {
 	MaskedAPIKey string `json:"masked_api_key" example:"sk-p...abcd"`
 	// BaseURL 表示 AI 提供商接口基础地址。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// DefaultModel 表示模型列表不可用时使用的默认模型标识。
+	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// APIType 表示 AI 接口类型。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。

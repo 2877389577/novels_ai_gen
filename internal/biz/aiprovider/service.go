@@ -83,6 +83,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (ProviderRespon
 		APIKeyCiphertext: ciphertext,
 		APIKeyMask:       maskAPIKey(req.APIKey),
 		BaseURL:          req.BaseURL,
+		DefaultModel:     req.DefaultModel,
 		APIType:          providerAPIType(req.ProviderType, req.APIType),
 		Enabled:          enabledFromCreateRequest(req),
 	}
@@ -161,6 +162,7 @@ func applyUpdateRequest(cipher *Cipher, item *Provider, req UpdateRequest) error
 	item.Name = req.Name
 	item.ProviderType = req.ProviderType
 	item.BaseURL = req.BaseURL
+	item.DefaultModel = req.DefaultModel
 	if item.ProviderType == providerTypeOpenAI {
 		item.APIType = apiTypeCompletions
 	} else if req.APIType != "" {
@@ -211,11 +213,23 @@ func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64) (ModelL
 		return ModelListResponse{}, fmt.Errorf("解密 AI 提供商 API Key 失败: %w", err)
 	}
 
-	return s.ListModels(ctx, ModelListRequest{
+	result, err := s.ListModels(ctx, ModelListRequest{
 		ProviderType: item.ProviderType,
 		APIKey:       apiKey,
 		BaseURL:      item.BaseURL,
 	})
+	if err != nil {
+		if fallback, ok := defaultModelList(item.DefaultModel); ok {
+			return fallback, nil
+		}
+		return ModelListResponse{}, err
+	}
+	if len(result.Items) == 0 {
+		if fallback, ok := defaultModelList(item.DefaultModel); ok {
+			return fallback, nil
+		}
+	}
+	return result, nil
 }
 
 // providerAPIType 根据 AI 提供商协议返回最终保存的接口类型。
@@ -246,6 +260,7 @@ func normalizeCreateRequest(req CreateRequest) CreateRequest {
 	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
 	req.APIKey = strings.TrimSpace(req.APIKey)
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
+	req.DefaultModel = strings.TrimSpace(req.DefaultModel)
 	req.APIType = strings.ToLower(strings.TrimSpace(req.APIType))
 	return req
 }
@@ -257,6 +272,7 @@ func normalizeUpdateRequest(req UpdateRequest) UpdateRequest {
 	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
 	req.APIKey = strings.TrimSpace(req.APIKey)
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
+	req.DefaultModel = strings.TrimSpace(req.DefaultModel)
 	req.APIType = strings.ToLower(strings.TrimSpace(req.APIType))
 	return req
 }
@@ -371,6 +387,23 @@ func maskAPIKey(value string) string {
 	return string(runes[:4]) + "..." + string(runes[len(runes)-4:])
 }
 
+// defaultModelList 根据默认模型标识构造兜底模型列表。
+// 参数 model 表示 AI 提供商手动填写的默认模型标识。
+func defaultModelList(model string) (ModelListResponse, bool) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ModelListResponse{}, false
+	}
+	return ModelListResponse{
+		Items: []ModelInfo{
+			{
+				ID:          model,
+				DisplayName: model,
+			},
+		},
+	}, true
+}
+
 // toResponse 将 AI 提供商模型转换为响应数据。
 // 参数 item 表示 AI 提供商模型。
 func toResponse(item Provider) ProviderResponse {
@@ -380,6 +413,7 @@ func toResponse(item Provider) ProviderResponse {
 		ProviderType: item.ProviderType,
 		MaskedAPIKey: item.APIKeyMask,
 		BaseURL:      item.BaseURL,
+		DefaultModel: item.DefaultModel,
 		APIType:      item.APIType,
 		Enabled:      item.Enabled,
 		CreatedAt:    item.CreatedAt,

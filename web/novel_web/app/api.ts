@@ -301,6 +301,8 @@ export interface AIProviderItem {
   masked_api_key: string;
   // base_url 表示 AI 提供商接口基础地址。
   base_url: string;
+  // default_model 表示模型列表不可用时使用的默认模型标识。
+  default_model: string;
   // api_type 表示 AI 接口类型。
   api_type: AIProviderAPIType;
   // enabled 表示是否启用该 AI 提供商。
@@ -343,6 +345,8 @@ export interface AIProviderUpsertParams {
   api_key: string;
   // base_url 表示 AI 提供商接口基础地址。
   base_url: string;
+  // default_model 表示模型列表不可用时使用的默认模型标识。
+  default_model: string;
   // api_type 表示 AI 接口类型。
   api_type: AIProviderAPIType;
   // enabled 表示是否启用该 AI 提供商。
