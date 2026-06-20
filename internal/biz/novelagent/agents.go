@@ -50,7 +50,19 @@ func newAgentRuntimeConfig(cfg *appconfig.AppConfig) (runtimeAgentConfig, error)
 	if cfg == nil {
 		return runtimeAgentConfig{}, ErrAgentNotConfigured
 	}
-	agentCfg := cfg.AI.Agent
+	return newRuntimeAgentConfigFromAgent(cfg.AI.Agent)
+}
+
+// ValidateAgentConfig 校验结构化小说写作 Agent 配置是否可用于运行时。
+// 参数 agentCfg 表示需要校验的多层 Agent 配置。
+func ValidateAgentConfig(agentCfg appconfig.AgentConfig) error {
+	_, err := newRuntimeAgentConfigFromAgent(agentCfg)
+	return err
+}
+
+// newRuntimeAgentConfigFromAgent 根据结构化 Agent 配置生成运行时 Agent 配置。
+// 参数 agentCfg 表示当前应用配置中的多层 Agent 配置。
+func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgentConfig, error) {
 	if isEmptyAgentDefinition(agentCfg.Supervisor) && len(agentCfg.Agent) == 0 {
 		return runtimeAgentConfig{}, ErrAgentNotConfigured
 	}

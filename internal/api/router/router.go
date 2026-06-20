@@ -84,6 +84,8 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.GET("/uploads/preview", uploadHandler.Preview)
 	protected.GET("/config/file", configHandler.GetFile)
 	protected.PUT("/config/file", configHandler.UpdateFile)
+	protected.GET("/config/agent", configHandler.GetAgent)
+	protected.PUT("/config/agent", configHandler.UpdateAgent)
 	protected.GET("/logs/stream", logHandler.Stream)
 	protected.GET("/logs/files", logHandler.Files)
 	protected.POST("/logs/clear-today", logHandler.ClearToday)
