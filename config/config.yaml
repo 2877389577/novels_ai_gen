@@ -104,6 +104,12 @@ ai:
     memory:
       # 每次请求注入模型上下文的最近对话轮数；一轮为用户消息 + AI 回复。
       recent_rounds: 10
+    # 上游模型失败重试配置。
+    retry:
+      # 单次模型调用失败后的最大重试次数；0 表示不重试。
+      max_retries: 0
+      # 每次重试前等待的毫秒数；max_retries 为 0 时不生效。
+      backoff_ms: 300
     # 顶层 Agent 配置；顶层 Agent 不放入子 Agent 数组。
     supervisor:
       name: novel_supervisor

@@ -162,6 +162,10 @@ type AgentChildTextField =
 interface AgentSettingsFormState {
   // memoryRecentRounds 表示最近原始对话轮数配置文本。
   memoryRecentRounds: string;
+  // retryMaxRetries 表示模型失败最大重试次数配置文本。
+  retryMaxRetries: string;
+  // retryBackoffMS 表示模型失败重试间隔毫秒数配置文本。
+  retryBackoffMS: string;
   // supervisor 表示顶层 Agent 表单状态。
   supervisor: AgentSupervisorFormState;
   // children 表示全部子 Agent 表单状态。
@@ -194,6 +198,8 @@ const defaultAIProviderFormState: AIProviderFormState = {
 };
 const defaultAgentSettingsFormState: AgentSettingsFormState = {
   memoryRecentRounds: "10",
+  retryMaxRetries: "0",
+  retryBackoffMS: "300",
   supervisor: {
     name: "",
     description: "",
@@ -734,6 +740,22 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
+  // handleRetryMaxRetriesChange 处理模型失败最大重试次数字段变化。
+  // 参数 event 表示输入框变化事件。
+  function handleRetryMaxRetriesChange(event: ChangeEvent<HTMLInputElement>) {
+    setForm(function updateRetryMaxRetries(current) {
+      return { ...current, retryMaxRetries: event.target.value };
+    });
+  }
+
+  // handleRetryBackoffMSChange 处理模型失败重试间隔字段变化。
+  // 参数 event 表示输入框变化事件。
+  function handleRetryBackoffMSChange(event: ChangeEvent<HTMLInputElement>) {
+    setForm(function updateRetryBackoffMS(current) {
+      return { ...current, retryBackoffMS: event.target.value };
+    });
+  }
+
   // handleSupervisorInputChange 处理顶层 Agent 文本或数字字段变化。
   // 参数 event 表示输入框或文本域变化事件。
   function handleSupervisorInputChange(
@@ -1084,7 +1106,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
       <section className="agent-settings-section" aria-labelledby="agent-memory-title">
         <div className="ai-provider-section-heading">
           <div>
-            <h2 id="agent-memory-title">记忆</h2>
+            <h2 id="agent-memory-title">记忆与重试</h2>
           </div>
         </div>
         <div className="agent-settings-grid">
@@ -1097,6 +1119,28 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
               value={form.memoryRecentRounds}
               disabled={loading || saving}
               onChange={handleMemoryRecentRoundsChange}
+            />
+          </label>
+          <label className="ai-provider-field">
+            <span>模型失败最大重试次数</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={form.retryMaxRetries}
+              disabled={loading || saving}
+              onChange={handleRetryMaxRetriesChange}
+            />
+          </label>
+          <label className="ai-provider-field">
+            <span>重试间隔毫秒</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={form.retryBackoffMS}
+              disabled={loading || saving}
+              onChange={handleRetryBackoffMSChange}
             />
           </label>
         </div>
@@ -2146,6 +2190,8 @@ function SystemSettingsPanel(props: SystemSettingsPanelProps) {
 function createDefaultAgentSettingsFormState(): AgentSettingsFormState {
   return {
     memoryRecentRounds: defaultAgentSettingsFormState.memoryRecentRounds,
+    retryMaxRetries: defaultAgentSettingsFormState.retryMaxRetries,
+    retryBackoffMS: defaultAgentSettingsFormState.retryBackoffMS,
     supervisor: { ...defaultAgentSettingsFormState.supervisor },
     children: [],
   };
@@ -2180,6 +2226,8 @@ function createAgentChildID(): string {
 function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormState {
   return {
     memoryRecentRounds: String(agent.memory?.recent_rounds ?? 10),
+    retryMaxRetries: String(agent.retry?.max_retries ?? 0),
+    retryBackoffMS: String(agent.retry?.backoff_ms ?? 300),
     supervisor: {
       name: agent.supervisor?.name ?? "",
       description: agent.supervisor?.description ?? "",
@@ -2248,6 +2296,22 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
   );
   if (recentRounds.error) {
     return { agent: null, error: recentRounds.error };
+  }
+
+  const retryMaxRetries = parseNonNegativeInteger(
+    form.retryMaxRetries,
+    "模型失败最大重试次数",
+  );
+  if (retryMaxRetries.error) {
+    return { agent: null, error: retryMaxRetries.error };
+  }
+
+  const retryBackoffMS = parseNonNegativeInteger(
+    form.retryBackoffMS,
+    "模型失败重试间隔毫秒",
+  );
+  if (retryBackoffMS.error) {
+    return { agent: null, error: retryBackoffMS.error };
   }
 
   const supervisorMaxIterations = parseNonNegativeInteger(
@@ -2364,6 +2428,10 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     agent: {
       memory: {
         recent_rounds: recentRounds.value,
+      },
+      retry: {
+        max_retries: retryMaxRetries.value,
+        backoff_ms: retryBackoffMS.value,
       },
       supervisor: {
         name: supervisorName,

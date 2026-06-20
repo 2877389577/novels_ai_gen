@@ -357,7 +357,10 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 		return RuntimeModelConfig{}, err
 	}
 
-	runtimeConfig := RuntimeModelConfig{Default: defaultConfig}
+	runtimeConfig := RuntimeModelConfig{
+		Default: defaultConfig,
+		Retry:   agentCfg.retry,
+	}
 	if agentCfg.supervisor.providerID != 0 {
 		supervisorConfig, err := s.agentModelOverrideConfig(ctx, "顶层 Agent", agentCfg.supervisor.providerID, agentCfg.supervisor.model)
 		if err != nil {

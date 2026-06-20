@@ -85,12 +85,22 @@ type AgentConfig struct {
 	Agent []AgentDefinition `mapstructure:"agent" json:"agent" yaml:"agent"`
 	// Memory 表示小说写作 Agent 的持久记忆配置。
 	Memory AgentMemoryConfig `mapstructure:"memory" json:"memory" yaml:"memory"`
+	// Retry 表示小说写作 Agent 调用上游模型失败时的重试配置。
+	Retry AgentRetryConfig `mapstructure:"retry" json:"retry" yaml:"retry"`
 }
 
 // AgentMemoryConfig 表示小说写作 Agent 的持久记忆配置。
 type AgentMemoryConfig struct {
 	// RecentRounds 表示每次请求注入模型上下文的最近对话轮数，小于等于 0 时使用业务默认值。
 	RecentRounds int `mapstructure:"recent_rounds" json:"recent_rounds" yaml:"recent_rounds"`
+}
+
+// AgentRetryConfig 表示小说写作 Agent 调用上游模型失败时的重试配置。
+type AgentRetryConfig struct {
+	// MaxRetries 表示单次模型调用失败后的最大重试次数，0 表示不重试，小于 0 时按 0 处理。
+	MaxRetries int `mapstructure:"max_retries" json:"max_retries" yaml:"max_retries"`
+	// BackoffMS 表示模型重试间隔毫秒数，小于等于 0 时使用业务默认值。
+	BackoffMS int `mapstructure:"backoff_ms" json:"backoff_ms" yaml:"backoff_ms"`
 }
 
 // AgentDefinition 表示单个小说写作 Agent 的配置。

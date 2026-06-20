@@ -442,6 +442,14 @@ export interface AgentMemoryConfig {
   recent_rounds: number;
 }
 
+// AgentRetryConfig 表示小说写作 Agent 的模型失败重试配置。
+export interface AgentRetryConfig {
+  // max_retries 表示单次模型调用失败后的最大重试次数，0 表示不重试。
+  max_retries: number;
+  // backoff_ms 表示模型失败后再次重试前等待的毫秒数。
+  backoff_ms: number;
+}
+
 // AgentDefinition 表示单个小说写作 Agent 的配置。
 export interface AgentDefinition {
   // name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
@@ -474,6 +482,8 @@ export interface AgentConfig {
   agent: AgentDefinition[];
   // memory 表示小说写作 Agent 的持久记忆配置。
   memory: AgentMemoryConfig;
+  // retry 表示小说写作 Agent 的模型失败重试配置。
+  retry: AgentRetryConfig;
 }
 
 // AgentConfigData 表示后端结构化智能体配置和加载状态。

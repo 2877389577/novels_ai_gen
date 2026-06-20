@@ -91,18 +91,18 @@ func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeMod
 			chapterReader:   f.chapterReader,
 		}, nil
 	case modelPathAgentic:
-		defaultModel, err := f.newAgenticModel(ctx, cfg.Default)
+		defaultModel, err := f.newAgenticModel(ctx, cfg.Default, cfg.Retry)
 		if err != nil {
 			return nil, err
 		}
 		supervisorModel := defaultModel
 		if cfg.Supervisor != nil {
-			supervisorModel, err = f.newAgenticModel(ctx, *cfg.Supervisor)
+			supervisorModel, err = f.newAgenticModel(ctx, *cfg.Supervisor, cfg.Retry)
 			if err != nil {
 				return nil, err
 			}
 		}
-		childModels, err := f.newAgenticChildModels(ctx, cfg.Children)
+		childModels, err := f.newAgenticChildModels(ctx, cfg.Children, cfg.Retry)
 		if err != nil {
 			return nil, err
 		}
@@ -136,16 +136,18 @@ func (f *EinoAgentRuntimeFactory) newChatModel(ctx context.Context, cfg ModelCon
 
 // newAgenticModel 创建 schema.AgenticMessage 路径使用的 Eino AgenticModel。
 // 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
-func (f *EinoAgentRuntimeFactory) newAgenticModel(ctx context.Context, cfg ModelConfig) (einomodel.AgenticModel, error) {
+func (f *EinoAgentRuntimeFactory) newAgenticModel(ctx context.Context, cfg ModelConfig, retry RuntimeRetryConfig) (einomodel.AgenticModel, error) {
 	_ = f
 	switch cfg.ProviderType {
 	case providerTypeOpenAI:
 		timeout := defaultTimeout
+		maxRetries := retry.MaxRetries
 		model, err := agenticopenai.NewResponsesModel(ctx, &agenticopenai.ResponsesConfig{
-			APIKey:  cfg.APIKey,
-			BaseURL: cfg.BaseURL,
-			Model:   cfg.Model,
-			Timeout: &timeout,
+			APIKey:     cfg.APIKey,
+			BaseURL:    cfg.BaseURL,
+			Model:      cfg.Model,
+			Timeout:    &timeout,
+			MaxRetries: &maxRetries,
 		})
 		if err != nil {
 			return nil, err
@@ -212,13 +214,13 @@ func (f *EinoAgentRuntimeFactory) newChatChildModels(ctx context.Context, config
 
 // newAgenticChildModels 创建启用子 Agent 的 AgenticModel 覆盖集合。
 // 参数 ctx 表示请求上下文；参数 configs 表示按子 Agent 名称索引的模型覆盖配置。
-func (f *EinoAgentRuntimeFactory) newAgenticChildModels(ctx context.Context, configs map[string]ModelConfig) (map[string]einomodel.AgenticModel, error) {
+func (f *EinoAgentRuntimeFactory) newAgenticChildModels(ctx context.Context, configs map[string]ModelConfig, retry RuntimeRetryConfig) (map[string]einomodel.AgenticModel, error) {
 	if len(configs) == 0 {
 		return nil, nil
 	}
 	models := make(map[string]einomodel.AgenticModel, len(configs))
 	for name, cfg := range configs {
-		model, err := f.newAgenticModel(ctx, cfg)
+		model, err := f.newAgenticModel(ctx, cfg, retry)
 		if err != nil {
 			return nil, fmt.Errorf("创建子 Agent %s 自定义模型失败: %w", name, err)
 		}
@@ -243,6 +245,7 @@ func normalizeGeminiBaseURL(baseURL string) string {
 // 参数 cfg 表示入口模型和启用 Agent 自定义模型配置。
 func normalizeRuntimeModelConfig(cfg RuntimeModelConfig) RuntimeModelConfig {
 	cfg.Default = normalizeModelConfig(cfg.Default)
+	cfg.Retry = normalizeRuntimeRetryConfig(cfg.Retry)
 	if cfg.Supervisor != nil {
 		supervisor := normalizeModelConfig(*cfg.Supervisor)
 		cfg.Supervisor = &supervisor
@@ -257,6 +260,18 @@ func normalizeRuntimeModelConfig(cfg RuntimeModelConfig) RuntimeModelConfig {
 			children[name] = normalizeModelConfig(childCfg)
 		}
 		cfg.Children = children
+	}
+	return cfg
+}
+
+// normalizeRuntimeRetryConfig 标准化一次 Agent 运行中的模型失败重试配置。
+// 参数 cfg 表示运行时重试配置。
+func normalizeRuntimeRetryConfig(cfg RuntimeRetryConfig) RuntimeRetryConfig {
+	if cfg.MaxRetries < 0 {
+		cfg.MaxRetries = 0
+	}
+	if cfg.Backoff <= 0 {
+		cfg.Backoff = defaultAgentRetryBackoff
 	}
 	return cfg
 }
@@ -764,12 +779,13 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 			childModel = configuredModel
 		}
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
-			Name:          child.name,
-			Description:   child.description,
-			Instruction:   child.instruction,
-			Model:         childModel,
-			ToolsConfig:   childToolsConfig(childTools),
-			MaxIterations: child.maxIterations,
+			Name:             child.name,
+			Description:      child.description,
+			Instruction:      child.instruction,
+			Model:            childModel,
+			ToolsConfig:      childToolsConfig(childTools),
+			MaxIterations:    child.maxIterations,
+			ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("创建子 Agent %s 失败: %w", child.name, err)
@@ -795,7 +811,8 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
-		MaxIterations: cfg.supervisor.maxIterations,
+		MaxIterations:    cfg.supervisor.maxIterations,
+		ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 	})
 }
 
@@ -824,12 +841,13 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 			childModel = configuredModel
 		}
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
-			Name:          child.name,
-			Description:   child.description,
-			Instruction:   child.instruction,
-			Model:         childModel,
-			ToolsConfig:   childToolsConfig(childTools),
-			MaxIterations: child.maxIterations,
+			Name:             child.name,
+			Description:      child.description,
+			Instruction:      child.instruction,
+			Model:            childModel,
+			ToolsConfig:      childToolsConfig(childTools),
+			MaxIterations:    child.maxIterations,
+			ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("创建子 Agent %s 失败: %w", child.name, err)
@@ -855,8 +873,58 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
-		MaxIterations: cfg.supervisor.maxIterations,
+		MaxIterations:    cfg.supervisor.maxIterations,
+		ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 	})
+}
+
+// chatModelRetryConfig 创建 schema.Message 路径使用的 ADK 模型重试配置。
+// 参数 retry 表示当前 Agent 运行使用的模型失败重试配置。
+func chatModelRetryConfig(retry RuntimeRetryConfig) *adk.ModelRetryConfig {
+	if retry.MaxRetries <= 0 {
+		return nil
+	}
+	return &adk.ModelRetryConfig{
+		MaxRetries:  retry.MaxRetries,
+		IsRetryAble: isRetryableModelError,
+		BackoffFunc: fixedRetryBackoff(retry.Backoff),
+	}
+}
+
+// agenticModelRetryConfig 创建 schema.AgenticMessage 路径使用的 ADK 模型重试配置。
+// 参数 retry 表示当前 Agent 运行使用的模型失败重试配置。
+func agenticModelRetryConfig(retry RuntimeRetryConfig) *adk.TypedModelRetryConfig[*schema.AgenticMessage] {
+	if retry.MaxRetries <= 0 {
+		return nil
+	}
+	return &adk.TypedModelRetryConfig[*schema.AgenticMessage]{
+		MaxRetries:  retry.MaxRetries,
+		IsRetryAble: isRetryableModelError,
+		BackoffFunc: fixedRetryBackoff(retry.Backoff),
+	}
+}
+
+// isRetryableModelError 判断模型错误是否允许重试。
+// 参数 ctx 表示当前请求上下文；参数 err 表示模型调用返回的错误。
+func isRetryableModelError(ctx context.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return false
+	}
+	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+}
+
+// fixedRetryBackoff 返回固定间隔的 ADK 重试等待函数。
+// 参数 backoff 表示每次重试前等待的时间。
+func fixedRetryBackoff(backoff time.Duration) func(context.Context, int) time.Duration {
+	if backoff <= 0 {
+		backoff = defaultAgentRetryBackoff
+	}
+	return func(context.Context, int) time.Duration {
+		return backoff
+	}
 }
 
 // configuredAgentTools 根据 Agent 配置创建本次请求可用的普通工具。

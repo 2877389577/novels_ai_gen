@@ -3,6 +3,7 @@ package novelagent
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/schema"
 
@@ -13,6 +14,7 @@ import (
 const (
 	defaultSupervisorMaxIterations = 8
 	defaultChildMaxIterations      = 6
+	defaultAgentRetryBackoff       = 300 * time.Millisecond
 	taskDirect                     = "direct"
 )
 
@@ -46,6 +48,8 @@ type runtimeAgentConfig struct {
 	children []runtimeAgentDefinition
 	// taskByAgent 表示子 Agent 名称到前端任务标识的映射。
 	taskByAgent map[string]string
+	// retry 表示上游模型失败时的重试配置。
+	retry RuntimeRetryConfig
 }
 
 // newAgentRuntimeConfig 根据应用配置生成运行时 Agent 配置。
@@ -103,7 +107,25 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 		supervisor:  supervisor,
 		children:    children,
 		taskByAgent: taskByAgent,
+		retry:       normalizeAgentRetry(agentCfg.Retry),
 	}, nil
+}
+
+// normalizeAgentRetry 标准化小说写作 Agent 模型失败重试配置。
+// 参数 cfg 表示配置文件中的重试配置。
+func normalizeAgentRetry(cfg appconfig.AgentRetryConfig) RuntimeRetryConfig {
+	maxRetries := cfg.MaxRetries
+	if maxRetries < 0 {
+		maxRetries = 0
+	}
+	backoff := time.Duration(cfg.BackoffMS) * time.Millisecond
+	if backoff <= 0 {
+		backoff = defaultAgentRetryBackoff
+	}
+	return RuntimeRetryConfig{
+		MaxRetries: maxRetries,
+		Backoff:    backoff,
+	}
 }
 
 // normalizeSupervisorAgent 标准化顶层 Agent 配置。
