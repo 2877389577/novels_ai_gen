@@ -13,6 +13,7 @@ import {
   createAIProvider,
   deleteAIProvider,
   fetchAgentConfig,
+  fetchAIProviderModels,
   fetchAIProviderModelsByProviderID,
   fetchAIProviders,
   fetchConfigFile,
@@ -1614,6 +1615,11 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
   const [form, setForm] = useState<AIProviderFormState>(
     createDefaultAIProviderFormState,
   );
+  const [providerModelOptions, setProviderModelOptions] = useState<
+    AIProviderModelItem[]
+  >([]);
+  const [providerModelLoading, setProviderModelLoading] = useState(false);
+  const [providerModelError, setProviderModelError] = useState("");
 
   const totalPages = Math.max(1, Math.ceil(total / aiProviderPageSize));
   const pageSummary =
@@ -1686,6 +1692,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
     setEditingProvider(null);
     setForm(createDefaultAIProviderFormState());
     setErrorMessage("");
+    clearProviderModelOptions();
     setProviderModalVisible(true);
   }
 
@@ -1696,6 +1703,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
     setEditingProvider(provider);
     setForm(providerToAIProviderFormState(provider));
     setErrorMessage("");
+    clearProviderModelOptions();
     setProviderModalVisible(true);
   }
 
@@ -1709,12 +1717,24 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
     setEditingProvider(null);
     setForm(createDefaultAIProviderFormState());
     setErrorMessage("");
+    clearProviderModelOptions();
+  }
+
+  // clearProviderModelOptions 清空 AI 提供商表单中已加载的模型候选。
+  function clearProviderModelOptions() {
+    setProviderModelOptions([]);
+    setProviderModelError("");
   }
 
   // handleFormInputChange 处理 AI 提供商文本或数字字段输入变化。
   // 参数 event 表示输入框变化事件。
   function handleFormInputChange(event: ChangeEvent<HTMLInputElement>) {
     const { name, value } = event.target;
+    const shouldClearModelOptions =
+      name === "providerType" || name === "apiKey" || name === "baseURL";
+    if (shouldClearModelOptions) {
+      clearProviderModelOptions();
+    }
     setForm(function updateForm(current) {
       switch (name) {
         case "name":
@@ -1738,6 +1758,11 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
           return current;
       }
     });
+  }
+
+  // handleProviderModelListClick 处理默认模型候选列表获取按钮点击。
+  function handleProviderModelListClick() {
+    void loadProviderModelOptions();
   }
 
   // handleEnabledChange 处理 AI 提供商启用状态变化。
@@ -1816,6 +1841,7 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
       setEditingProvider(null);
       setForm(createDefaultAIProviderFormState());
       setProviderModalVisible(false);
+      clearProviderModelOptions();
 
       const nextPage =
         formMode === "create" ? aiProviderDefaultPage : page;
@@ -1834,6 +1860,65 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
       Toast.error(message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // loadProviderModelOptions 获取当前 AI 提供商表单可用的模型候选。
+  async function loadProviderModelOptions() {
+    const providerType = form.providerType.trim();
+    if (!isAIProviderType(providerType)) {
+      const message = "AI 提供商类型只能是 openai、claude 或 gemini";
+      setProviderModelError(message);
+      Toast.error(message);
+      return;
+    }
+
+    const apiKey = form.apiKey.trim();
+    const baseURL = form.baseURL.trim();
+    const canUseSavedProvider =
+      formMode === "edit" &&
+      editingProvider !== null &&
+      !apiKey &&
+      isProviderConnectionUnchanged(form, editingProvider);
+
+    if (!apiKey && !canUseSavedProvider) {
+      const message =
+        formMode === "edit" && editingProvider !== null
+          ? "请输入 API Key 后获取当前配置的模型列表"
+          : "请输入 API Key 后获取模型列表";
+      setProviderModelError(message);
+      Toast.warning(message);
+      return;
+    }
+
+    setProviderModelLoading(true);
+    setProviderModelError("");
+
+    try {
+      const data = canUseSavedProvider
+        ? await fetchAIProviderModelsByProviderID(editingProvider.id)
+        : await fetchAIProviderModels({
+            provider_type: providerType,
+            api_key: apiKey,
+            base_url: baseURL,
+          });
+      const options = uniqueAIProviderModelOptions(data.items);
+      setProviderModelOptions(options);
+      if (options.length === 0) {
+        Toast.info("未获取到模型列表，可手动填写默认模型");
+        return;
+      }
+      Toast.success("模型列表已获取");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        props.onUnauthorized();
+        return;
+      }
+      const message = getErrorMessage(error, "AI 模型列表获取失败，请稍后再试");
+      setProviderModelError(message);
+      Toast.error(message);
+    } finally {
+      setProviderModelLoading(false);
     }
   }
 
@@ -2102,16 +2187,45 @@ function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                 onChange={handleFormInputChange}
               />
             </label>
-            <label className="ai-provider-field ai-provider-field-wide">
+            <div className="ai-provider-field ai-provider-field-wide">
               <span>默认模型</span>
-              <input
-                name="defaultModel"
-                value={form.defaultModel}
-                disabled={submitting}
-                placeholder="例如 gpt-5、claude-sonnet-4-5 或 gemini-2.5-pro"
-                onChange={handleFormInputChange}
-              />
-            </label>
+              <div className="ai-provider-model-picker">
+                <input
+                  name="defaultModel"
+                  list="ai-provider-default-model-options"
+                  value={form.defaultModel}
+                  disabled={submitting}
+                  placeholder="例如 gpt-5、claude-sonnet-4-5 或 gemini-2.5-pro"
+                  onChange={handleFormInputChange}
+                />
+                <button
+                  type="button"
+                  className="settings-secondary-button"
+                  disabled={submitting || providerModelLoading}
+                  onClick={handleProviderModelListClick}
+                >
+                  {providerModelLoading ? "获取中..." : "获取模型列表"}
+                </button>
+              </div>
+              <datalist id="ai-provider-default-model-options">
+                {providerModelOptions.map(function renderProviderModelOption(
+                  model,
+                ) {
+                  return (
+                    <option
+                      key={model.id}
+                      value={model.id}
+                      label={formatAgentModelOption(model)}
+                    />
+                  );
+                })}
+              </datalist>
+              {providerModelError ? (
+                <small className="ai-provider-model-message">
+                  {providerModelError}
+                </small>
+              ) : null}
+            </div>
             <label className="ai-provider-field">
               <span>优先级</span>
               <input
@@ -2822,6 +2936,40 @@ function toAIProviderUpsertParams(
     api_type: apiType,
     enabled: form.enabled,
   };
+}
+
+// isProviderConnectionUnchanged 判断编辑表单中的模型列表连接配置是否仍与已保存提供商一致。
+// 参数 form 表示 AI 提供商表单状态；参数 provider 表示当前正在编辑的已保存 AI 提供商。
+function isProviderConnectionUnchanged(
+  form: AIProviderFormState,
+  provider: AIProviderItem,
+): boolean {
+  return (
+    form.providerType.trim() === provider.provider_type &&
+    form.baseURL.trim() === provider.base_url.trim()
+  );
+}
+
+// uniqueAIProviderModelOptions 对模型列表按模型标识去重并过滤空标识。
+// 参数 items 表示接口返回的模型候选列表。
+function uniqueAIProviderModelOptions(
+  items: AIProviderModelItem[],
+): AIProviderModelItem[] {
+  const seen = new Set<string>();
+  const result: AIProviderModelItem[] = [];
+  for (const item of items) {
+    const id = item.id.trim();
+    if (!id || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    result.push({
+      ...item,
+      id,
+      display_name: item.display_name || id,
+    });
+  }
+  return result;
 }
 
 // parseAIProviderPriority 将表单优先级文本转换为非负整数。
