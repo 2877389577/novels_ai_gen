@@ -450,6 +450,14 @@ export interface AgentRetryConfig {
   backoff_ms: number;
 }
 
+// AgentToolConfig 表示小说写作 Agent 普通工具注册表中的单个工具配置。
+export interface AgentToolConfig {
+  // name 表示工具固定名称，必须与后端实现的工具名称一致。
+  name: string;
+  // description 表示提供给模型的工具提示词或能力描述。
+  description: string;
+}
+
 // AgentDefinition 表示单个小说写作 Agent 的配置。
 export interface AgentDefinition {
   // name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
@@ -476,6 +484,8 @@ export interface AgentDefinition {
 
 // AgentConfig 表示小说写作多层 Agent 配置集合。
 export interface AgentConfig {
+  // tools 表示小说写作 Agent 可选择的普通工具注册表。
+  tools: AgentToolConfig[];
   // supervisor 表示顶层 Agent 配置。
   supervisor: AgentDefinition;
   // agent 表示可被顶层 Agent 当成工具调用的子 Agent 配置列表。

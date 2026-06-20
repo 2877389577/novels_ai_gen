@@ -25,6 +25,7 @@ import {
   type AgentConfigData,
   type AgentDefinition,
   type AgentParameterDefinition,
+  type AgentToolConfig,
   type AIProviderAPIType,
   type AIProviderItem,
   type AIProviderModelItem,
@@ -111,8 +112,8 @@ interface AgentSupervisorFormState {
   instruction: string;
   // maxIterations 表示顶层 Agent 最大生成循环次数文本。
   maxIterations: string;
-  // getContentEnabled 表示是否给顶层 Agent 启用 get_content 工具。
-  getContentEnabled: boolean;
+  // toolNames 表示顶层 Agent 已选择的普通工具名称列表。
+  toolNames: string[];
   // customModelEnabled 表示顶层 Agent 是否启用自定义模型。
   customModelEnabled: boolean;
   // providerId 表示顶层 Agent 自定义模型使用的 AI 提供商 ID 文本。
@@ -137,8 +138,8 @@ interface AgentChildFormState {
   instruction: string;
   // maxIterations 表示子 Agent 最大生成循环次数文本。
   maxIterations: string;
-  // getContentEnabled 表示是否给该子 Agent 启用 get_content 工具。
-  getContentEnabled: boolean;
+  // toolNames 表示该子 Agent 已选择的普通工具名称列表。
+  toolNames: string[];
   // customModelEnabled 表示该子 Agent 是否启用自定义模型。
   customModelEnabled: boolean;
   // providerId 表示该子 Agent 自定义模型使用的 AI 提供商 ID 文本。
@@ -160,6 +161,8 @@ type AgentChildTextField =
 
 // AgentSettingsFormState 表示智能体配置页完整表单状态。
 interface AgentSettingsFormState {
+  // toolRegistry 表示当前配置中的普通工具注册表。
+  toolRegistry: AgentToolConfig[];
   // memoryRecentRounds 表示最近原始对话轮数配置文本。
   memoryRecentRounds: string;
   // retryMaxRetries 表示模型失败最大重试次数配置文本。
@@ -197,6 +200,7 @@ const defaultAIProviderFormState: AIProviderFormState = {
   enabled: true,
 };
 const defaultAgentSettingsFormState: AgentSettingsFormState = {
+  toolRegistry: [],
   memoryRecentRounds: "10",
   retryMaxRetries: "0",
   retryBackoffMS: "300",
@@ -205,7 +209,7 @@ const defaultAgentSettingsFormState: AgentSettingsFormState = {
     description: "",
     instruction: "",
     maxIterations: "8",
-    getContentEnabled: false,
+    toolNames: [],
     customModelEnabled: false,
     providerId: "",
     model: "",
@@ -773,15 +777,34 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
-  // handleSupervisorToolChange 处理顶层 Agent get_content 工具启用状态变化。
-  // 参数 event 表示复选框变化事件。
-  function handleSupervisorToolChange(event: ChangeEvent<HTMLInputElement>) {
+  // handleAgentToolDescriptionChange 处理普通工具注册表描述变化。
+  // 参数 toolName 表示工具固定名称；参数 description 表示新的工具描述。
+  function handleAgentToolDescriptionChange(toolName: string, description: string) {
+    setForm(function updateAgentToolDescription(current) {
+      return {
+        ...current,
+        toolRegistry: current.toolRegistry.map(function updateTool(toolConfig) {
+          return toolConfig.name === toolName
+            ? { ...toolConfig, description }
+            : toolConfig;
+        }),
+      };
+    });
+  }
+
+  // handleSupervisorToolChange 处理顶层 Agent 普通工具启用状态变化。
+  // 参数 toolName 表示工具固定名称；参数 enabled 表示是否启用。
+  function handleSupervisorToolChange(toolName: string, enabled: boolean) {
     setForm(function updateSupervisorTool(current) {
       return {
         ...current,
         supervisor: {
           ...current.supervisor,
-          getContentEnabled: event.target.checked,
+          toolNames: toggleAgentToolName(
+            current.supervisor.toolNames,
+            toolName,
+            enabled,
+          ),
         },
       };
     });
@@ -865,11 +888,14 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
-  // handleChildToolChange 处理子 Agent get_content 工具启用状态变化。
-  // 参数 index 表示子 Agent 在表单列表中的位置；参数 enabled 表示是否启用 get_content。
-  function handleChildToolChange(index: number, enabled: boolean) {
+  // handleChildToolChange 处理子 Agent 普通工具启用状态变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 toolName 表示工具固定名称；参数 enabled 表示是否启用。
+  function handleChildToolChange(index: number, toolName: string, enabled: boolean) {
     updateChildForm(index, function updateChildTool(child) {
-      return { ...child, getContentEnabled: enabled };
+      return {
+        ...child,
+        toolNames: toggleAgentToolName(child.toolNames, toolName, enabled),
+      };
     });
   }
 
@@ -1103,6 +1129,38 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
         </p>
       ) : null}
 
+      <section className="agent-settings-section" aria-labelledby="agent-tools-title">
+        <div className="ai-provider-section-heading">
+          <div>
+            <h2 id="agent-tools-title">工具注册表</h2>
+          </div>
+        </div>
+        <div className="agent-tool-registry">
+          {form.toolRegistry.length === 0 ? (
+            <p className="ai-provider-empty">当前配置中还没有可用工具。</p>
+          ) : null}
+          {form.toolRegistry.map(function renderAgentToolConfig(toolConfig) {
+            return (
+              <label className="ai-provider-field ai-provider-field-wide" key={toolConfig.name}>
+                <span>{toolConfig.name}</span>
+                <textarea
+                  className="agent-settings-textarea agent-settings-tool-description"
+                  value={toolConfig.description}
+                  disabled={loading || saving}
+                  spellCheck={false}
+                  onChange={function handleAgentToolDescriptionInput(event) {
+                    handleAgentToolDescriptionChange(
+                      toolConfig.name,
+                      event.target.value,
+                    );
+                  }}
+                />
+              </label>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="agent-settings-section" aria-labelledby="agent-memory-title">
         <div className="ai-provider-section-heading">
           <div>
@@ -1174,15 +1232,24 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
               onChange={handleSupervisorInputChange}
             />
           </label>
-          <label className="agent-settings-tool-toggle">
-            <input
-              type="checkbox"
-              checked={form.supervisor.getContentEnabled}
-              disabled={loading || saving}
-              onChange={handleSupervisorToolChange}
-            />
-            <span>get_content</span>
-          </label>
+          {form.toolRegistry.map(function renderSupervisorToolToggle(toolConfig) {
+            return (
+              <label className="agent-settings-tool-toggle" key={toolConfig.name}>
+                <input
+                  type="checkbox"
+                  checked={form.supervisor.toolNames.includes(toolConfig.name)}
+                  disabled={loading || saving}
+                  onChange={function handleSupervisorToolToggle(event) {
+                    handleSupervisorToolChange(
+                      toolConfig.name,
+                      event.target.checked,
+                    );
+                  }}
+                />
+                <span title={toolConfig.description}>{toolConfig.name}</span>
+              </label>
+            );
+          })}
           <label className="agent-settings-tool-toggle">
             <input
               type="checkbox"
@@ -1382,17 +1449,25 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                         }}
                       />
                     </label>
-                    <label className="agent-settings-tool-toggle">
-                      <input
-                        type="checkbox"
-                        checked={child.getContentEnabled}
-                        disabled={saving}
-                        onChange={function handleChildGetContentChange(event) {
-                          handleChildToolChange(index, event.target.checked);
-                        }}
-                      />
-                      <span>get_content</span>
-                    </label>
+                    {form.toolRegistry.map(function renderChildToolToggle(toolConfig) {
+                      return (
+                        <label className="agent-settings-tool-toggle" key={toolConfig.name}>
+                          <input
+                            type="checkbox"
+                            checked={child.toolNames.includes(toolConfig.name)}
+                            disabled={saving}
+                            onChange={function handleChildToolToggle(event) {
+                              handleChildToolChange(
+                                index,
+                                toolConfig.name,
+                                event.target.checked,
+                              );
+                            }}
+                          />
+                          <span title={toolConfig.description}>{toolConfig.name}</span>
+                        </label>
+                      );
+                    })}
                     <label className="agent-settings-tool-toggle">
                       <input
                         type="checkbox"
@@ -2189,6 +2264,7 @@ function SystemSettingsPanel(props: SystemSettingsPanelProps) {
 // createDefaultAgentSettingsFormState 创建智能体设置默认表单状态。
 function createDefaultAgentSettingsFormState(): AgentSettingsFormState {
   return {
+    toolRegistry: defaultAgentSettingsFormState.toolRegistry.map(copyAgentToolConfig),
     memoryRecentRounds: defaultAgentSettingsFormState.memoryRecentRounds,
     retryMaxRetries: defaultAgentSettingsFormState.retryMaxRetries,
     retryBackoffMS: defaultAgentSettingsFormState.retryBackoffMS,
@@ -2207,7 +2283,7 @@ function createDefaultAgentChildFormState(): AgentChildFormState {
     description: "",
     instruction: "",
     maxIterations: "6",
-    getContentEnabled: false,
+    toolNames: [],
     customModelEnabled: false,
     providerId: "",
     model: "",
@@ -2221,10 +2297,58 @@ function createAgentChildID(): string {
   return `agent-child-${Date.now()}-${agentChildIDSeed}`;
 }
 
+// copyAgentToolConfig 复制普通工具配置，避免表单状态共享引用。
+// 参数 toolConfig 表示需要复制的普通工具配置。
+function copyAgentToolConfig(toolConfig: AgentToolConfig): AgentToolConfig {
+  return {
+    name: toolConfig.name ?? "",
+    description: toolConfig.description ?? "",
+  };
+}
+
+// normalizeAgentToolNames 标准化 Agent 已选择的工具名称列表。
+// 参数 toolNames 表示接口返回的工具名称列表。
+function normalizeAgentToolNames(toolNames: string[] | null): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const rawName of toolNames ?? []) {
+    const name = rawName.trim();
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    result.push(name);
+  }
+  return result;
+}
+
+// toggleAgentToolName 根据复选框状态增删指定工具名称。
+// 参数 toolNames 表示当前已选择的工具名称列表；参数 toolName 表示需要切换的工具名称；参数 enabled 表示是否启用该工具。
+function toggleAgentToolName(
+  toolNames: string[],
+  toolName: string,
+  enabled: boolean,
+): string[] {
+  const normalizedName = toolName.trim();
+  if (!normalizedName) {
+    return normalizeAgentToolNames(toolNames);
+  }
+  const current = normalizeAgentToolNames(toolNames);
+  if (enabled) {
+    return current.includes(normalizedName)
+      ? current
+      : [...current, normalizedName];
+  }
+  return current.filter(function keepToolName(name) {
+    return name !== normalizedName;
+  });
+}
+
 // agentConfigToFormState 将智能体接口数据转换为前端表单状态。
 // 参数 agent 表示后端返回的结构化智能体配置。
 function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormState {
   return {
+    toolRegistry: (agent.tools ?? []).map(copyAgentToolConfig),
     memoryRecentRounds: String(agent.memory?.recent_rounds ?? 10),
     retryMaxRetries: String(agent.retry?.max_retries ?? 0),
     retryBackoffMS: String(agent.retry?.backoff_ms ?? 300),
@@ -2233,7 +2357,7 @@ function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormState {
       description: agent.supervisor?.description ?? "",
       instruction: agent.supervisor?.instruction ?? "",
       maxIterations: String(agent.supervisor?.max_iterations ?? 8),
-      getContentEnabled: (agent.supervisor?.tools ?? []).includes("get_content"),
+      toolNames: normalizeAgentToolNames(agent.supervisor?.tools ?? []),
       customModelEnabled: Number(agent.supervisor?.provider_id ?? 0) > 0,
       providerId:
         Number(agent.supervisor?.provider_id ?? 0) > 0
@@ -2259,7 +2383,7 @@ function agentDefinitionToChildFormState(
     description: definition.description ?? "",
     instruction: definition.instruction ?? "",
     maxIterations: String(definition.max_iterations ?? 6),
-    getContentEnabled: (definition.tools ?? []).includes("get_content"),
+    toolNames: normalizeAgentToolNames(definition.tools ?? []),
     customModelEnabled: Number(definition.provider_id ?? 0) > 0,
     providerId:
       Number(definition.provider_id ?? 0) > 0
@@ -2290,6 +2414,16 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
   agent: AgentConfig | null;
   error: string;
 } {
+  const toolRegistry = normalizeAgentToolRegistryForSave(form.toolRegistry);
+  if (toolRegistry.error) {
+    return { agent: null, error: toolRegistry.error };
+  }
+  const registeredToolNames = new Set(
+    (toolRegistry.value ?? []).map(function collectToolName(toolConfig) {
+      return toolConfig.name;
+    }),
+  );
+
   const recentRounds = parseNonNegativeInteger(
     form.memoryRecentRounds,
     "最近对话轮数",
@@ -2342,6 +2476,14 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
   );
   if (supervisorModel.error) {
     return { agent: null, error: supervisorModel.error };
+  }
+  const supervisorTools = normalizeSelectedAgentTools(
+    form.supervisor.toolNames,
+    registeredToolNames,
+    "顶层 Agent",
+  );
+  if (supervisorTools.error) {
+    return { agent: null, error: supervisorTools.error };
   }
 
   const names = new Set<string>();
@@ -2403,6 +2545,14 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     if (childModel.error) {
       return { agent: null, error: childModel.error };
     }
+    const childTools = normalizeSelectedAgentTools(
+      child.toolNames,
+      registeredToolNames,
+      `第 ${index + 1} 个子 Agent`,
+    );
+    if (childTools.error) {
+      return { agent: null, error: childTools.error };
+    }
 
     children.push({
       name: childName,
@@ -2413,19 +2563,22 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
       description: childDescription,
       instruction: childInstruction,
       max_iterations: childMaxIterations.error ? 0 : childMaxIterations.value,
-      tools: child.getContentEnabled ? ["get_content"] : [],
+      tools: childTools.value,
       parameters: parameters.value ?? {},
     });
   }
-  if (form.supervisor.getContentEnabled && names.has("get_content")) {
-    return {
-      agent: null,
-      error: "顶层 Agent 工具 get_content 与启用子 Agent 名称冲突",
-    };
+  for (const toolName of supervisorTools.value) {
+    if (names.has(toolName)) {
+      return {
+        agent: null,
+        error: `顶层 Agent 工具 ${toolName} 与启用子 Agent 名称冲突`,
+      };
+    }
   }
 
   return {
     agent: {
+      tools: toolRegistry.value ?? [],
       memory: {
         recent_rounds: recentRounds.value,
       },
@@ -2441,13 +2594,67 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
         description: supervisorDescription,
         instruction: supervisorInstruction,
         max_iterations: supervisorMaxIterations.value,
-        tools: form.supervisor.getContentEnabled ? ["get_content"] : [],
+        tools: supervisorTools.value,
         parameters: {},
       },
       agent: children,
     },
     error: "",
   };
+}
+
+// normalizeAgentToolRegistryForSave 标准化并校验普通工具注册表。
+// 参数 tools 表示当前表单中的普通工具注册表。
+function normalizeAgentToolRegistryForSave(
+  tools: AgentToolConfig[],
+): { value: AgentToolConfig[] | null; error: string } {
+  const seen = new Set<string>();
+  const result: AgentToolConfig[] = [];
+  for (const [index, toolConfig] of tools.entries()) {
+    const name = toolConfig.name.trim();
+    const description = toolConfig.description.trim();
+    if (!name) {
+      return { value: null, error: `第 ${index + 1} 个工具名称不能为空` };
+    }
+    if (!description) {
+      return { value: null, error: `工具 ${name} 的描述不能为空` };
+    }
+    if (seen.has(name)) {
+      return { value: null, error: `工具名称重复：${name}` };
+    }
+    seen.add(name);
+    result.push({ name, description });
+  }
+  return { value: result, error: "" };
+}
+
+// normalizeSelectedAgentTools 标准化并校验单个 Agent 选择的普通工具列表。
+// 参数 toolNames 表示 Agent 当前选择的工具名称；参数 registeredToolNames 表示工具注册表名称集合；参数 label 表示错误提示使用的 Agent 名称。
+function normalizeSelectedAgentTools(
+  toolNames: string[],
+  registeredToolNames: Set<string>,
+  label: string,
+): { value: string[]; error: string } {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const rawName of toolNames) {
+    const name = rawName.trim();
+    if (!name) {
+      return { value: [], error: `${label} 工具名称不能为空` };
+    }
+    if (!registeredToolNames.has(name)) {
+      return {
+        value: [],
+        error: `${label} 工具 ${name} 未在工具注册表中配置`,
+      };
+    }
+    if (seen.has(name)) {
+      return { value: [], error: `${label} 工具名称重复：${name}` };
+    }
+    seen.add(name);
+    result.push(name);
+  }
+  return { value: result, error: "" };
 }
 
 // parseAgentCustomModel 将启用 Agent 的自定义模型表单字段转换为后端字段。

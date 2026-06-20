@@ -100,6 +100,10 @@ ai:
     - 扩写
   # 小说写作多层 Agent 配置。
   agent:
+    # Agent 普通工具注册表；Agent 配置中的 tools 字段只能引用这里定义的 name。
+    tools:
+      - name: get_content
+        description: 读取当前请求关联章节的标题、正文、字数和更新时间。当需要章节全文时调用。
     # 小说级 Agent 记忆配置。
     memory:
       # 每次请求注入模型上下文的最近对话轮数；一轮为用户消息 + AI 回复。

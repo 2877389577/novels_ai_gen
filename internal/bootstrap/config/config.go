@@ -79,6 +79,8 @@ type AIConfig struct {
 
 // AgentConfig 表示小说写作多层 Agent 配置集合。
 type AgentConfig struct {
+	// Tools 表示小说写作 Agent 可选择的普通工具注册表，工具名称必须由后端代码实现。
+	Tools []AgentToolConfig `mapstructure:"tools" json:"tools" yaml:"tools"`
 	// Supervisor 表示顶层 Agent 配置。
 	Supervisor AgentDefinition `mapstructure:"supervisor" json:"supervisor" yaml:"supervisor"`
 	// Agent 表示可被顶层 Agent 当成工具调用的子 Agent 配置列表。
@@ -87,6 +89,14 @@ type AgentConfig struct {
 	Memory AgentMemoryConfig `mapstructure:"memory" json:"memory" yaml:"memory"`
 	// Retry 表示小说写作 Agent 调用上游模型失败时的重试配置。
 	Retry AgentRetryConfig `mapstructure:"retry" json:"retry" yaml:"retry"`
+}
+
+// AgentToolConfig 表示小说写作 Agent 普通工具注册表中的单个工具配置。
+type AgentToolConfig struct {
+	// Name 表示工具固定名称，必须与后端实现的工具名称一致，不能重复。
+	Name string `mapstructure:"name" json:"name" yaml:"name"`
+	// Description 表示提供给模型的工具提示词或能力描述。
+	Description string `mapstructure:"description" json:"description" yaml:"description"`
 }
 
 // AgentMemoryConfig 表示小说写作 Agent 的持久记忆配置。
