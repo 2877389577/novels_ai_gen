@@ -47,11 +47,11 @@ type GetContentOutput struct {
 }
 
 // NewGetContentTool 创建读取当前请求关联章节正文的 Eino 普通工具。
-// 参数 reader 表示章节读取依赖；参数 novelID 表示当前请求关联的小说 ID；参数 chapterID 表示当前请求关联的章节 ID。
-func NewGetContentTool(reader ChapterReader, novelID uint64, chapterID uint64) (tool.InvokableTool, error) {
+// 参数 reader 表示章节读取依赖；参数 novelID 表示当前请求关联的小说 ID；参数 chapterID 表示当前请求关联的章节 ID；参数 description 表示提供给模型的工具提示词。
+func NewGetContentTool(reader ChapterReader, novelID uint64, chapterID uint64, description string) (tool.InvokableTool, error) {
 	return utils.InferTool[GetContentInput, GetContentOutput](
 		ToolNameGetContent,
-		"读取当前请求关联章节的标题、正文、字数和更新时间。当需要章节全文时调用。",
+		description,
 		func(ctx context.Context, input GetContentInput) (GetContentOutput, error) {
 			return getContent(ctx, reader, novelID, chapterID)
 		},

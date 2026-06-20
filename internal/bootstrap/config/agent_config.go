@@ -223,7 +223,9 @@ func scalarKeyNode(value string) *yaml.Node {
 // 参数 agent 表示需要写入配置文件的智能体配置。
 func agentConfigYAMLNode(agent AgentConfig) (*yaml.Node, error) {
 	section := agentConfigYAMLSection{
+		Tools:      agent.Tools,
 		Memory:     agent.Memory,
+		Retry:      agent.Retry,
 		Supervisor: agent.Supervisor,
 		Agent:      agent.Agent,
 	}
@@ -245,8 +247,12 @@ func agentConfigYAMLNode(agent AgentConfig) (*yaml.Node, error) {
 
 // agentConfigYAMLSection 表示写入配置文件时使用的 ai.agent 字段顺序。
 type agentConfigYAMLSection struct {
+	// Tools 表示小说写作 Agent 可选择的普通工具注册表。
+	Tools []AgentToolConfig `yaml:"tools"`
 	// Memory 表示小说写作 Agent 的持久记忆配置。
 	Memory AgentMemoryConfig `yaml:"memory"`
+	// Retry 表示小说写作 Agent 调用上游模型失败时的重试配置。
+	Retry AgentRetryConfig `yaml:"retry"`
 	// Supervisor 表示顶层 Agent 配置。
 	Supervisor AgentDefinition `yaml:"supervisor"`
 	// Agent 表示可被顶层 Agent 当成工具调用的子 Agent 配置列表。

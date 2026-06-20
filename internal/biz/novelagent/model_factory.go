@@ -761,7 +761,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 		return nil, err
 	}
 
-	supervisorTools, err := configuredAgentTools(req, cfg.supervisor, chapterReader)
+	supervisorTools, err := configuredAgentTools(req, cfg.supervisor, cfg.tools, chapterReader)
 	if err != nil {
 		return nil, err
 	}
@@ -770,7 +770,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 	tools = append(tools, supervisorTools...)
 	returnDirectly := make(map[string]bool, len(cfg.children))
 	for _, child := range cfg.children {
-		childTools, err := configuredAgentTools(req, child, chapterReader)
+		childTools, err := configuredAgentTools(req, child, cfg.tools, chapterReader)
 		if err != nil {
 			return nil, err
 		}
@@ -823,7 +823,7 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 		return nil, err
 	}
 
-	supervisorTools, err := configuredAgentTools(req, cfg.supervisor, chapterReader)
+	supervisorTools, err := configuredAgentTools(req, cfg.supervisor, cfg.tools, chapterReader)
 	if err != nil {
 		return nil, err
 	}
@@ -832,7 +832,7 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 	tools = append(tools, supervisorTools...)
 	returnDirectly := make(map[string]bool, len(cfg.children))
 	for _, child := range cfg.children {
-		childTools, err := configuredAgentTools(req, child, chapterReader)
+		childTools, err := configuredAgentTools(req, child, cfg.tools, chapterReader)
 		if err != nil {
 			return nil, err
 		}
@@ -928,17 +928,21 @@ func fixedRetryBackoff(backoff time.Duration) func(context.Context, int) time.Du
 }
 
 // configuredAgentTools 根据 Agent 配置创建本次请求可用的普通工具。
-// 参数 req 表示流式聊天请求；参数 agent 表示 Agent 运行时配置；参数 chapterReader 表示章节读取依赖。
-func configuredAgentTools(req ChatRequest, agent runtimeAgentDefinition, chapterReader agenttools.ChapterReader) ([]tool.BaseTool, error) {
+// 参数 req 表示流式聊天请求；参数 agent 表示 Agent 运行时配置；参数 registry 表示普通工具注册表；参数 chapterReader 表示章节读取依赖。
+func configuredAgentTools(req ChatRequest, agent runtimeAgentDefinition, registry map[string]runtimeAgentTool, chapterReader agenttools.ChapterReader) ([]tool.BaseTool, error) {
 	if len(agent.toolNames) == 0 {
 		return nil, nil
 	}
 
 	tools := make([]tool.BaseTool, 0, len(agent.toolNames))
 	for _, name := range agent.toolNames {
+		toolConfig, ok := registry[name]
+		if !ok {
+			return nil, fmt.Errorf("%w: Agent %s 的工具 %s 未在 ai.agent.tools 中配置", ErrAgentConfigInvalid, agent.name, name)
+		}
 		switch name {
 		case agenttools.ToolNameGetContent:
-			getContentTool, err := agenttools.NewGetContentTool(chapterReader, req.NovelID, req.ChapterID)
+			getContentTool, err := agenttools.NewGetContentTool(chapterReader, req.NovelID, req.ChapterID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}

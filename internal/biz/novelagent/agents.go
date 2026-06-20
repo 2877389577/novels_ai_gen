@@ -40,6 +40,14 @@ type runtimeAgentDefinition struct {
 	toolNames []string
 }
 
+// runtimeAgentTool 表示运行时可创建普通工具所需的配置。
+type runtimeAgentTool struct {
+	// name 表示工具固定名称。
+	name string
+	// description 表示提供给模型的工具提示词或能力描述。
+	description string
+}
+
 // runtimeAgentConfig 表示一次请求使用的多层 Agent 运行时配置。
 type runtimeAgentConfig struct {
 	// supervisor 表示顶层 Agent 配置。
@@ -50,6 +58,8 @@ type runtimeAgentConfig struct {
 	taskByAgent map[string]string
 	// retry 表示上游模型失败时的重试配置。
 	retry RuntimeRetryConfig
+	// tools 表示按工具名称索引的普通工具注册表。
+	tools map[string]runtimeAgentTool
 }
 
 // newAgentRuntimeConfig 根据应用配置生成运行时 Agent 配置。
@@ -75,7 +85,12 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 		return runtimeAgentConfig{}, ErrAgentNotConfigured
 	}
 
-	supervisor, err := normalizeSupervisorAgent(agentCfg.Supervisor)
+	tools, err := normalizeAgentToolRegistry(agentCfg.Tools)
+	if err != nil {
+		return runtimeAgentConfig{}, err
+	}
+
+	supervisor, err := normalizeSupervisorAgent(agentCfg.Supervisor, tools)
 	if err != nil {
 		return runtimeAgentConfig{}, err
 	}
@@ -85,10 +100,13 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 	names := make(map[string]struct{}, len(agentCfg.Agent))
 	for index, childCfg := range agentCfg.Agent {
 		if !isChildAgentEnabled(childCfg) {
+			if _, err := normalizeAgentTools(childCfg.Tools, tools); err != nil {
+				return runtimeAgentConfig{}, fmt.Errorf("子 Agent 配置 %d 无效: %w", index+1, err)
+			}
 			continue
 		}
 
-		child, err := normalizeChildAgent(childCfg)
+		child, err := normalizeChildAgent(childCfg, tools)
 		if err != nil {
 			return runtimeAgentConfig{}, fmt.Errorf("子 Agent 配置 %d 无效: %w", index+1, err)
 		}
@@ -108,7 +126,32 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 		children:    children,
 		taskByAgent: taskByAgent,
 		retry:       normalizeAgentRetry(agentCfg.Retry),
+		tools:       tools,
 	}, nil
+}
+
+// normalizeAgentToolRegistry 标准化并校验小说写作 Agent 普通工具注册表。
+// 参数 values 表示配置文件中的普通工具注册表。
+func normalizeAgentToolRegistry(values []appconfig.AgentToolConfig) (map[string]runtimeAgentTool, error) {
+	tools := make(map[string]runtimeAgentTool, len(values))
+	for index, value := range values {
+		name := strings.TrimSpace(value.Name)
+		description := strings.TrimSpace(value.Description)
+		if name == "" {
+			return nil, fmt.Errorf("%w: ai.agent.tools 第 %d 个工具 name 不能为空", ErrAgentConfigInvalid, index+1)
+		}
+		if description == "" {
+			return nil, fmt.Errorf("%w: ai.agent.tools 工具 %s description 不能为空", ErrAgentConfigInvalid, name)
+		}
+		if _, ok := tools[name]; ok {
+			return nil, fmt.Errorf("%w: ai.agent.tools 工具名称重复 %s", ErrAgentConfigInvalid, name)
+		}
+		if !isImplementedAgentTool(name) {
+			return nil, fmt.Errorf("%w: ai.agent.tools 包含未知工具 %s", ErrAgentConfigInvalid, name)
+		}
+		tools[name] = runtimeAgentTool{name: name, description: description}
+	}
+	return tools, nil
 }
 
 // normalizeAgentRetry 标准化小说写作 Agent 模型失败重试配置。
@@ -130,7 +173,7 @@ func normalizeAgentRetry(cfg appconfig.AgentRetryConfig) RuntimeRetryConfig {
 
 // normalizeSupervisorAgent 标准化顶层 Agent 配置。
 // 参数 def 表示配置文件中的顶层 Agent 定义。
-func normalizeSupervisorAgent(def appconfig.AgentDefinition) (runtimeAgentDefinition, error) {
+func normalizeSupervisorAgent(def appconfig.AgentDefinition, registry map[string]runtimeAgentTool) (runtimeAgentDefinition, error) {
 	name := strings.TrimSpace(def.Name)
 	description := strings.TrimSpace(def.Description)
 	instruction := strings.TrimSpace(def.Instruction)
@@ -148,7 +191,7 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition) (runtimeAgentDefini
 		return runtimeAgentDefinition{}, err
 	}
 
-	toolNames, err := normalizeAgentTools(def.Tools)
+	toolNames, err := normalizeAgentTools(def.Tools, registry)
 	if err != nil {
 		return runtimeAgentDefinition{}, err
 	}
@@ -170,7 +213,7 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition) (runtimeAgentDefini
 
 // normalizeChildAgent 标准化子 Agent 配置。
 // 参数 def 表示配置文件中的子 Agent 定义。
-func normalizeChildAgent(def appconfig.AgentDefinition) (runtimeAgentDefinition, error) {
+func normalizeChildAgent(def appconfig.AgentDefinition, registry map[string]runtimeAgentTool) (runtimeAgentDefinition, error) {
 	name := strings.TrimSpace(def.Name)
 	description := strings.TrimSpace(def.Description)
 	instruction := strings.TrimSpace(def.Instruction)
@@ -188,7 +231,7 @@ func normalizeChildAgent(def appconfig.AgentDefinition) (runtimeAgentDefinition,
 		return runtimeAgentDefinition{}, err
 	}
 
-	toolNames, err := normalizeAgentTools(def.Tools)
+	toolNames, err := normalizeAgentTools(def.Tools, registry)
 	if err != nil {
 		return runtimeAgentDefinition{}, err
 	}
@@ -235,7 +278,7 @@ func normalizeAgentModelOverride(def appconfig.AgentDefinition, label string) (s
 
 // normalizeAgentTools 标准化并校验 Agent 可用普通工具列表。
 // 参数 values 表示配置文件中的工具名称列表。
-func normalizeAgentTools(values []string) ([]string, error) {
+func normalizeAgentTools(values []string, registry map[string]runtimeAgentTool) ([]string, error) {
 	if len(values) == 0 {
 		return nil, nil
 	}
@@ -250,13 +293,19 @@ func normalizeAgentTools(values []string) ([]string, error) {
 		if _, ok := seen[name]; ok {
 			return nil, fmt.Errorf("%w: Agent tool 名称重复 %s", ErrAgentConfigInvalid, name)
 		}
-		if name != agenttools.ToolNameGetContent {
-			return nil, fmt.Errorf("%w: 未知 Agent tool %s", ErrAgentConfigInvalid, name)
+		if _, ok := registry[name]; !ok {
+			return nil, fmt.Errorf("%w: Agent tool %s 未在 ai.agent.tools 中配置", ErrAgentConfigInvalid, name)
 		}
 		seen[name] = struct{}{}
 		toolNames = append(toolNames, name)
 	}
 	return toolNames, nil
+}
+
+// isImplementedAgentTool 判断工具名称是否已经由后端代码实现。
+// 参数 name 表示配置文件中的工具名称。
+func isImplementedAgentTool(name string) bool {
+	return name == agenttools.ToolNameGetContent
 }
 
 // isChildAgentEnabled 判断子 Agent 是否启用，未配置 enabled 时按启用处理。
