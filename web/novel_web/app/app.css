@@ -7750,6 +7750,26 @@ html[data-theme="dark"] .chapter-editor-paper {
   opacity: 0.68;
 }
 
+.ai-provider-model-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.ai-provider-model-picker .settings-secondary-button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.ai-provider-model-message {
+  color: var(--color-error);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
 .ai-provider-toggle-field {
   display: flex;
   align-items: center;
@@ -8047,6 +8067,10 @@ html[data-theme="dark"] .chapter-editor-paper {
   }
 
   .ai-provider-choice-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-provider-model-picker {
     grid-template-columns: minmax(0, 1fr);
   }
 
