@@ -69,11 +69,18 @@ interface BookshelfPageProps {
   onUnauthorized: () => void;
   // onNovelSelect 表示用户选择某本小说后进入详情页的回调。
   onNovelSelect: (novelId: number) => void;
+  // onOpenBookshelf 表示用户切换到书架页时执行的回调。
+  onOpenBookshelf: () => void;
+  // onOpenInspiration 表示用户切换到灵感社页时执行的回调。
+  onOpenInspiration: () => void;
   // onOpenSettings 表示用户进入设置中心时执行的回调。
   onOpenSettings: () => void;
   // onToggleTheme 表示用户切换全站黑白主题时执行的回调。
   onToggleTheme: () => void;
 }
+
+// BookshelfNavTab 表示书架顶部导航支持的主入口。
+export type BookshelfNavTab = "bookshelf" | "inspiration";
 
 // BookshelfState 表示书架首页的数据加载状态。
 type BookshelfState = "loading" | "ready" | "error";
@@ -161,9 +168,11 @@ export function BookshelfPage(props: BookshelfPageProps) {
   return (
     <main className="bookshelf-page">
       <BookshelfHeader
+        activeTab="bookshelf"
         currentTheme={props.currentTheme}
-        totalCount={totalCount}
-        updatedCount={updatedCount}
+        summaryItems={[`${totalCount} 部作品`, `${updatedCount} 部近日更新`]}
+        onOpenBookshelf={props.onOpenBookshelf}
+        onOpenInspiration={props.onOpenInspiration}
         onOpenSettings={props.onOpenSettings}
         onToggleTheme={props.onToggleTheme}
       />
@@ -201,14 +210,18 @@ export function BookshelfPage(props: BookshelfPageProps) {
   );
 }
 
-// BookshelfHeaderProps 表示书架顶部导航需要的统计数据。
-interface BookshelfHeaderProps {
+// BookshelfHeaderProps 表示书架顶部导航需要的外部状态和回调。
+export interface BookshelfHeaderProps {
+  // activeTab 表示当前激活的顶部导航入口。
+  activeTab: BookshelfNavTab;
   // currentTheme 表示全站当前使用的黑白主题。
   currentTheme: AppTheme;
-  // totalCount 表示当前书架中的小说总数。
-  totalCount: number;
-  // updatedCount 表示最近有更新的小说数量。
-  updatedCount: number;
+  // summaryItems 表示小屏幕导航下方展示的页面摘要文本。
+  summaryItems: string[];
+  // onOpenBookshelf 表示用户切换到书架页时执行的回调。
+  onOpenBookshelf: () => void;
+  // onOpenInspiration 表示用户切换到灵感社页时执行的回调。
+  onOpenInspiration: () => void;
   // onOpenSettings 表示用户进入设置中心时执行的回调。
   onOpenSettings: () => void;
   // onToggleTheme 表示用户切换全站黑白主题时执行的回调。
@@ -216,8 +229,8 @@ interface BookshelfHeaderProps {
 }
 
 // BookshelfHeader 渲染书架首页顶部导航。
-// 参数 props 表示书架顶部导航需要的统计数据。
-function BookshelfHeader(props: BookshelfHeaderProps) {
+// 参数 props 表示书架顶部导航需要的外部状态和回调。
+export function BookshelfHeader(props: BookshelfHeaderProps) {
   return (
     <header className="bookshelf-nav">
       <div className="bookshelf-nav-inner">
@@ -229,11 +242,22 @@ function BookshelfHeader(props: BookshelfHeaderProps) {
         </div>
 
         <nav className="bookshelf-links" aria-label="主导航">
-          <a href="/" aria-current="page">
+          <button
+            type="button"
+            aria-current={props.activeTab === "bookshelf" ? "page" : undefined}
+            onClick={props.onOpenBookshelf}
+          >
             藏书阁
-          </a>
-          <a href="/">我的作品</a>
-          <a href="/">灵感社</a>
+          </button>
+          <button
+            type="button"
+            aria-current={
+              props.activeTab === "inspiration" ? "page" : undefined
+            }
+            onClick={props.onOpenInspiration}
+          >
+            灵感社
+          </button>
         </nav>
 
         <div className="bookshelf-actions">
@@ -253,9 +277,8 @@ function BookshelfHeader(props: BookshelfHeaderProps) {
         </div>
       </div>
 
-      <div className="bookshelf-summary" aria-label="书架统计">
-        <span>{props.totalCount} 部作品</span>
-        <span>{props.updatedCount} 部近日更新</span>
+      <div className="bookshelf-summary" aria-label="页面摘要">
+        {props.summaryItems.map(renderSummaryItem)}
       </div>
     </header>
   );
@@ -820,6 +843,12 @@ function renderNovelCard(
 // 参数 tag 表示需要渲染的标签文本。
 function renderTag(tag: string) {
   return <span key={tag}>{tag}</span>;
+}
+
+// renderSummaryItem 渲染顶部导航在小屏幕下展示的单条摘要。
+// 参数 item 表示摘要文本。
+function renderSummaryItem(item: string) {
+  return <span key={item}>{item}</span>;
 }
 
 // renderSkeletonCard 渲染加载占位卡片。

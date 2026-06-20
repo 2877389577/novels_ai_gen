@@ -24,6 +24,7 @@ import (
 	bizevent "novels_ai_gen/internal/biz/event"
 	biznovel "novels_ai_gen/internal/biz/novel"
 	biznovelagent "novels_ai_gen/internal/biz/novelagent"
+	bizprompt "novels_ai_gen/internal/biz/prompt"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
@@ -57,6 +58,7 @@ var migrationModels = []any{
 	&bizevent.Relation{},
 	&biznovelagent.Conversation{},
 	&biznovelagent.MessageRecord{},
+	&bizprompt.Prompt{},
 }
 
 // obsoleteAIProviderColumns 表示需要从旧版 AI 提供商表中物理删除的历史配置字段。

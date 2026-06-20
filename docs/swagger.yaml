@@ -1486,6 +1486,21 @@ definitions:
         example: 1
         type: integer
     type: object
+  internal_api_handler_novelagent.PromptRecommendationRequest:
+    properties:
+      message:
+        description: Message 表示用户当前尚未发送的 AI 输入框原文。
+        example: 帮我把这一段润色得更有压迫感
+        type: string
+      model:
+        description: Model 表示本次推荐判定使用的模型标识。
+        example: gpt-5
+        type: string
+      provider_id:
+        description: ProviderID 表示本次推荐判定使用的 AI 提供商 ID。
+        example: 1
+        type: integer
+    type: object
   internal_api_handler_novelagent.StreamEvent:
     properties:
       content:
@@ -1812,6 +1827,289 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
+  novelagent.PromptRecommendationData:
+    properties:
+      action:
+        description: Action 表示前端下一步动作，prompt_search 表示查询数据库提示词，none 表示无需推荐。
+        example: prompt_search
+        type: string
+      matched:
+        description: Matched 表示是否匹配到小说修改或润色相关意图。
+        example: true
+        type: boolean
+      prompt_type:
+        description: PromptType 表示匹配到的提示词类型，不匹配时为空。
+        example: 润色
+        type: string
+    type: object
+  novelagent.PromptRecommendationSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/novelagent.PromptRecommendationData'
+        description: Data 表示提示词库推荐判定结果。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  prompt.PromptCreateRequest:
+    properties:
+      content:
+        description: Content 表示提示词正文，trim 后不能为空。
+        example: 请在保持剧情不变的前提下润色以下正文。
+        type: string
+      description:
+        description: Description 表示提示词简介，可以为空。
+        example: 用于让章节语言更细腻。
+        type: string
+      prompt_type:
+        description: PromptType 表示提示词类型，必须存在于配置文件 ai.prompt_types 中。
+        example: 润色
+        type: string
+    type: object
+  prompt.PromptData:
+    properties:
+      content:
+        description: Content 表示提示词正文。
+        example: 请在保持剧情不变的前提下润色以下正文。
+        type: string
+      created_at:
+        description: CreatedAt 表示创建时间。
+        example: "2026-06-20T12:00:00+08:00"
+        type: string
+      description:
+        description: Description 表示提示词简介。
+        example: 用于让章节语言更细腻。
+        type: string
+      id:
+        description: ID 表示提示词主键 ID。
+        example: 1
+        type: integer
+      prompt_type:
+        description: PromptType 表示提示词类型。
+        example: 润色
+        type: string
+      updated_at:
+        description: UpdatedAt 表示更新时间。
+        example: "2026-06-20T12:00:00+08:00"
+        type: string
+    type: object
+  prompt.PromptDeleteData:
+    properties:
+      deleted:
+        description: Deleted 表示是否已经删除提示词。
+        example: true
+        type: boolean
+    type: object
+  prompt.PromptDeleteSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/prompt.PromptDeleteData'
+        description: Data 表示删除提示词结果。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  prompt.PromptListData:
+    properties:
+      items:
+        description: Items 表示当前页提示词摘要列表。
+        items:
+          $ref: '#/definitions/prompt.PromptSummaryData'
+        type: array
+      page:
+        description: Page 表示当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 表示每页数量。
+        example: 20
+        type: integer
+      total:
+        description: Total 表示符合条件的提示词总数。
+        example: 1
+        type: integer
+    type: object
+  prompt.PromptListSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/prompt.PromptListData'
+        description: Data 表示提示词分页列表。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  prompt.PromptRecommendationListData:
+    properties:
+      items:
+        description: Items 表示推荐提示词列表，包含提示词正文。
+        items:
+          $ref: '#/definitions/prompt.PromptData'
+        type: array
+      page_size:
+        description: PageSize 表示本次推荐查询数量。
+        example: 10
+        type: integer
+      total:
+        description: Total 表示符合条件的提示词总数。
+        example: 1
+        type: integer
+    type: object
+  prompt.PromptRecommendationListSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/prompt.PromptRecommendationListData'
+        description: Data 表示提示词推荐列表。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  prompt.PromptSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/prompt.PromptData'
+        description: Data 表示提示词详情。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  prompt.PromptSummaryData:
+    properties:
+      created_at:
+        description: CreatedAt 表示创建时间。
+        example: "2026-06-20T12:00:00+08:00"
+        type: string
+      description:
+        description: Description 表示提示词简介。
+        example: 用于让章节语言更细腻。
+        type: string
+      id:
+        description: ID 表示提示词主键 ID。
+        example: 1
+        type: integer
+      prompt_type:
+        description: PromptType 表示提示词类型。
+        example: 润色
+        type: string
+      updated_at:
+        description: UpdatedAt 表示更新时间。
+        example: "2026-06-20T12:00:00+08:00"
+        type: string
+    type: object
+  prompt.PromptTypeRequest:
+    properties:
+      name:
+        description: Name 表示提示词类型名称。
+        example: 润色
+        type: string
+    type: object
+  prompt.PromptTypesData:
+    properties:
+      config_file:
+        description: ConfigFile 表示启动 -f 参数指定的实际配置文件绝对路径。
+        example: D:\Go\GOPATH\src\novels_ai_gen\config\config-dev.yaml
+        type: string
+      items:
+        description: Items 表示提示词类型列表。
+        example:
+        - 润色
+        - 情感
+        - 扩写
+        items:
+          type: string
+        type: array
+      modified_at:
+        description: ModifiedAt 表示配置文件在文件系统中的最后修改时间。
+        example: "2026-06-20T12:00:00+08:00"
+        type: string
+      reloaded_at:
+        description: ReloadedAt 表示后端最近一次成功加载该配置文件的时间。
+        example: "2026-06-20T12:00:00+08:00"
+        type: string
+    type: object
+  prompt.PromptTypesSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/prompt.PromptTypesData'
+        description: Data 表示提示词类型列表和配置文件加载状态。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  prompt.PromptUpdateRequest:
+    properties:
+      content:
+        description: Content 表示提示词正文，trim 后不能为空。
+        example: 请在保持剧情不变的前提下润色以下正文。
+        type: string
+      description:
+        description: Description 表示提示词简介，可以为空。
+        example: 用于让章节语言更细腻。
+        type: string
+      prompt_type:
+        description: PromptType 表示提示词类型，必须存在于配置文件 ai.prompt_types 中。
+        example: 润色
+        type: string
+    type: object
   relationship.EdgeData:
     properties:
       character_a_id:
@@ -2135,6 +2433,421 @@ paths:
       summary: 小说写作 Agent 流式对话
       tags:
       - ai-agents
+  /ai/agents/prompt-recommendation:
+    post:
+      consumes:
+      - application/json
+      description: 使用当前 AI 提供商和模型判断用户输入是否需要查询提示词库推荐；该请求不进入 Agent 记忆。
+      parameters:
+      - description: 提示词库推荐判定请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler_novelagent.PromptRecommendationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 判定成功
+          schema:
+            $ref: '#/definitions/novelagent.PromptRecommendationSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录已过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 提示词库推荐判定
+      tags:
+      - ai-agents
+  /ai/prompt-types:
+    delete:
+      description: 删除配置文件 ai.prompt_types 中的类型；已被提示词引用时禁止删除。
+      parameters:
+      - description: 提示词类型名称
+        in: query
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/prompt.PromptTypesSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 提示词类型不存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "409":
+          description: 提示词类型仍被使用
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 删除提示词类型
+      tags:
+      - ai-prompts
+    get:
+      description: 返回配置文件 ai.prompt_types 中的全局提示词类型列表。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            $ref: '#/definitions/prompt.PromptTypesSuccessResponse'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 查询提示词类型列表
+      tags:
+      - ai-prompts
+    post:
+      consumes:
+      - application/json
+      description: 向配置文件 ai.prompt_types 追加一个全局提示词类型并热加载。
+      parameters:
+      - description: 提示词类型名称
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.PromptTypeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 新增成功
+          schema:
+            $ref: '#/definitions/prompt.PromptTypesSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "409":
+          description: 提示词类型已存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 新增提示词类型
+      tags:
+      - ai-prompts
+    put:
+      consumes:
+      - application/json
+      description: 重命名配置文件 ai.prompt_types 中的类型，并同步更新数据库中使用旧类型的提示词。
+      parameters:
+      - description: 旧提示词类型名称
+        in: query
+        name: name
+        required: true
+        type: string
+      - description: 新提示词类型名称
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.PromptTypeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 重命名成功
+          schema:
+            $ref: '#/definitions/prompt.PromptTypesSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 提示词类型不存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "409":
+          description: 提示词类型已存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 重命名提示词类型
+      tags:
+      - ai-prompts
+  /ai/prompts:
+    get:
+      description: 分页查询提示词列表，列表项不返回提示词正文。
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 提示词类型
+        in: query
+        name: prompt_type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            $ref: '#/definitions/prompt.PromptListSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 查询提示词列表
+      tags:
+      - ai-prompts
+    post:
+      consumes:
+      - application/json
+      description: 创建用于小说修改或润色的 AI 提示词。
+      parameters:
+      - description: 提示词内容
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.PromptCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/prompt.PromptSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 创建提示词
+      tags:
+      - ai-prompts
+  /ai/prompts/{id}:
+    delete:
+      description: 根据 ID 删除提示词。
+      parameters:
+      - description: 提示词 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/prompt.PromptDeleteSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 提示词不存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 删除提示词
+      tags:
+      - ai-prompts
+    get:
+      description: 根据 ID 查询提示词详情，返回完整提示词正文。
+      parameters:
+      - description: 提示词 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            $ref: '#/definitions/prompt.PromptSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 提示词不存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 查询提示词详情
+      tags:
+      - ai-prompts
+    put:
+      consumes:
+      - application/json
+      description: 根据 ID 更新提示词详情。
+      parameters:
+      - description: 提示词 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 提示词内容
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.PromptUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/prompt.PromptSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 提示词不存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 更新提示词
+      tags:
+      - ai-prompts
+  /ai/prompts/recommendations:
+    get:
+      description: 按提示词类型查询推荐提示词，列表项返回完整提示词正文。
+      parameters:
+      - description: 提示词类型
+        in: query
+        name: prompt_type
+        required: true
+        type: string
+      - description: 推荐数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            $ref: '#/definitions/prompt.PromptRecommendationListSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 查询提示词推荐列表
+      tags:
+      - ai-prompts
   /ai/providers:
     get:
       consumes:

@@ -70,9 +70,11 @@ type AuthConfig struct {
 // AIConfig 表示 AI 功能相关配置。
 type AIConfig struct {
 	// ProviderSecretKey 表示 AI 提供商 API Key 应用层加密密钥，可填写任意非空字符串。
-	ProviderSecretKey string `mapstructure:"provider_secret_key"`
+	ProviderSecretKey string `mapstructure:"provider_secret_key" json:"provider_secret_key" yaml:"provider_secret_key"`
+	// PromptTypes 表示全局提示词类型库，类型名不能为空且不能重复。
+	PromptTypes []string `mapstructure:"prompt_types" json:"prompt_types" yaml:"prompt_types"`
 	// Agent 表示小说写作多层 Agent 配置。
-	Agent AgentConfig `mapstructure:"agent"`
+	Agent AgentConfig `mapstructure:"agent" json:"agent" yaml:"agent"`
 }
 
 // AgentConfig 表示小说写作多层 Agent 配置集合。
@@ -95,6 +97,8 @@ type AgentMemoryConfig struct {
 type AgentDefinition struct {
 	// Name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
 	Name string `mapstructure:"name" json:"name" yaml:"name"`
+	// Enabled 表示子 Agent 是否启用，未配置时子 Agent 默认启用，顶层 Agent 忽略该字段。
+	Enabled *bool `mapstructure:"enabled" json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	// Task 表示子 Agent 产生流式事件时返回给前端的任务标识，顶层 Agent 可留空。
 	Task string `mapstructure:"task" json:"task" yaml:"task,omitempty"`
 	// Description 表示 Agent 能力描述，供顶层 Agent 判断是否调用该子 Agent。
@@ -103,7 +107,7 @@ type AgentDefinition struct {
 	Instruction string `mapstructure:"instruction" json:"instruction" yaml:"instruction"`
 	// MaxIterations 表示 Eino ADK Agent 最大生成循环次数，小于等于 0 时使用业务默认值。
 	MaxIterations int `mapstructure:"max_iterations" json:"max_iterations" yaml:"max_iterations,omitempty"`
-	// Tools 表示子 Agent 可使用的普通工具名称列表，当前仅支持 get_content。
+	// Tools 表示 Agent 可使用的普通工具名称列表，当前仅支持 get_content。
 	Tools []string `mapstructure:"tools" json:"tools" yaml:"tools,omitempty"`
 	// Parameters 表示子 Agent 作为工具被调用时的入参定义，键为参数名。
 	Parameters map[string]AgentParameterDefinition `mapstructure:"parameters" json:"parameters" yaml:"parameters,omitempty"`
@@ -199,6 +203,12 @@ var (
 	ErrConfigContentRequired = errors.New("config content required")
 	// ErrInvalidConfigContent 表示配置文件内容无法解析为有效应用配置。
 	ErrInvalidConfigContent = errors.New("invalid config content")
+	// ErrPromptTypeNameRequired 表示提示词类型名称不能为空。
+	ErrPromptTypeNameRequired = errors.New("prompt type name required")
+	// ErrPromptTypeConflict 表示提示词类型名称重复。
+	ErrPromptTypeConflict = errors.New("prompt type conflict")
+	// ErrPromptTypeNotFound 表示提示词类型不存在。
+	ErrPromptTypeNotFound = errors.New("prompt type not found")
 )
 
 // ConfigManager 表示运行期间共享的配置文件管理器。
@@ -527,6 +537,7 @@ func setDefaults(loader *viper.Viper) {
 	loader.SetDefault("logger.file.rotation", "daily")
 	loader.SetDefault("auth.password", "admin123")
 	loader.SetDefault("ai.provider_secret_key", "")
+	loader.SetDefault("ai.prompt_types", []string{})
 	loader.SetDefault("storage.s3.bucket_lookup", "auto")
 	loader.SetDefault("storage.s3.preview_expire", "24h")
 	loader.SetDefault("storage.s3.max_upload_size_mb", 20)
@@ -609,6 +620,11 @@ func unmarshalLoader(loader *viper.Viper) (*AppConfig, error) {
 	if err := loader.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
+	promptTypes, err := normalizePromptTypeList(cfg.AI.PromptTypes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidConfigContent, err)
+	}
+	cfg.AI.PromptTypes = promptTypes
 	return &cfg, nil
 }
 

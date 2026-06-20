@@ -109,12 +109,16 @@ interface AgentSupervisorFormState {
   instruction: string;
   // maxIterations 表示顶层 Agent 最大生成循环次数文本。
   maxIterations: string;
+  // getContentEnabled 表示是否给顶层 Agent 启用 get_content 工具。
+  getContentEnabled: boolean;
 }
 
 // AgentChildFormState 表示子 Agent 表单输入状态。
 interface AgentChildFormState {
   // id 表示前端渲染列表时使用的稳定标识。
   id: string;
+  // enabled 表示该子 Agent 是否启用。
+  enabled: boolean;
   // name 表示子 Agent 名称，同时也是工具名称。
   name: string;
   // task 表示子 Agent 流事件任务标识。
@@ -181,6 +185,7 @@ const defaultAgentSettingsFormState: AgentSettingsFormState = {
     description: "",
     instruction: "",
     maxIterations: "8",
+    getContentEnabled: false,
   },
   children: [],
 };
@@ -618,6 +623,28 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
+  // handleSupervisorToolChange 处理顶层 Agent get_content 工具启用状态变化。
+  // 参数 event 表示复选框变化事件。
+  function handleSupervisorToolChange(event: ChangeEvent<HTMLInputElement>) {
+    setForm(function updateSupervisorTool(current) {
+      return {
+        ...current,
+        supervisor: {
+          ...current.supervisor,
+          getContentEnabled: event.target.checked,
+        },
+      };
+    });
+  }
+
+  // handleChildEnabledChange 处理子 Agent 启用状态变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 enabled 表示是否启用。
+  function handleChildEnabledChange(index: number, enabled: boolean) {
+    updateChildForm(index, function updateChildEnabled(child) {
+      return { ...child, enabled };
+    });
+  }
+
   // handleChildInputChange 处理指定子 Agent 字段变化。
   // 参数 index 表示子 Agent 在表单列表中的位置；参数 field 表示需要更新的字段名；参数 value 表示新的字段值。
   function handleChildInputChange(
@@ -870,6 +897,15 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
               onChange={handleSupervisorInputChange}
             />
           </label>
+          <label className="agent-settings-tool-toggle">
+            <input
+              type="checkbox"
+              checked={form.supervisor.getContentEnabled}
+              disabled={loading || saving}
+              onChange={handleSupervisorToolChange}
+            />
+            <span>get_content</span>
+          </label>
           <label className="ai-provider-field ai-provider-field-wide">
             <span>Description</span>
             <input
@@ -917,10 +953,28 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           ) : null}
           {!loading
             ? form.children.map((child, index) => (
-                <article className="agent-child-card" key={child.id}>
+                <article
+                  className={
+                    child.enabled
+                      ? "agent-child-card"
+                      : "agent-child-card agent-child-card-disabled"
+                  }
+                  key={child.id}
+                >
                   <div className="agent-child-card-heading">
                     <h3>{child.name.trim() || `子 Agent ${index + 1}`}</h3>
                     <div className="agent-child-card-actions">
+                      <label className="agent-settings-inline-toggle">
+                        <input
+                          type="checkbox"
+                          checked={child.enabled}
+                          disabled={saving}
+                          onChange={function handleChildEnabledToggle(event) {
+                            handleChildEnabledChange(index, event.target.checked);
+                          }}
+                        />
+                        <span>启用</span>
+                      </label>
                       <button
                         type="button"
                         className="settings-secondary-button"
@@ -1736,6 +1790,7 @@ function createDefaultAgentSettingsFormState(): AgentSettingsFormState {
 function createDefaultAgentChildFormState(): AgentChildFormState {
   return {
     id: createAgentChildID(),
+    enabled: true,
     name: "",
     task: "",
     description: "",
@@ -1762,6 +1817,7 @@ function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormState {
       description: agent.supervisor?.description ?? "",
       instruction: agent.supervisor?.instruction ?? "",
       maxIterations: String(agent.supervisor?.max_iterations ?? 8),
+      getContentEnabled: (agent.supervisor?.tools ?? []).includes("get_content"),
     },
     children: (agent.agent ?? []).map(agentDefinitionToChildFormState),
   };
@@ -1775,6 +1831,7 @@ function agentDefinitionToChildFormState(
 ): AgentChildFormState {
   return {
     id: `${createAgentChildID()}-${index}`,
+    enabled: definition.enabled !== false,
     name: definition.name ?? "",
     task: definition.task ?? "",
     description: definition.description ?? "",
@@ -1841,51 +1898,60 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     const childDescription = child.description.trim();
     const childInstruction = child.instruction.trim();
     const childTask = child.task.trim();
-    if (!childName) {
-      return { agent: null, error: `第 ${index + 1} 个子 Agent name 不能为空` };
+    if (child.enabled) {
+      if (!childName) {
+        return { agent: null, error: `第 ${index + 1} 个子 Agent name 不能为空` };
+      }
+      if (!childDescription) {
+        return {
+          agent: null,
+          error: `第 ${index + 1} 个子 Agent description 不能为空`,
+        };
+      }
+      if (!childInstruction) {
+        return {
+          agent: null,
+          error: `第 ${index + 1} 个子 Agent instruction 不能为空`,
+        };
+      }
+      if (childTask === "direct") {
+        return { agent: null, error: "子 Agent task 不能为 direct" };
+      }
+      if (names.has(childName)) {
+        return { agent: null, error: `子 Agent 名称重复：${childName}` };
+      }
+      names.add(childName);
     }
-    if (!childDescription) {
-      return {
-        agent: null,
-        error: `第 ${index + 1} 个子 Agent description 不能为空`,
-      };
-    }
-    if (!childInstruction) {
-      return {
-        agent: null,
-        error: `第 ${index + 1} 个子 Agent instruction 不能为空`,
-      };
-    }
-    if (childTask === "direct") {
-      return { agent: null, error: "子 Agent task 不能为 direct" };
-    }
-    if (names.has(childName)) {
-      return { agent: null, error: `子 Agent 名称重复：${childName}` };
-    }
-    names.add(childName);
 
     const childMaxIterations = parseNonNegativeInteger(
       child.maxIterations,
       `第 ${index + 1} 个子 Agent 最大迭代次数`,
     );
-    if (childMaxIterations.error) {
+    if (child.enabled && childMaxIterations.error) {
       return { agent: null, error: childMaxIterations.error };
     }
 
     const parameters = parseAgentParametersText(child.parametersText, index);
-    if (parameters.error || !parameters.value) {
+    if (child.enabled && (parameters.error || !parameters.value)) {
       return { agent: null, error: parameters.error };
     }
 
     children.push({
       name: childName,
+      enabled: child.enabled,
       task: childTask,
       description: childDescription,
       instruction: childInstruction,
-      max_iterations: childMaxIterations.value,
+      max_iterations: childMaxIterations.error ? 0 : childMaxIterations.value,
       tools: child.getContentEnabled ? ["get_content"] : [],
-      parameters: parameters.value,
+      parameters: parameters.value ?? {},
     });
+  }
+  if (form.supervisor.getContentEnabled && names.has("get_content")) {
+    return {
+      agent: null,
+      error: "顶层 Agent 工具 get_content 与启用子 Agent 名称冲突",
+    };
   }
 
   return {
@@ -1899,7 +1965,7 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
         description: supervisorDescription,
         instruction: supervisorInstruction,
         max_iterations: supervisorMaxIterations.value,
-        tools: [],
+        tools: form.supervisor.getContentEnabled ? ["get_content"] : [],
         parameters: {},
       },
       agent: children,

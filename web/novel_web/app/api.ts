@@ -177,6 +177,145 @@ export interface NovelAgentChatParams {
   signal?: AbortSignal;
 }
 
+// PromptRecommendationAction 表示提示词库推荐判定后的前端动作。
+export type PromptRecommendationAction = "prompt_search" | "none" | string;
+
+// PromptRecommendationParams 表示提示词库推荐判定请求参数。
+export interface PromptRecommendationParams {
+  // providerId 表示本次推荐判定使用的 AI 提供商 ID。
+  providerId: number;
+  // model 表示本次推荐判定使用的模型标识。
+  model: string;
+  // message 表示用户当前尚未发送的 AI 输入框原文。
+  message: string;
+  // signal 表示用于取消推荐判定请求的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// PromptRecommendationData 表示提示词库推荐判定结果。
+export interface PromptRecommendationData {
+  // action 表示前端下一步动作，prompt_search 表示查询数据库提示词。
+  action: PromptRecommendationAction;
+  // matched 表示是否匹配到小说修改或润色相关意图。
+  matched: boolean;
+  // prompt_type 表示匹配到的提示词类型，不匹配时为空。
+  prompt_type: string;
+}
+
+// RecommendedPromptItem 表示推荐提示词列表中的单条提示词。
+export interface RecommendedPromptItem {
+  // id 表示提示词主键 ID。
+  id: number;
+  // prompt_type 表示提示词类型。
+  prompt_type: string;
+  // description 表示提示词简介。
+  description: string;
+  // content 表示提示词正文。
+  content: string;
+  // created_at 表示创建时间。
+  created_at: string;
+  // updated_at 表示更新时间。
+  updated_at: string;
+}
+
+// RecommendedPromptListData 表示提示词推荐列表响应数据。
+export interface RecommendedPromptListData {
+  // items 表示推荐提示词列表，包含提示词正文。
+  items: RecommendedPromptItem[];
+  // total 表示符合条件的提示词总数。
+  total: number;
+  // page_size 表示本次推荐查询数量。
+  page_size: number;
+}
+
+// RecommendedPromptListParams 表示查询推荐提示词列表时使用的参数。
+export interface RecommendedPromptListParams {
+  // promptType 表示需要推荐的提示词类型。
+  promptType: string;
+  // pageSize 表示推荐返回数量。
+  pageSize?: number;
+  // signal 表示用于取消推荐列表请求的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// PromptTypesData 表示提示词类型库列表和配置加载状态。
+export interface PromptTypesData {
+  // items 表示当前配置中的提示词类型列表。
+  items: string[];
+  // config_file 表示后端启动配置文件路径。
+  config_file: string;
+  // modified_at 表示配置文件最后修改时间。
+  modified_at: string;
+  // reloaded_at 表示配置文件最近热加载成功时间。
+  reloaded_at: string;
+}
+
+// PromptTypeUpsertParams 表示新增或重命名提示词类型时提交的数据。
+export interface PromptTypeUpsertParams {
+  // name 表示提示词类型名称。
+  name: string;
+}
+
+// PromptSummaryItem 表示提示词分页列表中的摘要信息，不包含正文。
+export interface PromptSummaryItem {
+  // id 表示提示词主键 ID。
+  id: number;
+  // prompt_type 表示提示词类型。
+  prompt_type: string;
+  // description 表示提示词简介。
+  description: string;
+  // created_at 表示创建时间。
+  created_at: string;
+  // updated_at 表示更新时间。
+  updated_at: string;
+}
+
+// PromptItem 表示提示词详情信息，包含正文。
+export interface PromptItem extends PromptSummaryItem {
+  // content 表示提示词正文。
+  content: string;
+}
+
+// PromptListData 表示提示词分页列表响应数据。
+export interface PromptListData {
+  // items 表示当前页提示词摘要列表。
+  items: PromptSummaryItem[];
+  // total 表示符合条件的提示词总数。
+  total: number;
+  // page 表示当前页码。
+  page: number;
+  // page_size 表示每页数量。
+  page_size: number;
+}
+
+// PromptListParams 表示查询提示词分页列表时使用的参数。
+export interface PromptListParams {
+  // page 表示当前页码，从 1 开始。
+  page: number;
+  // pageSize 表示每页数量。
+  pageSize: number;
+  // promptType 表示按提示词类型筛选，空值表示全部类型。
+  promptType?: string;
+  // signal 表示用于取消请求的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// PromptUpsertParams 表示创建或更新提示词时提交的数据。
+export interface PromptUpsertParams {
+  // prompt_type 表示提示词类型，必须存在于提示词类型库。
+  prompt_type: string;
+  // description 表示提示词简介，可以为空。
+  description: string;
+  // content 表示提示词正文，不能为空。
+  content: string;
+}
+
+// PromptDeleteData 表示删除提示词接口返回的数据。
+export interface PromptDeleteData {
+  // deleted 表示提示词是否已经删除。
+  deleted: boolean;
+}
+
 // NovelAgentStreamHandlers 表示小说写作 Agent 流读取过程中的回调集合。
 export interface NovelAgentStreamHandlers {
   // onEvent 表示收到单个 Agent 流事件时执行的回调。
@@ -307,6 +446,8 @@ export interface AgentMemoryConfig {
 export interface AgentDefinition {
   // name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
   name: string;
+  // enabled 表示子 Agent 是否启用，未返回时按启用处理。
+  enabled?: boolean | null;
   // task 表示子 Agent 产生流式事件时返回给前端的任务标识。
   task: string;
   // description 表示 Agent 能力描述。
@@ -1534,6 +1675,352 @@ export async function streamNovelAgentChat(
   }
 
   await readNovelAgentStream(response.body, handlers);
+}
+
+// recommendPromptType 请求后端判断当前输入是否需要提示词库推荐。
+// 参数 params 表示推荐判定所需的提供商、模型和用户输入。
+export async function recommendPromptType(
+  params: PromptRecommendationParams,
+): Promise<PromptRecommendationData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/ai/agents/prompt-recommendation", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      provider_id: params.providerId,
+      model: params.model,
+      message: params.message,
+    }),
+    signal: params.signal,
+  });
+  const payload = await parseApiResponse<PromptRecommendationData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词推荐判定失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// fetchRecommendedPrompts 查询指定类型的推荐提示词列表。
+// 参数 params 表示推荐提示词列表查询参数。
+export async function fetchRecommendedPrompts(
+  params: RecommendedPromptListParams,
+): Promise<RecommendedPromptListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({
+    prompt_type: params.promptType,
+    page_size: String(params.pageSize ?? 10),
+  });
+  const response = await fetch(
+    `/api/v1/ai/prompts/recommendations?${searchParams.toString()}`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal: params.signal,
+    },
+  );
+  const payload = await parseApiResponse<RecommendedPromptListData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词推荐列表加载失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// fetchPromptTypes 查询配置文件中的提示词类型库。
+// 参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchPromptTypes(
+  signal?: AbortSignal,
+): Promise<PromptTypesData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/ai/prompt-types", {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<PromptTypesData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词类型加载失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// createPromptType 调用后端接口新增提示词类型。
+// 参数 name 表示需要新增的提示词类型名称。
+export async function createPromptType(name: string): Promise<PromptTypesData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/ai/prompt-types", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name } satisfies PromptTypeUpsertParams),
+  });
+  const payload = await parseApiResponse<PromptTypesData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词类型创建失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// renamePromptType 调用后端接口重命名提示词类型。
+// 参数 oldName 表示原提示词类型名称；参数 name 表示新的提示词类型名称。
+export async function renamePromptType(
+  oldName: string,
+  name: string,
+): Promise<PromptTypesData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({ name: oldName });
+  const response = await fetch(
+    `/api/v1/ai/prompt-types?${searchParams.toString()}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name } satisfies PromptTypeUpsertParams),
+    },
+  );
+  const payload = await parseApiResponse<PromptTypesData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词类型重命名失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// deletePromptType 调用后端接口删除提示词类型。
+// 参数 name 表示需要删除的提示词类型名称。
+export async function deletePromptType(name: string): Promise<PromptTypesData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({ name });
+  const response = await fetch(
+    `/api/v1/ai/prompt-types?${searchParams.toString()}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+    },
+  );
+  const payload = await parseApiResponse<PromptTypesData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词类型删除失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// fetchPrompts 查询提示词分页列表，列表项不包含提示词正文。
+// 参数 params 表示提示词分页查询参数。
+export async function fetchPrompts(
+  params: PromptListParams,
+): Promise<PromptListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    page_size: String(params.pageSize),
+  });
+  if (params.promptType) {
+    searchParams.set("prompt_type", params.promptType);
+  }
+
+  const response = await fetch(
+    `/api/v1/ai/prompts?${searchParams.toString()}`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal: params.signal,
+    },
+  );
+  const payload = await parseApiResponse<PromptListData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词列表加载失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// fetchPromptDetail 查询指定提示词详情。
+// 参数 id 表示提示词主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchPromptDetail(
+  id: number,
+  signal?: AbortSignal,
+): Promise<PromptItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/ai/prompts/${id}`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<PromptItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词详情加载失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// createPrompt 调用后端接口创建提示词。
+// 参数 params 表示提示词创建表单数据。
+export async function createPrompt(
+  params: PromptUpsertParams,
+): Promise<PromptItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/ai/prompts", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<PromptItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词创建失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// updatePrompt 调用后端接口更新提示词。
+// 参数 id 表示提示词主键 ID；参数 params 表示提示词更新表单数据。
+export async function updatePrompt(
+  id: number,
+  params: PromptUpsertParams,
+): Promise<PromptItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/ai/prompts/${id}`, {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<PromptItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词更新失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// deletePrompt 调用后端接口删除指定提示词。
+// 参数 id 表示提示词主键 ID。
+export async function deletePrompt(id: number): Promise<PromptDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/ai/prompts/${id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+  });
+  const payload = await parseApiResponse<PromptDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "提示词删除失败，请稍后再试");
+  }
+  return payload.data;
 }
 
 // fetchNovelAgentMessages 查询指定小说最近的 Agent 历史消息。

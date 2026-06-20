@@ -12,6 +12,7 @@ import { BookshelfPage } from "./bookshelf";
 import { ChapterEditorPage } from "./chapter-editor";
 import { clearAuthData, readAuthData } from "./api";
 import { AppFooter } from "./app-footer";
+import { InspirationPage } from "./inspiration";
 import { LoginPage } from "./login";
 import { NovelDetailPage } from "./novel-detail";
 import { SettingsPage, type SettingsSection } from "./settings";
@@ -32,6 +33,10 @@ type AppRoute =
   | {
       // view 表示当前展示书架页。
       view: "bookshelf";
+    }
+  | {
+      // view 表示当前展示灵感社提示词库页。
+      view: "inspiration";
     }
   | {
       // view 表示当前展示设置中心。
@@ -70,6 +75,7 @@ interface GuardedRoute {
 
 const loginRoutePath = "/login";
 const bookshelfRoutePath = "/";
+const inspirationRoutePath = "/inspiration";
 const settingsBaseRoutePath = "/settings";
 const logsRoutePath = "/logs";
 const novelDetailRoutePattern = /^\/novels\/([1-9]\d*)$/;
@@ -165,6 +171,32 @@ export function App() {
         setRoute,
         { view: "settings", section: "config" },
         settingsBaseRoutePath,
+        "push",
+      );
+    },
+    [],
+  );
+
+  // handleOpenBookshelf 处理顶部导航切换到书架页。
+  const handleOpenBookshelf = useCallback(
+    function handleOpenBookshelf() {
+      navigateToRoute(
+        setRoute,
+        { view: "bookshelf" },
+        bookshelfRoutePath,
+        "push",
+      );
+    },
+    [],
+  );
+
+  // handleOpenInspiration 处理顶部导航切换到灵感社页。
+  const handleOpenInspiration = useCallback(
+    function handleOpenInspiration() {
+      navigateToRoute(
+        setRoute,
+        { view: "inspiration" },
+        inspirationRoutePath,
         "push",
       );
     },
@@ -270,6 +302,8 @@ export function App() {
         onLoginSuccess: handleLoginSuccess,
         onNovelDeleted: handleNovelDeleted,
         onNovelSelect: handleNovelSelect,
+        onOpenBookshelf: handleOpenBookshelf,
+        onOpenInspiration: handleOpenInspiration,
         onOpenSettings: handleOpenSettings,
         onSettingsSectionChange: handleSettingsSectionChange,
         onToggleTheme: handleToggleTheme,
@@ -300,6 +334,10 @@ interface RouteHandlers {
   onNovelDeleted: () => void;
   // onNovelSelect 表示书架页选择小说时执行的回调。
   onNovelSelect: (novelId: number) => void;
+  // onOpenBookshelf 表示顶部导航切换到书架页时执行的回调。
+  onOpenBookshelf: () => void;
+  // onOpenInspiration 表示顶部导航切换到灵感社页时执行的回调。
+  onOpenInspiration: () => void;
   // onOpenSettings 表示打开设置中心时执行的回调。
   onOpenSettings: () => void;
   // onSettingsSectionChange 表示设置中心切换功能分区时执行的回调。
@@ -319,6 +357,19 @@ function renderRoute(route: AppRoute, handlers: RouteHandlers) {
         <BookshelfPage
           currentTheme={handlers.currentTheme}
           onNovelSelect={handlers.onNovelSelect}
+          onOpenBookshelf={handlers.onOpenBookshelf}
+          onOpenInspiration={handlers.onOpenInspiration}
+          onOpenSettings={handlers.onOpenSettings}
+          onToggleTheme={handlers.onToggleTheme}
+          onUnauthorized={handlers.onUnauthorized}
+        />
+      );
+    case "inspiration":
+      return (
+        <InspirationPage
+          currentTheme={handlers.currentTheme}
+          onOpenBookshelf={handlers.onOpenBookshelf}
+          onOpenInspiration={handlers.onOpenInspiration}
           onOpenSettings={handlers.onOpenSettings}
           onToggleTheme={handlers.onToggleTheme}
           onUnauthorized={handlers.onUnauthorized}
@@ -403,6 +454,13 @@ function resolveGuardedRoute(
     };
   }
 
+  if (isInspirationRoute(pathname)) {
+    return {
+      path: inspirationRoutePath,
+      route: { view: "inspiration" },
+    };
+  }
+
   if (isSettingsRoute(pathname)) {
     return {
       path: normalizeRoutePath(pathname),
@@ -457,6 +515,12 @@ function resolveGuardedRoute(
 // 参数 pathname 表示需要判断的浏览器路径。
 function isLoginRoute(pathname: string): boolean {
   return normalizeRoutePath(pathname) === loginRoutePath;
+}
+
+// isInspirationRoute 判断指定路径是否为灵感社页路径。
+// 参数 pathname 表示需要判断的浏览器路径。
+function isInspirationRoute(pathname: string): boolean {
+  return normalizeRoutePath(pathname) === inspirationRoutePath;
 }
 
 // isSettingsRoute 判断指定路径是否为设置中心根路径。

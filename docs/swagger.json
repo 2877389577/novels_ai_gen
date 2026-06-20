@@ -69,6 +69,655 @@
                 }
             }
         },
+        "/ai/agents/prompt-recommendation": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "使用当前 AI 提供商和模型判断用户输入是否需要查询提示词库推荐；该请求不进入 Agent 记忆。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "提示词库推荐判定",
+                "parameters": [
+                    {
+                        "description": "提示词库推荐判定请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api_handler_novelagent.PromptRecommendationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "判定成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelagent.PromptRecommendationSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai/prompt-types": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "返回配置文件 ai.prompt_types 中的全局提示词类型列表。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "查询提示词类型列表",
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptTypesSuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "重命名配置文件 ai.prompt_types 中的类型，并同步更新数据库中使用旧类型的提示词。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "重命名提示词类型",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "旧提示词类型名称",
+                        "name": "name",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "新提示词类型名称",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptTypeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "重命名成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptTypesSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "提示词类型不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "提示词类型已存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "向配置文件 ai.prompt_types 追加一个全局提示词类型并热加载。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "新增提示词类型",
+                "parameters": [
+                    {
+                        "description": "提示词类型名称",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptTypeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "新增成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptTypesSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "提示词类型已存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "删除配置文件 ai.prompt_types 中的类型；已被提示词引用时禁止删除。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "删除提示词类型",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "提示词类型名称",
+                        "name": "name",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptTypesSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "提示词类型不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "提示词类型仍被使用",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai/prompts": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "分页查询提示词列表，列表项不返回提示词正文。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "查询提示词列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "提示词类型",
+                        "name": "prompt_type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptListSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "创建用于小说修改或润色的 AI 提示词。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "创建提示词",
+                "parameters": [
+                    {
+                        "description": "提示词内容",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai/prompts/recommendations": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "按提示词类型查询推荐提示词，列表项返回完整提示词正文。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "查询提示词推荐列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "提示词类型",
+                        "name": "prompt_type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "推荐数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptRecommendationListSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/ai/prompts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "根据 ID 查询提示词详情，返回完整提示词正文。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "查询提示词详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "提示词 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "提示词不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "根据 ID 更新提示词详情。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "更新提示词",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "提示词 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "提示词内容",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "提示词不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "根据 ID 删除提示词。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-prompts"
+                ],
+                "summary": "删除提示词",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "提示词 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/prompt.PromptDeleteSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "提示词不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/ai/providers": {
             "get": {
                 "security": [
@@ -5083,6 +5732,26 @@
                 }
             }
         },
+        "internal_api_handler_novelagent.PromptRecommendationRequest": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "description": "Message 表示用户当前尚未发送的 AI 输入框原文。",
+                    "type": "string",
+                    "example": "帮我把这一段润色得更有压迫感"
+                },
+                "model": {
+                    "description": "Model 表示本次推荐判定使用的模型标识。",
+                    "type": "string",
+                    "example": "gpt-5"
+                },
+                "provider_id": {
+                    "description": "ProviderID 表示本次推荐判定使用的 AI 提供商 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
         "internal_api_handler_novelagent.StreamEvent": {
             "type": "object",
             "properties": {
@@ -5537,6 +6206,400 @@
                     "description": "RequestID 表示本次请求的追踪标识。",
                     "type": "string",
                     "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novelagent.PromptRecommendationData": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "Action 表示前端下一步动作，prompt_search 表示查询数据库提示词，none 表示无需推荐。",
+                    "type": "string",
+                    "example": "prompt_search"
+                },
+                "matched": {
+                    "description": "Matched 表示是否匹配到小说修改或润色相关意图。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "prompt_type": {
+                    "description": "PromptType 表示匹配到的提示词类型，不匹配时为空。",
+                    "type": "string",
+                    "example": "润色"
+                }
+            }
+        },
+        "novelagent.PromptRecommendationSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示提示词库推荐判定结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novelagent.PromptRecommendationData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "prompt.PromptCreateRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示提示词正文，trim 后不能为空。",
+                    "type": "string",
+                    "example": "请在保持剧情不变的前提下润色以下正文。"
+                },
+                "description": {
+                    "description": "Description 表示提示词简介，可以为空。",
+                    "type": "string",
+                    "example": "用于让章节语言更细腻。"
+                },
+                "prompt_type": {
+                    "description": "PromptType 表示提示词类型，必须存在于配置文件 ai.prompt_types 中。",
+                    "type": "string",
+                    "example": "润色"
+                }
+            }
+        },
+        "prompt.PromptData": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示提示词正文。",
+                    "type": "string",
+                    "example": "请在保持剧情不变的前提下润色以下正文。"
+                },
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-20T12:00:00+08:00"
+                },
+                "description": {
+                    "description": "Description 表示提示词简介。",
+                    "type": "string",
+                    "example": "用于让章节语言更细腻。"
+                },
+                "id": {
+                    "description": "ID 表示提示词主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "prompt_type": {
+                    "description": "PromptType 表示提示词类型。",
+                    "type": "string",
+                    "example": "润色"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示更新时间。",
+                    "type": "string",
+                    "example": "2026-06-20T12:00:00+08:00"
+                }
+            }
+        },
+        "prompt.PromptDeleteData": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "description": "Deleted 表示是否已经删除提示词。",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "prompt.PromptDeleteSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示删除提示词结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/prompt.PromptDeleteData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "prompt.PromptListData": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items 表示当前页提示词摘要列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/prompt.PromptSummaryData"
+                    }
+                },
+                "page": {
+                    "description": "Page 表示当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 表示每页数量。",
+                    "type": "integer",
+                    "example": 20
+                },
+                "total": {
+                    "description": "Total 表示符合条件的提示词总数。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "prompt.PromptListSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示提示词分页列表。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/prompt.PromptListData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "prompt.PromptRecommendationListData": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items 表示推荐提示词列表，包含提示词正文。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/prompt.PromptData"
+                    }
+                },
+                "page_size": {
+                    "description": "PageSize 表示本次推荐查询数量。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "description": "Total 表示符合条件的提示词总数。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "prompt.PromptRecommendationListSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示提示词推荐列表。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/prompt.PromptRecommendationListData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "prompt.PromptSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示提示词详情。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/prompt.PromptData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "prompt.PromptSummaryData": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-20T12:00:00+08:00"
+                },
+                "description": {
+                    "description": "Description 表示提示词简介。",
+                    "type": "string",
+                    "example": "用于让章节语言更细腻。"
+                },
+                "id": {
+                    "description": "ID 表示提示词主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "prompt_type": {
+                    "description": "PromptType 表示提示词类型。",
+                    "type": "string",
+                    "example": "润色"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示更新时间。",
+                    "type": "string",
+                    "example": "2026-06-20T12:00:00+08:00"
+                }
+            }
+        },
+        "prompt.PromptTypeRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name 表示提示词类型名称。",
+                    "type": "string",
+                    "example": "润色"
+                }
+            }
+        },
+        "prompt.PromptTypesData": {
+            "type": "object",
+            "properties": {
+                "config_file": {
+                    "description": "ConfigFile 表示启动 -f 参数指定的实际配置文件绝对路径。",
+                    "type": "string",
+                    "example": "D:\\Go\\GOPATH\\src\\novels_ai_gen\\config\\config-dev.yaml"
+                },
+                "items": {
+                    "description": "Items 表示提示词类型列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "润色",
+                        "情感",
+                        "扩写"
+                    ]
+                },
+                "modified_at": {
+                    "description": "ModifiedAt 表示配置文件在文件系统中的最后修改时间。",
+                    "type": "string",
+                    "example": "2026-06-20T12:00:00+08:00"
+                },
+                "reloaded_at": {
+                    "description": "ReloadedAt 表示后端最近一次成功加载该配置文件的时间。",
+                    "type": "string",
+                    "example": "2026-06-20T12:00:00+08:00"
+                }
+            }
+        },
+        "prompt.PromptTypesSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示提示词类型列表和配置文件加载状态。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/prompt.PromptTypesData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "prompt.PromptUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示提示词正文，trim 后不能为空。",
+                    "type": "string",
+                    "example": "请在保持剧情不变的前提下润色以下正文。"
+                },
+                "description": {
+                    "description": "Description 表示提示词简介，可以为空。",
+                    "type": "string",
+                    "example": "用于让章节语言更细腻。"
+                },
+                "prompt_type": {
+                    "description": "PromptType 表示提示词类型，必须存在于配置文件 ai.prompt_types 中。",
+                    "type": "string",
+                    "example": "润色"
                 }
             }
         },

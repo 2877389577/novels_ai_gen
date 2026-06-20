@@ -16,6 +16,7 @@ import (
 	"novels_ai_gen/internal/api/handler/log"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
 	novelagent3 "novels_ai_gen/internal/api/handler/novelagent"
+	prompt3 "novels_ai_gen/internal/api/handler/prompt"
 	relationship3 "novels_ai_gen/internal/api/handler/relationship"
 	system2 "novels_ai_gen/internal/api/handler/system"
 	upload2 "novels_ai_gen/internal/api/handler/upload"
@@ -27,6 +28,7 @@ import (
 	event2 "novels_ai_gen/internal/biz/event"
 	novel2 "novels_ai_gen/internal/biz/novel"
 	"novels_ai_gen/internal/biz/novelagent"
+	prompt2 "novels_ai_gen/internal/biz/prompt"
 	relationship2 "novels_ai_gen/internal/biz/relationship"
 	"novels_ai_gen/internal/biz/system"
 	"novels_ai_gen/internal/biz/upload"
@@ -40,6 +42,7 @@ import (
 	"novels_ai_gen/internal/data/novel"
 	novelagent2 "novels_ai_gen/internal/data/novelagent"
 	"novels_ai_gen/internal/data/objectstore"
+	"novels_ai_gen/internal/data/prompt"
 	"novels_ai_gen/internal/data/relationship"
 	"novels_ai_gen/internal/server"
 )
@@ -101,6 +104,9 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	novelagentRepository := novelagent2.NewRepository(gormDB)
 	novelagentService := novelagent.NewService(aiproviderRepository, cipher, configManager, einoAgentRuntimeFactory, novelagentRepository)
 	novelagentHandler := novelagent3.NewHandler(novelagentService)
+	promptRepository := prompt.NewRepository(gormDB)
+	promptService := prompt2.NewService(promptRepository, configManager)
+	promptHandler := prompt3.NewHandler(promptService)
 	client, err := objectstore.NewClient(appConfig)
 	if err != nil {
 		cleanup3()
@@ -114,7 +120,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	logHandler := log.NewHandler(configManager)
 	systemService := system.NewService()
 	systemHandler := system2.NewHandler(systemService)
-	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, eventHandler, aiproviderHandler, novelagentHandler, uploadHandler, configHandler, logHandler, systemHandler, service)
+	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, eventHandler, aiproviderHandler, novelagentHandler, promptHandler, uploadHandler, configHandler, logHandler, systemHandler, service)
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {

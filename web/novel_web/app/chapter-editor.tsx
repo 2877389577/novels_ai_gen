@@ -1,16 +1,17 @@
 import {
   IconAIEditLevel1,
+  IconArrowUp,
   IconClose,
   IconDelete,
   IconDeleteStroked,
   IconEditStroked,
   IconRedoStroked,
-  IconSend,
 } from "@douyinfe/semi-icons";
 import { AIChatDialogue, Button, FloatButton, Toast } from "@douyinfe/semi-ui-19";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -36,7 +37,9 @@ import {
   fetchAIProviderModelsByProviderID,
   fetchNovelAgentMessages,
   fetchAIProviders,
+  fetchRecommendedPrompts,
   fetchNextChapterNumber,
+  recommendPromptType,
   streamNovelAgentChat,
   updateChapter,
   type AIProviderItem,
@@ -45,11 +48,16 @@ import {
   type ChapterDetailItem,
   type ChapterUpdateParams,
   type NovelAgentMessageItem,
+  type RecommendedPromptItem,
 } from "./api";
 import { normalizeText } from "./novel-utils";
 
 const chapterEditorScrollbarHiddenClass = "chapter-editor-scrollbar-hidden";
 const chapterAiProviderPageSize = 100;
+const chapterAiPromptRecommendationDelayMs = 600;
+const chapterAiPromptRecommendationPageSize = 10;
+// chapterAiInputMaxHeight 表示 AI 输入框自动增高上限，约等于 6 行正文。
+const chapterAiInputMaxHeight = 22 * 6;
 const chapterAutoSaveIntervalMs = 5000;
 const chapterSelectionAIActionWidth = 112;
 const chapterSelectionAIActionHeight = 36;
@@ -140,6 +148,14 @@ interface ChapterAiStreamRequest {
   savedChapterID: number;
   // retryPayload 表示本次请求使用的原始 AI 调用参数。
   retryPayload: ChapterAiRetryPayload;
+}
+
+// ChapterAiPromptRecommendationCache 表示章节 AI 输入推荐结果的本地缓存。
+interface ChapterAiPromptRecommendationCache {
+  // promptType 表示本次输入匹配到的提示词类型，未匹配时为空。
+  promptType: string;
+  // items 表示已查询到的推荐提示词列表。
+  items: RecommendedPromptItem[];
 }
 
 // ChapterAiPrefillMessage 表示一次从正文选区填入 AI 输入框的请求。
@@ -1060,7 +1076,20 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyClearing, setHistoryClearing] = useState(false);
   const [assistantSending, setAssistantSending] = useState(false);
+  const [promptRecommendationLoading, setPromptRecommendationLoading] =
+    useState(false);
+  const [promptRecommendationType, setPromptRecommendationType] = useState("");
+  const [promptRecommendations, setPromptRecommendations] = useState<
+    RecommendedPromptItem[]
+  >([]);
+  const assistantInputRef = useRef<HTMLTextAreaElement | null>(null);
   const streamControllerRef = useRef<AbortController | null>(null);
+  const promptRecommendationControllerRef = useRef<AbortController | null>(null);
+  const promptRecommendationCacheRef = useRef<
+    Map<string, ChapterAiPromptRecommendationCache>
+  >(new Map());
+  // promptRecommendationSuppressedInputRef 记录由推荐提示词插入产生、无需再次推荐的输入内容。
+  const promptRecommendationSuppressedInputRef = useRef<string | null>(null);
   const consumedPrefillMessageIDRef = useRef<number | null>(null);
   const onUnauthorized = props.onUnauthorized;
 
@@ -1090,6 +1119,13 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     : models.length === 0
       ? "暂无模型"
       : "选择模型";
+
+  useLayoutEffect(
+    function syncAssistantInputHeight() {
+      syncChapterAiInputHeight(assistantInputRef.current);
+    },
+    [inputValue],
+  );
 
   useEffect(
     function loadAgentHistory() {
@@ -1192,6 +1228,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     function cancelAssistantStreamOnUnmount() {
       return function cancelAssistantStream() {
         streamControllerRef.current?.abort();
+        promptRecommendationControllerRef.current?.abort();
       };
     },
     [],
@@ -1272,6 +1309,139 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     [onUnauthorized, selectedProvider?.default_model, selectedProviderID],
   );
 
+  useEffect(
+    function recommendPromptsForAssistantInput() {
+      const rawInput = inputValue;
+      const normalizedInput = rawInput.trim();
+      if (
+        !normalizedInput ||
+        !selectedProviderID ||
+        !selectedModelID ||
+        assistantSending ||
+        modelLoading
+      ) {
+        promptRecommendationControllerRef.current?.abort();
+        setPromptRecommendationLoading(false);
+        setPromptRecommendationType("");
+        setPromptRecommendations([]);
+        if (!normalizedInput) {
+          promptRecommendationSuppressedInputRef.current = null;
+        }
+        return;
+      }
+
+      if (promptRecommendationSuppressedInputRef.current === normalizedInput) {
+        promptRecommendationControllerRef.current?.abort();
+        setPromptRecommendationLoading(false);
+        setPromptRecommendationType("");
+        setPromptRecommendations([]);
+        return;
+      }
+
+      const providerId = Number(selectedProviderID);
+      if (!Number.isFinite(providerId) || providerId <= 0) {
+        setPromptRecommendationLoading(false);
+        setPromptRecommendationType("");
+        setPromptRecommendations([]);
+        return;
+      }
+
+      const cacheKey = createPromptRecommendationCacheKey(
+        providerId,
+        selectedModelID,
+        normalizedInput,
+      );
+      const cachedRecommendation = promptRecommendationCacheRef.current.get(cacheKey);
+      if (cachedRecommendation) {
+        setPromptRecommendationLoading(false);
+        setPromptRecommendationType(cachedRecommendation.promptType);
+        setPromptRecommendations(cachedRecommendation.items);
+        return;
+      }
+
+      const controller = new AbortController();
+      promptRecommendationControllerRef.current?.abort();
+      promptRecommendationControllerRef.current = controller;
+      setPromptRecommendationLoading(true);
+
+      const timer = window.setTimeout(function requestPromptRecommendation() {
+        async function loadPromptRecommendation() {
+          try {
+            const recommendation = await recommendPromptType({
+              providerId,
+              model: selectedModelID,
+              message: rawInput,
+              signal: controller.signal,
+            });
+            if (controller.signal.aborted) {
+              return;
+            }
+            if (
+              recommendation.action !== "prompt_search" ||
+              !recommendation.matched ||
+              !recommendation.prompt_type
+            ) {
+              const emptyRecommendation = { promptType: "", items: [] };
+              promptRecommendationCacheRef.current.set(cacheKey, emptyRecommendation);
+              setPromptRecommendationType("");
+              setPromptRecommendations([]);
+              return;
+            }
+
+            const list = await fetchRecommendedPrompts({
+              promptType: recommendation.prompt_type,
+              pageSize: chapterAiPromptRecommendationPageSize,
+              signal: controller.signal,
+            });
+            if (controller.signal.aborted) {
+              return;
+            }
+
+            const nextRecommendation = {
+              promptType: recommendation.prompt_type,
+              items: list.items,
+            };
+            promptRecommendationCacheRef.current.set(cacheKey, nextRecommendation);
+            setPromptRecommendationType(nextRecommendation.promptType);
+            setPromptRecommendations(nextRecommendation.items);
+          } catch (error) {
+            if (controller.signal.aborted) {
+              return;
+            }
+            if (error instanceof UnauthorizedError) {
+              onUnauthorized();
+              return;
+            }
+            setPromptRecommendationType("");
+            setPromptRecommendations([]);
+          } finally {
+            if (promptRecommendationControllerRef.current === controller) {
+              promptRecommendationControllerRef.current = null;
+            }
+            if (!controller.signal.aborted) {
+              setPromptRecommendationLoading(false);
+            }
+          }
+        }
+
+        void loadPromptRecommendation();
+      }, chapterAiPromptRecommendationDelayMs);
+
+      return function cancelPromptRecommendation() {
+        window.clearTimeout(timer);
+        controller.abort();
+      };
+    },
+    [
+      assistantSending,
+      inputValue,
+      modelLoading,
+      onUnauthorized,
+      selectedModelID,
+      selectedProviderID,
+    ],
+  );
+
   // handleProviderChange 切换当前用于查询模型的 AI 提供商。
   // 参数 event 表示提供商选择框变更事件。
   function handleProviderChange(event: ChangeEvent<HTMLSelectElement>) {
@@ -1287,7 +1457,26 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   // handleAssistantInputChange 同步 AI 对话输入框内容。
   // 参数 event 表示输入框变更事件。
   function handleAssistantInputChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    promptRecommendationSuppressedInputRef.current = null;
     setInputValue(event.target.value);
+  }
+
+  // handleApplyRecommendedPrompt 将推荐提示词正文追加到当前 AI 输入框。
+  // 参数 item 表示用户点击的推荐提示词。
+  function handleApplyRecommendedPrompt(item: RecommendedPromptItem) {
+    const separator = inputValue.trim()
+      ? inputValue.endsWith("\n")
+        ? "\n"
+        : "\n\n"
+      : "";
+    const nextInputValue = `${inputValue}${separator}${item.content}`;
+    promptRecommendationSuppressedInputRef.current = nextInputValue.trim();
+    promptRecommendationControllerRef.current?.abort();
+    promptRecommendationControllerRef.current = null;
+    setPromptRecommendationLoading(false);
+    setInputValue(nextInputValue);
+    setPromptRecommendationType("");
+    setPromptRecommendations([]);
   }
 
   // handleAssistantInputKeyDown 处理 AI 对话输入框键盘提交。
@@ -1420,6 +1609,8 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       ];
     });
     setInputValue("");
+    setPromptRecommendationType("");
+    setPromptRecommendations([]);
 
     await runChapterAiStream({
       pairID,
@@ -1797,26 +1988,62 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
               </select>
             </label>
           </div>
-          <div className="chapter-ai-input-row">
+          {promptRecommendationLoading || promptRecommendations.length > 0 ? (
+            <div className="chapter-ai-prompt-recommendations" aria-live="polite">
+              <div className="chapter-ai-prompt-recommendation-header">
+                <span>推荐提示词</span>
+                {promptRecommendationType ? <strong>{promptRecommendationType}</strong> : null}
+                {promptRecommendationLoading ? <em>匹配中...</em> : null}
+              </div>
+              {promptRecommendations.length > 0 ? (
+                <div className="chapter-ai-prompt-recommendation-list">
+                  {promptRecommendations.map(function renderPromptRecommendation(item) {
+                    return (
+                      <button
+                        className="chapter-ai-prompt-recommendation-item"
+                        key={item.id}
+                        onClick={function applyPromptRecommendation() {
+                          handleApplyRecommendedPrompt(item);
+                        }}
+                        type="button"
+                      >
+                        <span className="chapter-ai-prompt-recommendation-meta">
+                          {item.prompt_type}
+                        </span>
+                        <strong>{item.description || "未填写简介"}</strong>
+                        <span className="chapter-ai-prompt-recommendation-preview">
+                          {item.content}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="chapter-ai-input-shell">
             <textarea
+              ref={assistantInputRef}
               aria-label="AI 对话输入"
               className="chapter-ai-input"
               disabled={assistantSending}
               onChange={handleAssistantInputChange}
               onKeyDown={handleAssistantInputKeyDown}
               placeholder="输入你的问题或写作目标..."
-              rows={2}
+              rows={1}
               value={inputValue}
             />
-            <button
-              aria-label="发送给 AI 写作助手"
-              className="chapter-ai-send"
-              disabled={modelLoading || assistantSending}
-              title="发送"
-              type="submit"
-            >
-              <IconSend aria-hidden="true" />
-            </button>
+            <div className="chapter-ai-input-actions">
+              <button
+                aria-label="发送给 AI 写作助手"
+                className="chapter-ai-send"
+                disabled={modelLoading || assistantSending}
+                title="发送"
+                type="submit"
+              >
+                <IconArrowUp aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -1855,6 +2082,31 @@ function createChapterAiRenderMessageID(
   contentLength: number,
 ): string {
   return `${messageID}-${status}-${contentLength}`;
+}
+
+// createPromptRecommendationCacheKey 创建提示词推荐本地缓存键。
+// 参数 providerId 表示 AI 提供商 ID；参数 modelId 表示模型标识；参数 input 表示用户输入框文本。
+function createPromptRecommendationCacheKey(
+  providerId: number,
+  modelId: string,
+  input: string,
+): string {
+  return `${providerId}::${modelId}::${input}`;
+}
+
+// syncChapterAiInputHeight 根据输入内容同步 AI 输入框高度。
+// 参数 textarea 表示需要调整高度的 AI 输入框元素。
+function syncChapterAiInputHeight(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) {
+    return;
+  }
+
+  textarea.style.height = "auto";
+  const scrollHeight = textarea.scrollHeight;
+  const nextHeight = Math.min(scrollHeight, chapterAiInputMaxHeight);
+  textarea.style.height = `${nextHeight}px`;
+  textarea.style.overflowY =
+    scrollHeight > chapterAiInputMaxHeight ? "auto" : "hidden";
 }
 
 // getChapterSelectionAIAction 根据正文编辑器选区生成 AI 修改按钮状态。

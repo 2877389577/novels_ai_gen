@@ -216,6 +216,69 @@ func (s *Service) ClearMessages(ctx context.Context, novelID uint64) (ClearMessa
 	return ClearMessagesResponse{Cleared: cleared}, nil
 }
 
+// RecommendPromptType 判断当前用户输入是否需要查询提示词库推荐。
+// 参数 ctx 表示请求上下文；参数 req 表示提示词库推荐判定请求。
+func (s *Service) RecommendPromptType(ctx context.Context, req PromptRecommendationRequest) (PromptRecommendationResponse, error) {
+	req = normalizePromptRecommendationRequest(req)
+	if err := ValidatePromptRecommendationRequest(req); err != nil {
+		return PromptRecommendationResponse{}, err
+	}
+
+	provider, apiKey, err := s.providerCredential(ctx, req.ProviderID)
+	if err != nil {
+		return PromptRecommendationResponse{}, err
+	}
+	req.Model = modelForChatRequest(req.Model, provider.DefaultModel)
+	if strings.TrimSpace(req.Model) == "" {
+		return PromptRecommendationResponse{}, ErrModelRequired
+	}
+
+	cfg := s.currentConfig()
+	promptTypes := normalizedPromptTypes(cfg)
+	if len(promptTypes) == 0 {
+		return noPromptRecommendation(), nil
+	}
+
+	runtime, err := s.runtimeFactory.NewRuntime(ctx, ModelConfig{
+		ProviderType: provider.ProviderType,
+		APIType:      provider.APIType,
+		APIKey:       apiKey,
+		BaseURL:      provider.BaseURL,
+		Model:        req.Model,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "提示词库推荐判定运行时创建失败",
+			"error", err,
+			"provider_id", req.ProviderID,
+			"provider_type", provider.ProviderType,
+			"api_type", provider.APIType,
+			"model", req.Model,
+			"base_url_configured", strings.TrimSpace(provider.BaseURL) != "",
+		)
+		return PromptRecommendationResponse{}, fmt.Errorf("%w: %v", ErrModelStreamFailed, err)
+	}
+
+	result, err := runtime.RecommendPromptType(ctx, cfg, PromptRecommendationInput{
+		Message:     req.Message,
+		PromptTypes: promptTypes,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "提示词库推荐判定失败",
+			"error", err,
+			"provider_id", req.ProviderID,
+			"provider_type", provider.ProviderType,
+			"api_type", provider.APIType,
+			"model", req.Model,
+			"base_url_configured", strings.TrimSpace(provider.BaseURL) != "",
+		)
+		return PromptRecommendationResponse{}, fmt.Errorf("%w: %v", ErrModelStreamFailed, err)
+	}
+	if result.Action != PromptRecommendationActionSearch || !result.Matched || !promptRecommendationTypeAllowed(promptTypes, result.PromptType) {
+		return noPromptRecommendation(), nil
+	}
+	return result, nil
+}
+
 // ValidateChatRequest 校验小说写作 Agent 流式对话请求。
 // 参数 req 表示流式对话请求。
 func ValidateChatRequest(req ChatRequest) error {
@@ -227,6 +290,18 @@ func ValidateChatRequest(req ChatRequest) error {
 	}
 	if req.ChapterID != 0 && req.NovelID == 0 {
 		return ErrChapterContextInvalid
+	}
+	return nil
+}
+
+// ValidatePromptRecommendationRequest 校验提示词库推荐判定请求。
+// 参数 req 表示提示词库推荐判定请求。
+func ValidatePromptRecommendationRequest(req PromptRecommendationRequest) error {
+	if req.ProviderID == 0 {
+		return ErrProviderIDRequired
+	}
+	if strings.TrimSpace(req.Message) == "" {
+		return ErrMessageRequired
 	}
 	return nil
 }
@@ -410,6 +485,28 @@ func memoryMessageLimit(cfg *appconfig.AppConfig) int {
 	return memoryRecentRounds(cfg) * 2
 }
 
+// normalizedPromptTypes 返回配置文件中可用于推荐判定的提示词类型列表。
+// 参数 cfg 表示当前配置快照。
+func normalizedPromptTypes(cfg *appconfig.AppConfig) []string {
+	if cfg == nil || len(cfg.AI.PromptTypes) == 0 {
+		return []string{}
+	}
+	items := make([]string, 0, len(cfg.AI.PromptTypes))
+	seen := make(map[string]struct{}, len(cfg.AI.PromptTypes))
+	for _, item := range cfg.AI.PromptTypes {
+		name := strings.TrimSpace(item)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		items = append(items, name)
+	}
+	return items
+}
+
 // conversationSummaryMessageID 返回会话已经纳入摘要的最新消息 ID。
 // 参数 conversation 表示小说级 Agent 会话。
 func conversationSummaryMessageID(conversation *Conversation) uint64 {
@@ -444,6 +541,14 @@ func messageResponses(messages []MessageRecord) []MessageResponse {
 // normalizeChatRequest 标准化小说写作 Agent 请求。
 // 参数 req 表示原始流式对话请求。
 func normalizeChatRequest(req ChatRequest) ChatRequest {
+	req.Model = strings.TrimSpace(req.Model)
+	req.Message = strings.TrimSpace(req.Message)
+	return req
+}
+
+// normalizePromptRecommendationRequest 标准化提示词库推荐判定请求。
+// 参数 req 表示原始提示词库推荐判定请求。
+func normalizePromptRecommendationRequest(req PromptRecommendationRequest) PromptRecommendationRequest {
 	req.Model = strings.TrimSpace(req.Model)
 	req.Message = strings.TrimSpace(req.Message)
 	return req
