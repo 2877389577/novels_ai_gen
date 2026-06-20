@@ -271,6 +271,84 @@ export interface ConfigFileUpdateParams {
   content: string;
 }
 
+// AgentParameterDataType 表示智能体工具参数支持的数据类型。
+export type AgentParameterDataType =
+  | "string"
+  | "number"
+  | "integer"
+  | "boolean"
+  | "array"
+  | "object"
+  | "null";
+
+// AgentParameterDefinition 表示子 Agent 作为工具时的单个参数定义。
+export interface AgentParameterDefinition {
+  // type 表示参数类型，空值由后端按 string 处理。
+  type?: AgentParameterDataType | string;
+  // description 表示参数用途说明。
+  description?: string;
+  // required 表示调用工具时该参数是否必填。
+  required?: boolean;
+  // enum 表示 string 参数允许的枚举值。
+  enum?: string[] | null;
+  // items 表示 array 参数的元素类型定义。
+  items?: AgentParameterDefinition | null;
+  // properties 表示 object 参数的子参数定义。
+  properties?: Record<string, AgentParameterDefinition> | null;
+}
+
+// AgentMemoryConfig 表示小说写作 Agent 的持久记忆配置。
+export interface AgentMemoryConfig {
+  // recent_rounds 表示每次请求注入模型上下文的最近对话轮数。
+  recent_rounds: number;
+}
+
+// AgentDefinition 表示单个小说写作 Agent 的配置。
+export interface AgentDefinition {
+  // name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
+  name: string;
+  // task 表示子 Agent 产生流式事件时返回给前端的任务标识。
+  task: string;
+  // description 表示 Agent 能力描述。
+  description: string;
+  // instruction 表示 Agent 系统提示词。
+  instruction: string;
+  // max_iterations 表示 Eino ADK Agent 最大生成循环次数。
+  max_iterations: number;
+  // tools 表示子 Agent 可使用的普通工具名称列表。
+  tools: string[] | null;
+  // parameters 表示子 Agent 作为工具被调用时的入参定义。
+  parameters: Record<string, AgentParameterDefinition> | null;
+}
+
+// AgentConfig 表示小说写作多层 Agent 配置集合。
+export interface AgentConfig {
+  // supervisor 表示顶层 Agent 配置。
+  supervisor: AgentDefinition;
+  // agent 表示可被顶层 Agent 当成工具调用的子 Agent 配置列表。
+  agent: AgentDefinition[];
+  // memory 表示小说写作 Agent 的持久记忆配置。
+  memory: AgentMemoryConfig;
+}
+
+// AgentConfigData 表示后端结构化智能体配置和加载状态。
+export interface AgentConfigData {
+  // config_file 表示后端启动 -f 参数使用的实际配置文件路径。
+  config_file: string;
+  // agent 表示当前结构化智能体配置。
+  agent: AgentConfig;
+  // modified_at 表示配置文件最后修改时间。
+  modified_at: string;
+  // reloaded_at 表示后端最近一次成功加载配置的时间。
+  reloaded_at: string;
+}
+
+// AgentConfigUpdateParams 表示保存结构化智能体配置时提交给后端的参数。
+export interface AgentConfigUpdateParams {
+  // agent 表示需要写入配置文件 ai.agent 子树的智能体配置。
+  agent: AgentConfig;
+}
+
 // SystemUpdateData 表示后端一键更新启动后的结果。
 export interface SystemUpdateData {
   // branch 表示本次更新拉取的目标分支。
@@ -1078,6 +1156,68 @@ export async function updateConfigFile(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "配置文件保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchAgentConfig 查询后端当前结构化智能体配置。
+// 参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchAgentConfig(
+  signal?: AbortSignal,
+): Promise<AgentConfigData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/config/agent", {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<AgentConfigData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "智能体配置加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateAgentConfig 保存后端当前结构化智能体配置。
+// 参数 params 表示智能体配置保存请求参数。
+export async function updateAgentConfig(
+  params: AgentConfigUpdateParams,
+): Promise<AgentConfigData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/config/agent", {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<AgentConfigData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "智能体配置保存失败，请稍后再试");
   }
 
   return payload.data;

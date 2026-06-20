@@ -78,51 +78,51 @@ type AIConfig struct {
 // AgentConfig 表示小说写作多层 Agent 配置集合。
 type AgentConfig struct {
 	// Supervisor 表示顶层 Agent 配置。
-	Supervisor AgentDefinition `mapstructure:"supervisor"`
+	Supervisor AgentDefinition `mapstructure:"supervisor" json:"supervisor" yaml:"supervisor"`
 	// Agent 表示可被顶层 Agent 当成工具调用的子 Agent 配置列表。
-	Agent []AgentDefinition `mapstructure:"agent"`
+	Agent []AgentDefinition `mapstructure:"agent" json:"agent" yaml:"agent"`
 	// Memory 表示小说写作 Agent 的持久记忆配置。
-	Memory AgentMemoryConfig `mapstructure:"memory"`
+	Memory AgentMemoryConfig `mapstructure:"memory" json:"memory" yaml:"memory"`
 }
 
 // AgentMemoryConfig 表示小说写作 Agent 的持久记忆配置。
 type AgentMemoryConfig struct {
 	// RecentRounds 表示每次请求注入模型上下文的最近对话轮数，小于等于 0 时使用业务默认值。
-	RecentRounds int `mapstructure:"recent_rounds"`
+	RecentRounds int `mapstructure:"recent_rounds" json:"recent_rounds" yaml:"recent_rounds"`
 }
 
 // AgentDefinition 表示单个小说写作 Agent 的配置。
 type AgentDefinition struct {
 	// Name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
-	Name string `mapstructure:"name"`
+	Name string `mapstructure:"name" json:"name" yaml:"name"`
 	// Task 表示子 Agent 产生流式事件时返回给前端的任务标识，顶层 Agent 可留空。
-	Task string `mapstructure:"task"`
+	Task string `mapstructure:"task" json:"task" yaml:"task,omitempty"`
 	// Description 表示 Agent 能力描述，供顶层 Agent 判断是否调用该子 Agent。
-	Description string `mapstructure:"description"`
+	Description string `mapstructure:"description" json:"description" yaml:"description"`
 	// Instruction 表示 Agent 系统提示词，内容会按原文传给 Eino。
-	Instruction string `mapstructure:"instruction"`
+	Instruction string `mapstructure:"instruction" json:"instruction" yaml:"instruction"`
 	// MaxIterations 表示 Eino ADK Agent 最大生成循环次数，小于等于 0 时使用业务默认值。
-	MaxIterations int `mapstructure:"max_iterations"`
+	MaxIterations int `mapstructure:"max_iterations" json:"max_iterations" yaml:"max_iterations,omitempty"`
 	// Tools 表示子 Agent 可使用的普通工具名称列表，当前仅支持 get_content。
-	Tools []string `mapstructure:"tools"`
+	Tools []string `mapstructure:"tools" json:"tools" yaml:"tools,omitempty"`
 	// Parameters 表示子 Agent 作为工具被调用时的入参定义，键为参数名。
-	Parameters map[string]AgentParameterDefinition `mapstructure:"parameters"`
+	Parameters map[string]AgentParameterDefinition `mapstructure:"parameters" json:"parameters" yaml:"parameters,omitempty"`
 }
 
 // AgentParameterDefinition 表示子 Agent 工具参数定义。
 type AgentParameterDefinition struct {
 	// Type 表示参数类型，支持 string、number、integer、boolean、array、object、null，空值默认 string。
-	Type string `mapstructure:"type"`
+	Type string `mapstructure:"type" json:"type" yaml:"type,omitempty"`
 	// Description 表示参数用途说明。
-	Description string `mapstructure:"description"`
+	Description string `mapstructure:"description" json:"description" yaml:"description,omitempty"`
 	// Required 表示调用工具时该参数是否必填。
-	Required bool `mapstructure:"required"`
+	Required bool `mapstructure:"required" json:"required" yaml:"required,omitempty"`
 	// Enum 表示 string 参数允许的枚举值。
-	Enum []string `mapstructure:"enum"`
+	Enum []string `mapstructure:"enum" json:"enum" yaml:"enum,omitempty"`
 	// Items 表示 array 参数的元素类型定义。
-	Items *AgentParameterDefinition `mapstructure:"items"`
+	Items *AgentParameterDefinition `mapstructure:"items" json:"items" yaml:"items,omitempty"`
 	// Properties 表示 object 参数的子参数定义，键为子参数名。
-	Properties map[string]AgentParameterDefinition `mapstructure:"properties"`
+	Properties map[string]AgentParameterDefinition `mapstructure:"properties" json:"properties" yaml:"properties,omitempty"`
 }
 
 // StorageConfig 表示文件对象存储配置集合。
@@ -323,17 +323,7 @@ func (m *ConfigManager) UpdateFile(content string) (FileSnapshot, error) {
 	m.fileMu.Lock()
 	defer m.fileMu.Unlock()
 
-	mode := os.FileMode(0644)
-	if info, statErr := os.Stat(m.configFile); statErr == nil {
-		mode = info.Mode().Perm()
-	}
-	if err := os.WriteFile(m.configFile, []byte(content), mode); err != nil {
-		return FileSnapshot{}, fmt.Errorf("写入配置文件失败: %w", err)
-	}
-
-	m.apply(cfg, time.Now())
-	slog.Info("配置文件保存并热加载成功", "config_file", m.configFile)
-	return m.readFileLocked()
+	return m.writeParsedConfigLocked(content, cfg)
 }
 
 // ReloadFromDisk 从磁盘重新读取配置文件，成功后更新运行时配置快照。

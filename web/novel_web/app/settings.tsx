@@ -12,12 +12,18 @@ import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
 import {
   createAIProvider,
   deleteAIProvider,
+  fetchAgentConfig,
   fetchAIProviders,
   fetchConfigFile,
   triggerSystemUpdate,
+  updateAgentConfig,
   updateAIProvider,
   updateConfigFile,
   UnauthorizedError,
+  type AgentConfig,
+  type AgentConfigData,
+  type AgentDefinition,
+  type AgentParameterDefinition,
   type AIProviderAPIType,
   type AIProviderItem,
   type AIProviderType,
@@ -27,7 +33,12 @@ import {
 import { LogsPanel } from "./logs";
 
 // SettingsSection 表示设置中心支持切换的功能分区。
-export type SettingsSection = "config" | "logs" | "system" | "ai-providers";
+export type SettingsSection =
+  | "config"
+  | "agents"
+  | "logs"
+  | "system"
+  | "ai-providers";
 
 // AIProviderFormMode 表示 AI 提供商表单当前处于创建或编辑模式。
 type AIProviderFormMode = "create" | "edit";
@@ -46,6 +57,12 @@ interface SettingsPageProps {
 
 // ConfigSettingsPanelProps 表示配置管理面板需要的外部回调。
 interface ConfigSettingsPanelProps {
+  // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+  onUnauthorized: () => void;
+}
+
+// AgentSettingsPanelProps 表示智能体配置面板需要的外部回调。
+interface AgentSettingsPanelProps {
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
@@ -82,6 +99,57 @@ interface AIProviderFormState {
   enabled: boolean;
 }
 
+// AgentSupervisorFormState 表示顶层 Agent 表单输入状态。
+interface AgentSupervisorFormState {
+  // name 表示顶层 Agent 名称。
+  name: string;
+  // description 表示顶层 Agent 能力描述。
+  description: string;
+  // instruction 表示顶层 Agent 系统提示词。
+  instruction: string;
+  // maxIterations 表示顶层 Agent 最大生成循环次数文本。
+  maxIterations: string;
+}
+
+// AgentChildFormState 表示子 Agent 表单输入状态。
+interface AgentChildFormState {
+  // id 表示前端渲染列表时使用的稳定标识。
+  id: string;
+  // name 表示子 Agent 名称，同时也是工具名称。
+  name: string;
+  // task 表示子 Agent 流事件任务标识。
+  task: string;
+  // description 表示子 Agent 能力描述。
+  description: string;
+  // instruction 表示子 Agent 系统提示词。
+  instruction: string;
+  // maxIterations 表示子 Agent 最大生成循环次数文本。
+  maxIterations: string;
+  // getContentEnabled 表示是否给该子 Agent 启用 get_content 工具。
+  getContentEnabled: boolean;
+  // parametersText 表示子 Agent 工具参数 JSON 文本。
+  parametersText: string;
+}
+
+// AgentChildTextField 表示子 Agent 表单中以文本方式编辑的字段名。
+type AgentChildTextField =
+  | "name"
+  | "task"
+  | "description"
+  | "instruction"
+  | "maxIterations"
+  | "parametersText";
+
+// AgentSettingsFormState 表示智能体配置页完整表单状态。
+interface AgentSettingsFormState {
+  // memoryRecentRounds 表示最近原始对话轮数配置文本。
+  memoryRecentRounds: string;
+  // supervisor 表示顶层 Agent 表单状态。
+  supervisor: AgentSupervisorFormState;
+  // children 表示全部子 Agent 表单状态。
+  children: AgentChildFormState[];
+}
+
 const aiProviderDefaultPage = 1;
 const aiProviderPageSize = 20;
 const aiProviderTypeOptions: { value: AIProviderType; label: string }[] = [
@@ -106,6 +174,17 @@ const defaultAIProviderFormState: AIProviderFormState = {
   apiType: "completions",
   enabled: true,
 };
+const defaultAgentSettingsFormState: AgentSettingsFormState = {
+  memoryRecentRounds: "10",
+  supervisor: {
+    name: "",
+    description: "",
+    instruction: "",
+    maxIterations: "8",
+  },
+  children: [],
+};
+let agentChildIDSeed = 0;
 
 // SettingsPage 渲染聚合配置、日志和系统更新的设置中心。
 // 参数 props 表示设置中心页面需要的外部状态和回调。
@@ -113,6 +192,11 @@ export function SettingsPage(props: SettingsPageProps) {
   // handleConfigSectionClick 切换到配置管理分区。
   function handleConfigSectionClick() {
     props.onSectionChange("config");
+  }
+
+  // handleAgentsSectionClick 切换到智能体设置分区。
+  function handleAgentsSectionClick() {
+    props.onSectionChange("agents");
   }
 
   // handleLogsSectionClick 切换到日志预览分区。
@@ -173,6 +257,15 @@ export function SettingsPage(props: SettingsPageProps) {
             <button
               type="button"
               className="settings-sidebar-button"
+              aria-current={props.section === "agents" ? "page" : undefined}
+              onClick={handleAgentsSectionClick}
+            >
+              <span aria-hidden="true">AI</span>
+              <span>智能体设置</span>
+            </button>
+            <button
+              type="button"
+              className="settings-sidebar-button"
               aria-current={props.section === "logs" ? "page" : undefined}
               onClick={handleLogsSectionClick}
             >
@@ -205,6 +298,9 @@ export function SettingsPage(props: SettingsPageProps) {
         <div className="settings-content">
           {props.section === "config" ? (
             <ConfigSettingsPanel onUnauthorized={props.onUnauthorized} />
+          ) : null}
+          {props.section === "agents" ? (
+            <AgentSettingsPanel onUnauthorized={props.onUnauthorized} />
           ) : null}
           {props.section === "logs" ? (
             <LogsPanel onUnauthorized={props.onUnauthorized} />
@@ -420,6 +516,545 @@ function ConfigSettingsPanel(props: ConfigSettingsPanelProps) {
       <p className="settings-editor-note">
         保存成功后仅登录密码会立即热更新；数据库、HTTP 服务、对象存储等连接型配置需要重启后生效。
       </p>
+    </article>
+  );
+}
+
+// AgentSettingsPanel 渲染结构化智能体配置面板。
+// 参数 props 表示智能体配置面板需要的外部回调。
+function AgentSettingsPanel(props: AgentSettingsPanelProps) {
+  const [agentData, setAgentData] = useState<AgentConfigData | null>(null);
+  const [form, setForm] = useState<AgentSettingsFormState>(
+    createDefaultAgentSettingsFormState,
+  );
+  const [savedForm, setSavedForm] = useState<AgentSettingsFormState>(
+    createDefaultAgentSettingsFormState,
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const dirty = useMemo(
+    function calculateAgentSettingsDirty() {
+      return JSON.stringify(form) !== JSON.stringify(savedForm);
+    },
+    [form, savedForm],
+  );
+
+  const loadAgentConfig = useCallback(
+    // loadAgentConfig 读取后端结构化智能体配置。
+    // 参数 signal 表示用于取消请求的浏览器 AbortSignal；参数 showSuccess 表示重新加载成功时是否展示提示。
+    async function loadAgentConfig(
+      signal?: AbortSignal,
+      showSuccess = false,
+    ) {
+      setLoading(true);
+      setErrorMessage("");
+
+      try {
+        const data = await fetchAgentConfig(signal);
+        const nextForm = agentConfigToFormState(data.agent);
+        setAgentData(data);
+        setForm(nextForm);
+        setSavedForm(nextForm);
+        if (showSuccess) {
+          Toast.success("智能体配置已重新加载");
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+        if (error instanceof UnauthorizedError) {
+          props.onUnauthorized();
+          return;
+        }
+        const message = getErrorMessage(error, "智能体配置加载失败，请稍后再试");
+        setErrorMessage(message);
+        Toast.error(message);
+      } finally {
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [props.onUnauthorized],
+  );
+
+  useEffect(
+    function loadAgentConfigOnMount() {
+      const controller = new AbortController();
+      void loadAgentConfig(controller.signal);
+
+      // cancelAgentConfigLoad 取消卸载中的智能体配置加载请求。
+      return function cancelAgentConfigLoad() {
+        controller.abort();
+      };
+    },
+    [loadAgentConfig],
+  );
+
+  // handleMemoryRecentRoundsChange 处理最近对话轮数字段变化。
+  // 参数 event 表示输入框变化事件。
+  function handleMemoryRecentRoundsChange(event: ChangeEvent<HTMLInputElement>) {
+    setForm(function updateMemoryRecentRounds(current) {
+      return { ...current, memoryRecentRounds: event.target.value };
+    });
+  }
+
+  // handleSupervisorInputChange 处理顶层 Agent 文本或数字字段变化。
+  // 参数 event 表示输入框或文本域变化事件。
+  function handleSupervisorInputChange(
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) {
+    const { name, value } = event.target;
+    setForm(function updateSupervisor(current) {
+      return {
+        ...current,
+        supervisor: {
+          ...current.supervisor,
+          [name]: value,
+        },
+      };
+    });
+  }
+
+  // handleChildInputChange 处理指定子 Agent 字段变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 field 表示需要更新的字段名；参数 value 表示新的字段值。
+  function handleChildInputChange(
+    index: number,
+    field: AgentChildTextField,
+    value: string,
+  ) {
+    updateChildForm(index, function updateChildField(child) {
+      return { ...child, [field]: value };
+    });
+  }
+
+  // handleChildToolChange 处理子 Agent get_content 工具启用状态变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 enabled 表示是否启用 get_content。
+  function handleChildToolChange(index: number, enabled: boolean) {
+    updateChildForm(index, function updateChildTool(child) {
+      return { ...child, getContentEnabled: enabled };
+    });
+  }
+
+  // updateChildForm 更新指定子 Agent 的表单状态。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 updater 表示子 Agent 状态更新函数。
+  function updateChildForm(
+    index: number,
+    updater: (child: AgentChildFormState) => AgentChildFormState,
+  ) {
+    setForm(function updateChildren(current) {
+      return {
+        ...current,
+        children: current.children.map((child, childIndex) =>
+          childIndex === index ? updater(child) : child,
+        ),
+      };
+    });
+  }
+
+  // handleAddChildClick 新增一个空白子 Agent 表单项。
+  function handleAddChildClick() {
+    setForm(function addChild(current) {
+      return {
+        ...current,
+        children: [...current.children, createDefaultAgentChildFormState()],
+      };
+    });
+  }
+
+  // handleRemoveChildClick 删除指定子 Agent 表单项。
+  // 参数 index 表示子 Agent 在表单列表中的位置。
+  function handleRemoveChildClick(index: number) {
+    setForm(function removeChild(current) {
+      return {
+        ...current,
+        children: current.children.filter((_, childIndex) => childIndex !== index),
+      };
+    });
+  }
+
+  // handleMoveChildClick 移动指定子 Agent 的排序位置。
+  // 参数 index 表示子 Agent 当前所在位置；参数 direction 表示移动方向。
+  function handleMoveChildClick(index: number, direction: -1 | 1) {
+    setForm(function moveChild(current) {
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= current.children.length) {
+        return current;
+      }
+
+      const children = [...current.children];
+      const [target] = children.splice(index, 1);
+      children.splice(nextIndex, 0, target);
+      return { ...current, children };
+    });
+  }
+
+  // handleReloadAgentClick 处理重新加载智能体配置按钮点击。
+  function handleReloadAgentClick() {
+    if (!dirty) {
+      void loadAgentConfig(undefined, true);
+      return;
+    }
+
+    Modal.confirm({
+      title: "重新加载智能体配置",
+      content: "当前未保存的智能体配置修改会被磁盘上的配置覆盖。",
+      okText: "重新加载",
+      cancelText: "取消",
+      className: "settings-confirm-modal",
+      onOk: function confirmAgentReload() {
+        void loadAgentConfig(undefined, true);
+      },
+    });
+  }
+
+  // handleSaveAgentClick 处理保存智能体配置按钮点击。
+  function handleSaveAgentClick() {
+    if (!dirty) {
+      Toast.info("智能体配置没有变化");
+      return;
+    }
+
+    const validationMessage = validateAgentSettingsForm(form);
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      Toast.error(validationMessage);
+      return;
+    }
+
+    Modal.confirm({
+      title: "保存智能体配置",
+      content: "保存后会写入后端启动配置文件，并立即用于后续 AI Agent 请求。",
+      okText: "保存",
+      cancelText: "取消",
+      className: "settings-confirm-modal",
+      onOk: function confirmAgentSave() {
+        void saveAgentConfig();
+      },
+    });
+  }
+
+  // saveAgentConfig 保存当前结构化智能体配置。
+  async function saveAgentConfig() {
+    const buildResult = buildAgentConfigFromForm(form);
+    if (buildResult.error || !buildResult.agent) {
+      const message = buildResult.error || "智能体配置不完整";
+      setErrorMessage(message);
+      Toast.error(message);
+      return;
+    }
+
+    setSaving(true);
+    setErrorMessage("");
+
+    try {
+      const data = await updateAgentConfig({ agent: buildResult.agent });
+      const nextForm = agentConfigToFormState(data.agent);
+      setAgentData(data);
+      setForm(nextForm);
+      setSavedForm(nextForm);
+      Toast.success("智能体配置已保存");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        props.onUnauthorized();
+        return;
+      }
+      const message = getErrorMessage(error, "智能体配置保存失败，请稍后再试");
+      setErrorMessage(message);
+      Toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const modifiedAtText = formatTime(agentData?.modified_at);
+  const reloadedAtText = formatTime(agentData?.reloaded_at);
+
+  return (
+    <article
+      className="settings-panel agent-settings-panel"
+      aria-labelledby="settings-agent-title"
+    >
+      <div className="settings-corner settings-corner-left-top" />
+      <div className="settings-corner settings-corner-right-top" />
+      <div className="settings-corner settings-corner-left-bottom" />
+      <div className="settings-corner settings-corner-right-bottom" />
+
+      <div className="settings-editor-heading">
+        <div>
+          <p className="settings-kicker">Agents</p>
+          <h1 id="settings-agent-title">智能体设置</h1>
+        </div>
+        <div className="settings-editor-actions">
+          <button
+            type="button"
+            className="settings-secondary-button"
+            disabled={loading || saving}
+            onClick={handleReloadAgentClick}
+          >
+            重新加载
+          </button>
+          <button
+            type="button"
+            className="settings-primary-button"
+            disabled={loading || saving || !dirty}
+            onClick={handleSaveAgentClick}
+          >
+            {saving ? "保存中..." : "保存配置"}
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-file-meta" aria-label="智能体配置文件状态">
+        <span title={agentData?.config_file || ""}>
+          文件：{agentData?.config_file || "加载中..."}
+        </span>
+        <span>修改：{modifiedAtText}</span>
+        <span>加载：{reloadedAtText}</span>
+      </div>
+
+      {errorMessage ? (
+        <p className="settings-error-message" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+
+      <section className="agent-settings-section" aria-labelledby="agent-memory-title">
+        <div className="ai-provider-section-heading">
+          <div>
+            <h2 id="agent-memory-title">记忆</h2>
+          </div>
+        </div>
+        <div className="agent-settings-grid">
+          <label className="ai-provider-field">
+            <span>最近对话轮数</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={form.memoryRecentRounds}
+              disabled={loading || saving}
+              onChange={handleMemoryRecentRoundsChange}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="agent-settings-section" aria-labelledby="agent-supervisor-title">
+        <div className="ai-provider-section-heading">
+          <div>
+            <h2 id="agent-supervisor-title">顶层 Agent</h2>
+          </div>
+        </div>
+        <div className="agent-settings-grid">
+          <label className="ai-provider-field">
+            <span>Name</span>
+            <input
+              name="name"
+              value={form.supervisor.name}
+              disabled={loading || saving}
+              onChange={handleSupervisorInputChange}
+            />
+          </label>
+          <label className="ai-provider-field">
+            <span>最大迭代次数</span>
+            <input
+              name="maxIterations"
+              type="number"
+              min="0"
+              step="1"
+              value={form.supervisor.maxIterations}
+              disabled={loading || saving}
+              onChange={handleSupervisorInputChange}
+            />
+          </label>
+          <label className="ai-provider-field ai-provider-field-wide">
+            <span>Description</span>
+            <input
+              name="description"
+              value={form.supervisor.description}
+              disabled={loading || saving}
+              onChange={handleSupervisorInputChange}
+            />
+          </label>
+          <label className="ai-provider-field ai-provider-field-wide">
+            <span>Instruction</span>
+            <textarea
+              name="instruction"
+              className="agent-settings-textarea agent-settings-instruction"
+              value={form.supervisor.instruction}
+              disabled={loading || saving}
+              spellCheck={false}
+              onChange={handleSupervisorInputChange}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="agent-settings-section" aria-labelledby="agent-children-title">
+        <div className="ai-provider-section-heading agent-settings-child-heading">
+          <div>
+            <h2 id="agent-children-title">子 Agent</h2>
+          </div>
+          <button
+            type="button"
+            className="settings-secondary-button"
+            disabled={loading || saving}
+            onClick={handleAddChildClick}
+          >
+            新增子 Agent
+          </button>
+        </div>
+
+        <div className="agent-child-list">
+          {loading ? (
+            <p className="ai-provider-empty">正在加载智能体配置...</p>
+          ) : null}
+          {!loading && form.children.length === 0 ? (
+            <p className="ai-provider-empty">还没有子 Agent。</p>
+          ) : null}
+          {!loading
+            ? form.children.map((child, index) => (
+                <article className="agent-child-card" key={child.id}>
+                  <div className="agent-child-card-heading">
+                    <h3>{child.name.trim() || `子 Agent ${index + 1}`}</h3>
+                    <div className="agent-child-card-actions">
+                      <button
+                        type="button"
+                        className="settings-secondary-button"
+                        disabled={saving || index === 0}
+                        onClick={function handleMoveChildUpClick() {
+                          handleMoveChildClick(index, -1);
+                        }}
+                      >
+                        上移
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-secondary-button"
+                        disabled={saving || index === form.children.length - 1}
+                        onClick={function handleMoveChildDownClick() {
+                          handleMoveChildClick(index, 1);
+                        }}
+                      >
+                        下移
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-secondary-button ai-provider-danger-button"
+                        disabled={saving}
+                        onClick={function handleRemoveAgentChildClick() {
+                          handleRemoveChildClick(index);
+                        }}
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="agent-settings-grid">
+                    <label className="ai-provider-field">
+                      <span>Name</span>
+                      <input
+                        value={child.name}
+                        disabled={saving}
+                        onChange={function handleChildNameChange(event) {
+                          handleChildInputChange(index, "name", event.target.value);
+                        }}
+                      />
+                    </label>
+                    <label className="ai-provider-field">
+                      <span>Task</span>
+                      <input
+                        value={child.task}
+                        disabled={saving}
+                        onChange={function handleChildTaskChange(event) {
+                          handleChildInputChange(index, "task", event.target.value);
+                        }}
+                      />
+                    </label>
+                    <label className="ai-provider-field">
+                      <span>最大迭代次数</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={child.maxIterations}
+                        disabled={saving}
+                        onChange={function handleChildMaxIterationsChange(event) {
+                          handleChildInputChange(
+                            index,
+                            "maxIterations",
+                            event.target.value,
+                          );
+                        }}
+                      />
+                    </label>
+                    <label className="agent-settings-tool-toggle">
+                      <input
+                        type="checkbox"
+                        checked={child.getContentEnabled}
+                        disabled={saving}
+                        onChange={function handleChildGetContentChange(event) {
+                          handleChildToolChange(index, event.target.checked);
+                        }}
+                      />
+                      <span>get_content</span>
+                    </label>
+                    <label className="ai-provider-field ai-provider-field-wide">
+                      <span>Description</span>
+                      <input
+                        value={child.description}
+                        disabled={saving}
+                        onChange={function handleChildDescriptionChange(event) {
+                          handleChildInputChange(
+                            index,
+                            "description",
+                            event.target.value,
+                          );
+                        }}
+                      />
+                    </label>
+                    <label className="ai-provider-field ai-provider-field-wide">
+                      <span>Instruction</span>
+                      <textarea
+                        className="agent-settings-textarea agent-settings-instruction"
+                        value={child.instruction}
+                        disabled={saving}
+                        spellCheck={false}
+                        onChange={function handleChildInstructionChange(event) {
+                          handleChildInputChange(
+                            index,
+                            "instruction",
+                            event.target.value,
+                          );
+                        }}
+                      />
+                    </label>
+                    <label className="ai-provider-field ai-provider-field-wide">
+                      <span>Parameters JSON</span>
+                      <textarea
+                        className="agent-settings-textarea agent-settings-parameters"
+                        value={child.parametersText}
+                        disabled={saving}
+                        spellCheck={false}
+                        onChange={function handleChildParametersChange(event) {
+                          handleChildInputChange(
+                            index,
+                            "parametersText",
+                            event.target.value,
+                          );
+                        }}
+                      />
+                    </label>
+                  </div>
+                </article>
+              ))
+            : null}
+        </div>
+      </section>
     </article>
   );
 }
@@ -1086,6 +1721,244 @@ function SystemSettingsPanel(props: SystemSettingsPanelProps) {
       </div>
     </article>
   );
+}
+
+// createDefaultAgentSettingsFormState 创建智能体设置默认表单状态。
+function createDefaultAgentSettingsFormState(): AgentSettingsFormState {
+  return {
+    memoryRecentRounds: defaultAgentSettingsFormState.memoryRecentRounds,
+    supervisor: { ...defaultAgentSettingsFormState.supervisor },
+    children: [],
+  };
+}
+
+// createDefaultAgentChildFormState 创建空白子 Agent 表单状态。
+function createDefaultAgentChildFormState(): AgentChildFormState {
+  return {
+    id: createAgentChildID(),
+    name: "",
+    task: "",
+    description: "",
+    instruction: "",
+    maxIterations: "6",
+    getContentEnabled: false,
+    parametersText: "{}",
+  };
+}
+
+// createAgentChildID 创建子 Agent 表单项前端渲染标识。
+function createAgentChildID(): string {
+  agentChildIDSeed += 1;
+  return `agent-child-${Date.now()}-${agentChildIDSeed}`;
+}
+
+// agentConfigToFormState 将智能体接口数据转换为前端表单状态。
+// 参数 agent 表示后端返回的结构化智能体配置。
+function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormState {
+  return {
+    memoryRecentRounds: String(agent.memory?.recent_rounds ?? 10),
+    supervisor: {
+      name: agent.supervisor?.name ?? "",
+      description: agent.supervisor?.description ?? "",
+      instruction: agent.supervisor?.instruction ?? "",
+      maxIterations: String(agent.supervisor?.max_iterations ?? 8),
+    },
+    children: (agent.agent ?? []).map(agentDefinitionToChildFormState),
+  };
+}
+
+// agentDefinitionToChildFormState 将子 Agent 配置转换为表单状态。
+// 参数 definition 表示后端返回的子 Agent 配置；参数 index 表示子 Agent 在列表中的位置。
+function agentDefinitionToChildFormState(
+  definition: AgentDefinition,
+  index: number,
+): AgentChildFormState {
+  return {
+    id: `${createAgentChildID()}-${index}`,
+    name: definition.name ?? "",
+    task: definition.task ?? "",
+    description: definition.description ?? "",
+    instruction: definition.instruction ?? "",
+    maxIterations: String(definition.max_iterations ?? 6),
+    getContentEnabled: (definition.tools ?? []).includes("get_content"),
+    parametersText: formatAgentParameters(definition.parameters),
+  };
+}
+
+// formatAgentParameters 将参数对象格式化为稳定的 JSON 文本。
+// 参数 parameters 表示后端返回的子 Agent 参数定义。
+function formatAgentParameters(
+  parameters: Record<string, AgentParameterDefinition> | null,
+): string {
+  return JSON.stringify(parameters ?? {}, null, 2);
+}
+
+// validateAgentSettingsForm 校验智能体设置表单。
+// 参数 form 表示当前智能体设置表单状态。
+function validateAgentSettingsForm(form: AgentSettingsFormState): string {
+  return buildAgentConfigFromForm(form).error;
+}
+
+// buildAgentConfigFromForm 将智能体设置表单转换为后端保存参数。
+// 参数 form 表示当前智能体设置表单状态。
+function buildAgentConfigFromForm(form: AgentSettingsFormState): {
+  agent: AgentConfig | null;
+  error: string;
+} {
+  const recentRounds = parseNonNegativeInteger(
+    form.memoryRecentRounds,
+    "最近对话轮数",
+  );
+  if (recentRounds.error) {
+    return { agent: null, error: recentRounds.error };
+  }
+
+  const supervisorMaxIterations = parseNonNegativeInteger(
+    form.supervisor.maxIterations,
+    "顶层 Agent 最大迭代次数",
+  );
+  if (supervisorMaxIterations.error) {
+    return { agent: null, error: supervisorMaxIterations.error };
+  }
+
+  const supervisorName = form.supervisor.name.trim();
+  const supervisorDescription = form.supervisor.description.trim();
+  const supervisorInstruction = form.supervisor.instruction.trim();
+  if (!supervisorName) {
+    return { agent: null, error: "顶层 Agent name 不能为空" };
+  }
+  if (!supervisorDescription) {
+    return { agent: null, error: "顶层 Agent description 不能为空" };
+  }
+  if (!supervisorInstruction) {
+    return { agent: null, error: "顶层 Agent instruction 不能为空" };
+  }
+
+  const names = new Set<string>();
+  const children: AgentDefinition[] = [];
+  for (const [index, child] of form.children.entries()) {
+    const childName = child.name.trim();
+    const childDescription = child.description.trim();
+    const childInstruction = child.instruction.trim();
+    const childTask = child.task.trim();
+    if (!childName) {
+      return { agent: null, error: `第 ${index + 1} 个子 Agent name 不能为空` };
+    }
+    if (!childDescription) {
+      return {
+        agent: null,
+        error: `第 ${index + 1} 个子 Agent description 不能为空`,
+      };
+    }
+    if (!childInstruction) {
+      return {
+        agent: null,
+        error: `第 ${index + 1} 个子 Agent instruction 不能为空`,
+      };
+    }
+    if (childTask === "direct") {
+      return { agent: null, error: "子 Agent task 不能为 direct" };
+    }
+    if (names.has(childName)) {
+      return { agent: null, error: `子 Agent 名称重复：${childName}` };
+    }
+    names.add(childName);
+
+    const childMaxIterations = parseNonNegativeInteger(
+      child.maxIterations,
+      `第 ${index + 1} 个子 Agent 最大迭代次数`,
+    );
+    if (childMaxIterations.error) {
+      return { agent: null, error: childMaxIterations.error };
+    }
+
+    const parameters = parseAgentParametersText(child.parametersText, index);
+    if (parameters.error || !parameters.value) {
+      return { agent: null, error: parameters.error };
+    }
+
+    children.push({
+      name: childName,
+      task: childTask,
+      description: childDescription,
+      instruction: childInstruction,
+      max_iterations: childMaxIterations.value,
+      tools: child.getContentEnabled ? ["get_content"] : [],
+      parameters: parameters.value,
+    });
+  }
+
+  return {
+    agent: {
+      memory: {
+        recent_rounds: recentRounds.value,
+      },
+      supervisor: {
+        name: supervisorName,
+        task: "",
+        description: supervisorDescription,
+        instruction: supervisorInstruction,
+        max_iterations: supervisorMaxIterations.value,
+        tools: [],
+        parameters: {},
+      },
+      agent: children,
+    },
+    error: "",
+  };
+}
+
+// parseAgentParametersText 解析子 Agent 参数 JSON 文本。
+// 参数 value 表示参数 JSON 文本；参数 childIndex 表示子 Agent 在表单列表中的位置。
+function parseAgentParametersText(
+  value: string,
+  childIndex: number,
+): { value: Record<string, AgentParameterDefinition> | null; error: string } {
+  const text = value.trim();
+  if (!text) {
+    return { value: {}, error: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!isPlainRecord(parsed)) {
+      return {
+        value: null,
+        error: `第 ${childIndex + 1} 个子 Agent parameters 必须是 JSON 对象`,
+      };
+    }
+    return {
+      value: parsed as Record<string, AgentParameterDefinition>,
+      error: "",
+    };
+  } catch {
+    return {
+      value: null,
+      error: `第 ${childIndex + 1} 个子 Agent parameters 不是合法 JSON`,
+    };
+  }
+}
+
+// parseNonNegativeInteger 将表单数字文本转换为非负整数。
+// 参数 value 表示表单中的数字文本；参数 label 表示错误提示使用的字段名。
+function parseNonNegativeInteger(
+  value: string,
+  label: string,
+): { value: number; error: string } {
+  const text = value.trim();
+  if (!text) {
+    return { value: 0, error: "" };
+  }
+  if (!/^\d+$/.test(text)) {
+    return { value: 0, error: `${label}必须是非负整数` };
+  }
+  return { value: Number.parseInt(text, 10), error: "" };
+}
+
+// isPlainRecord 判断未知值是否为普通 JSON 对象。
+// 参数 value 表示需要判断的未知值。
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // createDefaultAIProviderFormState 创建 AI 提供商默认表单状态。

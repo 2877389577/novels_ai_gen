@@ -641,6 +641,43 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
+  config.AgentData:
+    properties:
+      agent:
+        description: Agent 表示小说写作多层 Agent 配置。
+        type: object
+      config_file:
+        description: ConfigFile 表示启动 -f 参数指定的实际配置文件绝对路径。
+        example: D:\Go\GOPATH\src\novels_ai_gen\config\config-dev.yaml
+        type: string
+      modified_at:
+        description: ModifiedAt 表示配置文件在文件系统中的最后修改时间。
+        example: "2026-06-14T22:00:00+08:00"
+        type: string
+      reloaded_at:
+        description: ReloadedAt 表示后端最近一次成功加载该配置文件的时间。
+        example: "2026-06-14T22:00:00+08:00"
+        type: string
+    type: object
+  config.AgentSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/config.AgentData'
+        description: Data 表示结构化智能体配置和加载状态。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
   config.FileData:
     properties:
       config_file:
@@ -680,6 +717,12 @@ definitions:
         description: RequestID 表示本次请求的追踪标识。
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
+    type: object
+  config.UpdateAgentRequest:
+    properties:
+      agent:
+        description: Agent 表示需要写入配置文件 ai.agent 子树的智能体配置。
+        type: object
     type: object
   config.UpdateFileRequest:
     properties:
@@ -2409,6 +2452,64 @@ paths:
       summary: 用户登录
       tags:
       - auth
+  /config/agent:
+    get:
+      description: 返回当前后端启动配置文件中的 ai.agent 结构化配置。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 读取成功
+          schema:
+            $ref: '#/definitions/config.AgentSuccessResponse'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 读取智能体配置
+      tags:
+      - config
+    put:
+      consumes:
+      - application/json
+      description: 只替换当前启动配置文件中的 ai.agent 子树，保存成功后立即热加载。
+      parameters:
+      - description: 智能体配置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/config.UpdateAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存成功
+          schema:
+            $ref: '#/definitions/config.AgentSuccessResponse'
+        "400":
+          description: 配置内容错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 保存智能体配置
+      tags:
+      - config
   /config/file:
     get:
       description: 返回当前后端启动 -f 参数指定配置文件的原始文本内容。
