@@ -13,6 +13,7 @@ import {
   createAIProvider,
   deleteAIProvider,
   fetchAgentConfig,
+  fetchAIProviderModelsByProviderID,
   fetchAIProviders,
   fetchConfigFile,
   triggerSystemUpdate,
@@ -26,6 +27,7 @@ import {
   type AgentParameterDefinition,
   type AIProviderAPIType,
   type AIProviderItem,
+  type AIProviderModelItem,
   type AIProviderType,
   type AIProviderUpsertParams,
   type ConfigFileData,
@@ -111,6 +113,12 @@ interface AgentSupervisorFormState {
   maxIterations: string;
   // getContentEnabled 表示是否给顶层 Agent 启用 get_content 工具。
   getContentEnabled: boolean;
+  // customModelEnabled 表示顶层 Agent 是否启用自定义模型。
+  customModelEnabled: boolean;
+  // providerId 表示顶层 Agent 自定义模型使用的 AI 提供商 ID 文本。
+  providerId: string;
+  // model 表示顶层 Agent 自定义模型标识，空值时使用提供商默认模型。
+  model: string;
 }
 
 // AgentChildFormState 表示子 Agent 表单输入状态。
@@ -131,6 +139,12 @@ interface AgentChildFormState {
   maxIterations: string;
   // getContentEnabled 表示是否给该子 Agent 启用 get_content 工具。
   getContentEnabled: boolean;
+  // customModelEnabled 表示该子 Agent 是否启用自定义模型。
+  customModelEnabled: boolean;
+  // providerId 表示该子 Agent 自定义模型使用的 AI 提供商 ID 文本。
+  providerId: string;
+  // model 表示该子 Agent 自定义模型标识，空值时使用提供商默认模型。
+  model: string;
   // parametersText 表示子 Agent 工具参数 JSON 文本。
   parametersText: string;
 }
@@ -148,6 +162,10 @@ type AgentChildTextField =
 interface AgentSettingsFormState {
   // memoryRecentRounds 表示最近原始对话轮数配置文本。
   memoryRecentRounds: string;
+  // retryMaxRetries 表示模型失败最大重试次数配置文本。
+  retryMaxRetries: string;
+  // retryBackoffMS 表示模型失败重试间隔毫秒数配置文本。
+  retryBackoffMS: string;
   // supervisor 表示顶层 Agent 表单状态。
   supervisor: AgentSupervisorFormState;
   // children 表示全部子 Agent 表单状态。
@@ -180,12 +198,17 @@ const defaultAIProviderFormState: AIProviderFormState = {
 };
 const defaultAgentSettingsFormState: AgentSettingsFormState = {
   memoryRecentRounds: "10",
+  retryMaxRetries: "0",
+  retryBackoffMS: "300",
   supervisor: {
     name: "",
     description: "",
     instruction: "",
     maxIterations: "8",
     getContentEnabled: false,
+    customModelEnabled: false,
+    providerId: "",
+    model: "",
   },
   children: [],
 };
@@ -325,13 +348,13 @@ export function SettingsPage(props: SettingsPageProps) {
 // ConfigSettingsPanel 渲染配置文件管理面板。
 // 参数 props 表示配置管理面板需要的外部回调。
 function ConfigSettingsPanel(props: ConfigSettingsPanelProps) {
-  const [configData, setConfigData] = useState<ConfigFileData | null>(null);
-  const [content, setContent] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+	const [configData, setConfigData] = useState<ConfigFileData | null>(null);
+	const [content, setContent] = useState("");
+	const [loading, setLoading] = useState(true);
+	const [saving, setSaving] = useState(false);
+	const [errorMessage, setErrorMessage] = useState("");
 
-  const dirty = useMemo(
+	const dirty = useMemo(
     function calculateDirty() {
       return configData !== null && content !== configData.content;
     },
@@ -528,18 +551,25 @@ function ConfigSettingsPanel(props: ConfigSettingsPanelProps) {
 // AgentSettingsPanel 渲染结构化智能体配置面板。
 // 参数 props 表示智能体配置面板需要的外部回调。
 function AgentSettingsPanel(props: AgentSettingsPanelProps) {
-  const [agentData, setAgentData] = useState<AgentConfigData | null>(null);
-  const [form, setForm] = useState<AgentSettingsFormState>(
-    createDefaultAgentSettingsFormState,
-  );
+	const [agentData, setAgentData] = useState<AgentConfigData | null>(null);
+	const [form, setForm] = useState<AgentSettingsFormState>(
+		createDefaultAgentSettingsFormState,
+	);
   const [savedForm, setSavedForm] = useState<AgentSettingsFormState>(
     createDefaultAgentSettingsFormState,
   );
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+	const [loading, setLoading] = useState(true);
+	const [saving, setSaving] = useState(false);
+	const [errorMessage, setErrorMessage] = useState("");
+	const [modelProviders, setModelProviders] = useState<AIProviderItem[]>([]);
+	const [modelOptionsByProvider, setModelOptionsByProvider] = useState<
+		Record<string, AIProviderModelItem[]>
+	>({});
+	const [modelLoadingByProvider, setModelLoadingByProvider] = useState<
+		Record<string, boolean>
+	>({});
 
-  const dirty = useMemo(
+	const dirty = useMemo(
     function calculateAgentSettingsDirty() {
       return JSON.stringify(form) !== JSON.stringify(savedForm);
     },
@@ -585,6 +615,97 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     [props.onUnauthorized],
   );
 
+  const loadModelProviders = useCallback(
+    // loadModelProviders 读取可用于 Agent 自定义模型选择的 AI 提供商列表。
+    // 参数 signal 表示用于取消请求的浏览器 AbortSignal。
+    async function loadModelProviders(signal?: AbortSignal) {
+      try {
+        const data = await fetchAIProviders({
+          page: aiProviderDefaultPage,
+          pageSize: 100,
+          signal,
+        });
+        setModelProviders(data.items);
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+        if (error instanceof UnauthorizedError) {
+          props.onUnauthorized();
+          return;
+        }
+        Toast.error(getErrorMessage(error, "AI 提供商列表加载失败，请稍后再试"));
+      }
+    },
+    [props.onUnauthorized],
+  );
+
+  const loadAgentModelOptions = useCallback(
+    // loadAgentModelOptions 读取指定 AI 提供商的模型列表，失败时按默认模型兜底。
+    // 参数 providerId 表示 AI 提供商 ID 文本；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+    async function loadAgentModelOptions(
+      providerId: string,
+      signal?: AbortSignal,
+    ) {
+      const normalizedProviderID = providerId.trim();
+      if (!normalizedProviderID || modelLoadingByProvider[normalizedProviderID]) {
+        return;
+      }
+
+      setModelLoadingByProvider(function markModelLoading(current) {
+        return { ...current, [normalizedProviderID]: true };
+      });
+      try {
+        const data = await fetchAIProviderModelsByProviderID(
+          Number(normalizedProviderID),
+          signal,
+        );
+        const defaultModel = defaultModelForAgentProvider(
+          modelProviders,
+          normalizedProviderID,
+        );
+        setModelOptionsByProvider(function updateModelOptions(current) {
+          return {
+            ...current,
+            [normalizedProviderID]: modelsWithDefaultAgentModel(
+              data.items,
+              defaultModel,
+            ),
+          };
+        });
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+        if (error instanceof UnauthorizedError) {
+          props.onUnauthorized();
+          return;
+        }
+        const defaultModel = defaultModelForAgentProvider(
+          modelProviders,
+          normalizedProviderID,
+        );
+        if (defaultModel) {
+          setModelOptionsByProvider(function fallbackModelOptions(current) {
+            return {
+              ...current,
+              [normalizedProviderID]: [defaultAgentModelOption(defaultModel)],
+            };
+          });
+          return;
+        }
+        Toast.error(getErrorMessage(error, "AI 模型列表加载失败，请稍后再试"));
+      } finally {
+        if (!signal?.aborted) {
+          setModelLoadingByProvider(function clearModelLoading(current) {
+            return { ...current, [normalizedProviderID]: false };
+          });
+        }
+      }
+    },
+    [modelLoadingByProvider, modelProviders, props.onUnauthorized],
+  );
+
   useEffect(
     function loadAgentConfigOnMount() {
       const controller = new AbortController();
@@ -598,11 +719,40 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     [loadAgentConfig],
   );
 
+  useEffect(
+    function loadAgentModelProvidersOnMount() {
+      const controller = new AbortController();
+      void loadModelProviders(controller.signal);
+
+      // cancelAgentModelProviderLoad 取消卸载中的 AI 提供商加载请求。
+      return function cancelAgentModelProviderLoad() {
+        controller.abort();
+      };
+    },
+    [loadModelProviders],
+  );
+
   // handleMemoryRecentRoundsChange 处理最近对话轮数字段变化。
   // 参数 event 表示输入框变化事件。
   function handleMemoryRecentRoundsChange(event: ChangeEvent<HTMLInputElement>) {
     setForm(function updateMemoryRecentRounds(current) {
       return { ...current, memoryRecentRounds: event.target.value };
+    });
+  }
+
+  // handleRetryMaxRetriesChange 处理模型失败最大重试次数字段变化。
+  // 参数 event 表示输入框变化事件。
+  function handleRetryMaxRetriesChange(event: ChangeEvent<HTMLInputElement>) {
+    setForm(function updateRetryMaxRetries(current) {
+      return { ...current, retryMaxRetries: event.target.value };
+    });
+  }
+
+  // handleRetryBackoffMSChange 处理模型失败重试间隔字段变化。
+  // 参数 event 表示输入框变化事件。
+  function handleRetryBackoffMSChange(event: ChangeEvent<HTMLInputElement>) {
+    setForm(function updateRetryBackoffMS(current) {
+      return { ...current, retryBackoffMS: event.target.value };
     });
   }
 
@@ -637,6 +787,64 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
+  // handleSupervisorCustomModelChange 处理顶层 Agent 自定义模型启用状态变化。
+  // 参数 event 表示复选框变化事件。
+  function handleSupervisorCustomModelChange(event: ChangeEvent<HTMLInputElement>) {
+    const enabled = event.target.checked;
+    const providerId =
+      enabled && !form.supervisor.providerId
+        ? String(modelProviders[0]?.id ?? "")
+        : form.supervisor.providerId;
+    setForm(function updateSupervisorCustomModel(current) {
+      return {
+        ...current,
+        supervisor: {
+          ...current.supervisor,
+          customModelEnabled: enabled,
+          providerId: enabled ? providerId : "",
+          model: enabled ? current.supervisor.model : "",
+        },
+      };
+    });
+    if (enabled && providerId) {
+      void loadAgentModelOptions(providerId);
+    }
+  }
+
+  // handleSupervisorModelProviderChange 处理顶层 Agent 自定义模型提供商变化。
+  // 参数 event 表示下拉框变化事件。
+  function handleSupervisorModelProviderChange(
+    event: ChangeEvent<HTMLSelectElement>,
+  ) {
+    const providerId = event.target.value;
+    setForm(function updateSupervisorModelProvider(current) {
+      return {
+        ...current,
+        supervisor: {
+          ...current.supervisor,
+          providerId,
+          model: "",
+        },
+      };
+    });
+    void loadAgentModelOptions(providerId);
+  }
+
+  // handleSupervisorModelChange 处理顶层 Agent 自定义模型变化。
+  // 参数 event 表示下拉框变化事件。
+  function handleSupervisorModelChange(event: ChangeEvent<HTMLSelectElement>) {
+    const model = event.target.value;
+    setForm(function updateSupervisorModel(current) {
+      return {
+        ...current,
+        supervisor: {
+          ...current.supervisor,
+          model,
+        },
+      };
+    });
+  }
+
   // handleChildEnabledChange 处理子 Agent 启用状态变化。
   // 参数 index 表示子 Agent 在表单列表中的位置；参数 enabled 表示是否启用。
   function handleChildEnabledChange(index: number, enabled: boolean) {
@@ -663,6 +871,53 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     updateChildForm(index, function updateChildTool(child) {
       return { ...child, getContentEnabled: enabled };
     });
+  }
+
+  // handleChildCustomModelChange 处理子 Agent 自定义模型启用状态变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 enabled 表示是否启用自定义模型。
+  function handleChildCustomModelChange(index: number, enabled: boolean) {
+    const child = form.children[index];
+    const providerId =
+      enabled && !child?.providerId
+        ? String(modelProviders[0]?.id ?? "")
+        : child?.providerId ?? "";
+    updateChildForm(index, function updateChildCustomModel(child) {
+      return {
+        ...child,
+        customModelEnabled: enabled,
+        providerId: enabled ? providerId : "",
+        model: enabled ? child.model : "",
+      };
+    });
+    if (enabled && providerId) {
+      void loadAgentModelOptions(providerId);
+    }
+  }
+
+  // handleChildModelProviderChange 处理子 Agent 自定义模型提供商变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 providerId 表示新的 AI 提供商 ID 文本。
+  function handleChildModelProviderChange(index: number, providerId: string) {
+    updateChildForm(index, function updateChildModelProvider(child) {
+      return { ...child, providerId, model: "" };
+    });
+    void loadAgentModelOptions(providerId);
+  }
+
+  // handleChildModelChange 处理子 Agent 自定义模型变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 model 表示新的模型标识。
+  function handleChildModelChange(index: number, model: string) {
+    updateChildForm(index, function updateChildModel(child) {
+      return { ...child, model };
+    });
+  }
+
+  // handleAgentModelSelectFocus 处理模型下拉框聚焦时的按需加载。
+  // 参数 providerId 表示当前选择的 AI 提供商 ID 文本。
+  function handleAgentModelSelectFocus(providerId: string) {
+    if (!providerId.trim()) {
+      return;
+    }
+    void loadAgentModelOptions(providerId);
   }
 
   // updateChildForm 更新指定子 Agent 的表单状态。
@@ -851,7 +1106,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
       <section className="agent-settings-section" aria-labelledby="agent-memory-title">
         <div className="ai-provider-section-heading">
           <div>
-            <h2 id="agent-memory-title">记忆</h2>
+            <h2 id="agent-memory-title">记忆与重试</h2>
           </div>
         </div>
         <div className="agent-settings-grid">
@@ -864,6 +1119,28 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
               value={form.memoryRecentRounds}
               disabled={loading || saving}
               onChange={handleMemoryRecentRoundsChange}
+            />
+          </label>
+          <label className="ai-provider-field">
+            <span>模型失败最大重试次数</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={form.retryMaxRetries}
+              disabled={loading || saving}
+              onChange={handleRetryMaxRetriesChange}
+            />
+          </label>
+          <label className="ai-provider-field">
+            <span>重试间隔毫秒</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={form.retryBackoffMS}
+              disabled={loading || saving}
+              onChange={handleRetryBackoffMSChange}
             />
           </label>
         </div>
@@ -906,6 +1183,65 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
             />
             <span>get_content</span>
           </label>
+          <label className="agent-settings-tool-toggle">
+            <input
+              type="checkbox"
+              checked={form.supervisor.customModelEnabled}
+              disabled={loading || saving}
+              onChange={handleSupervisorCustomModelChange}
+            />
+            <span>自定义模型</span>
+          </label>
+          {form.supervisor.customModelEnabled ? (
+            <>
+              <label className="ai-provider-field">
+                <span>模型提供商</span>
+                <select
+                  value={form.supervisor.providerId}
+                  disabled={loading || saving || modelProviders.length === 0}
+                  onChange={handleSupervisorModelProviderChange}
+                >
+                  <option value="">选择提供商</option>
+                  {modelProviders.map(function renderAgentProviderOption(provider) {
+                    return (
+                      <option key={provider.id} value={String(provider.id)}>
+                        {formatAgentProviderOption(provider)}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              <label className="ai-provider-field">
+                <span>模型</span>
+                <select
+                  value={form.supervisor.model}
+                  disabled={loading || saving || !form.supervisor.providerId}
+                  onFocus={function handleSupervisorModelSelectFocus() {
+                    handleAgentModelSelectFocus(form.supervisor.providerId);
+                  }}
+                  onChange={handleSupervisorModelChange}
+                >
+                  <option value="">
+                    {modelLoadingByProvider[form.supervisor.providerId]
+                      ? "正在加载模型..."
+                      : "使用提供商默认模型"}
+                  </option>
+                  {agentModelOptionsForProvider(
+                    form.supervisor.providerId,
+                    form.supervisor.model,
+                    modelProviders,
+                    modelOptionsByProvider,
+                  ).map(function renderSupervisorModelOption(model) {
+                    return (
+                      <option key={model.id} value={model.id}>
+                        {formatAgentModelOption(model)}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+            </>
+          ) : null}
           <label className="ai-provider-field ai-provider-field-wide">
             <span>Description</span>
             <input
@@ -1057,6 +1393,79 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                       />
                       <span>get_content</span>
                     </label>
+                    <label className="agent-settings-tool-toggle">
+                      <input
+                        type="checkbox"
+                        checked={child.customModelEnabled}
+                        disabled={saving}
+                        onChange={function handleChildCustomModelToggle(event) {
+                          handleChildCustomModelChange(index, event.target.checked);
+                        }}
+                      />
+                      <span>自定义模型</span>
+                    </label>
+                    {child.customModelEnabled ? (
+                      <>
+                        <label className="ai-provider-field">
+                          <span>模型提供商</span>
+                          <select
+                            value={child.providerId}
+                            disabled={saving || modelProviders.length === 0}
+                            onChange={function handleChildProviderSelect(event) {
+                              handleChildModelProviderChange(
+                                index,
+                                event.target.value,
+                              );
+                            }}
+                          >
+                            <option value="">选择提供商</option>
+                            {modelProviders.map(function renderChildProviderOption(
+                              provider,
+                            ) {
+                              return (
+                                <option
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
+                                  {formatAgentProviderOption(provider)}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </label>
+                        <label className="ai-provider-field">
+                          <span>模型</span>
+                          <select
+                            value={child.model}
+                            disabled={saving || !child.providerId}
+                            onFocus={function handleChildModelSelectFocus() {
+                              handleAgentModelSelectFocus(child.providerId);
+                            }}
+                            onChange={function handleChildModelSelect(event) {
+                              handleChildModelChange(index, event.target.value);
+                            }}
+                          >
+                            <option value="">
+                              {modelLoadingByProvider[child.providerId]
+                                ? "正在加载模型..."
+                                : "使用提供商默认模型"}
+                            </option>
+                            {agentModelOptionsForProvider(
+                              child.providerId,
+                              child.model,
+                              modelProviders,
+                              modelOptionsByProvider,
+                            ).map(function renderChildModelOption(model) {
+                              return (
+                                <option key={model.id} value={model.id}>
+                                  {formatAgentModelOption(model)}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </label>
+                      </>
+                    ) : null}
                     <label className="ai-provider-field ai-provider-field-wide">
                       <span>Description</span>
                       <input
@@ -1781,6 +2190,8 @@ function SystemSettingsPanel(props: SystemSettingsPanelProps) {
 function createDefaultAgentSettingsFormState(): AgentSettingsFormState {
   return {
     memoryRecentRounds: defaultAgentSettingsFormState.memoryRecentRounds,
+    retryMaxRetries: defaultAgentSettingsFormState.retryMaxRetries,
+    retryBackoffMS: defaultAgentSettingsFormState.retryBackoffMS,
     supervisor: { ...defaultAgentSettingsFormState.supervisor },
     children: [],
   };
@@ -1797,6 +2208,9 @@ function createDefaultAgentChildFormState(): AgentChildFormState {
     instruction: "",
     maxIterations: "6",
     getContentEnabled: false,
+    customModelEnabled: false,
+    providerId: "",
+    model: "",
     parametersText: "{}",
   };
 }
@@ -1812,12 +2226,20 @@ function createAgentChildID(): string {
 function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormState {
   return {
     memoryRecentRounds: String(agent.memory?.recent_rounds ?? 10),
+    retryMaxRetries: String(agent.retry?.max_retries ?? 0),
+    retryBackoffMS: String(agent.retry?.backoff_ms ?? 300),
     supervisor: {
       name: agent.supervisor?.name ?? "",
       description: agent.supervisor?.description ?? "",
       instruction: agent.supervisor?.instruction ?? "",
       maxIterations: String(agent.supervisor?.max_iterations ?? 8),
       getContentEnabled: (agent.supervisor?.tools ?? []).includes("get_content"),
+      customModelEnabled: Number(agent.supervisor?.provider_id ?? 0) > 0,
+      providerId:
+        Number(agent.supervisor?.provider_id ?? 0) > 0
+          ? String(agent.supervisor?.provider_id ?? "")
+          : "",
+      model: agent.supervisor?.model ?? "",
     },
     children: (agent.agent ?? []).map(agentDefinitionToChildFormState),
   };
@@ -1838,6 +2260,12 @@ function agentDefinitionToChildFormState(
     instruction: definition.instruction ?? "",
     maxIterations: String(definition.max_iterations ?? 6),
     getContentEnabled: (definition.tools ?? []).includes("get_content"),
+    customModelEnabled: Number(definition.provider_id ?? 0) > 0,
+    providerId:
+      Number(definition.provider_id ?? 0) > 0
+        ? String(definition.provider_id ?? "")
+        : "",
+    model: definition.model ?? "",
     parametersText: formatAgentParameters(definition.parameters),
   };
 }
@@ -1870,6 +2298,22 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     return { agent: null, error: recentRounds.error };
   }
 
+  const retryMaxRetries = parseNonNegativeInteger(
+    form.retryMaxRetries,
+    "模型失败最大重试次数",
+  );
+  if (retryMaxRetries.error) {
+    return { agent: null, error: retryMaxRetries.error };
+  }
+
+  const retryBackoffMS = parseNonNegativeInteger(
+    form.retryBackoffMS,
+    "模型失败重试间隔毫秒",
+  );
+  if (retryBackoffMS.error) {
+    return { agent: null, error: retryBackoffMS.error };
+  }
+
   const supervisorMaxIterations = parseNonNegativeInteger(
     form.supervisor.maxIterations,
     "顶层 Agent 最大迭代次数",
@@ -1889,6 +2333,15 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
   }
   if (!supervisorInstruction) {
     return { agent: null, error: "顶层 Agent instruction 不能为空" };
+  }
+  const supervisorModel = parseAgentCustomModel(
+    form.supervisor.customModelEnabled,
+    form.supervisor.providerId,
+    form.supervisor.model,
+    "顶层 Agent",
+  );
+  if (supervisorModel.error) {
+    return { agent: null, error: supervisorModel.error };
   }
 
   const names = new Set<string>();
@@ -1935,10 +2388,27 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     if (child.enabled && (parameters.error || !parameters.value)) {
       return { agent: null, error: parameters.error };
     }
+    const childModel = child.enabled
+      ? parseAgentCustomModel(
+          child.customModelEnabled,
+          child.providerId,
+          child.model,
+          `第 ${index + 1} 个子 Agent`,
+        )
+      : parseDisabledAgentCustomModel(
+          child.customModelEnabled,
+          child.providerId,
+          child.model,
+        );
+    if (childModel.error) {
+      return { agent: null, error: childModel.error };
+    }
 
     children.push({
       name: childName,
       enabled: child.enabled,
+      provider_id: childModel.providerId,
+      model: childModel.model,
       task: childTask,
       description: childDescription,
       instruction: childInstruction,
@@ -1959,8 +2429,14 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
       memory: {
         recent_rounds: recentRounds.value,
       },
+      retry: {
+        max_retries: retryMaxRetries.value,
+        backoff_ms: retryBackoffMS.value,
+      },
       supervisor: {
         name: supervisorName,
+        provider_id: supervisorModel.providerId,
+        model: supervisorModel.model,
         task: "",
         description: supervisorDescription,
         instruction: supervisorInstruction,
@@ -1970,6 +2446,45 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
       },
       agent: children,
     },
+    error: "",
+  };
+}
+
+// parseAgentCustomModel 将启用 Agent 的自定义模型表单字段转换为后端字段。
+// 参数 enabled 表示是否启用自定义模型；参数 providerId 表示提供商 ID 文本；参数 model 表示模型标识文本；参数 label 表示错误提示使用的 Agent 名称。
+function parseAgentCustomModel(
+  enabled: boolean,
+  providerId: string,
+  model: string,
+  label: string,
+): { providerId: number; model: string; error: string } {
+  if (!enabled) {
+    return { providerId: 0, model: "", error: "" };
+  }
+  const normalizedProviderID = providerId.trim();
+  if (!/^[1-9]\d*$/.test(normalizedProviderID)) {
+    return { providerId: 0, model: "", error: `${label} 自定义模型必须选择提供商` };
+  }
+  return {
+    providerId: Number.parseInt(normalizedProviderID, 10),
+    model: model.trim(),
+    error: "",
+  };
+}
+
+// parseDisabledAgentCustomModel 将禁用子 Agent 的自定义模型草稿转换为后端字段。
+// 参数 enabled 表示是否启用自定义模型；参数 providerId 表示提供商 ID 文本；参数 model 表示模型标识文本。
+function parseDisabledAgentCustomModel(
+  enabled: boolean,
+  providerId: string,
+  model: string,
+): { providerId: number; model: string; error: string } {
+  if (!enabled || !/^[1-9]\d*$/.test(providerId.trim())) {
+    return { providerId: 0, model: "", error: "" };
+  }
+  return {
+    providerId: Number.parseInt(providerId.trim(), 10),
+    model: model.trim(),
     error: "",
   };
 }
@@ -2133,6 +2648,95 @@ function isAIProviderAPIType(value: string): value is AIProviderAPIType {
       return option.value === value;
     },
   );
+}
+
+// defaultAgentModelOption 根据模型标识创建智能体设置页的模型选项。
+// 参数 modelID 表示 AI 提供商默认模型或已配置模型标识。
+function defaultAgentModelOption(modelID: string): AIProviderModelItem {
+  return {
+    id: modelID,
+    display_name: modelID,
+    owned_by: "",
+    created_at: "",
+    supported_generation_methods: [],
+  };
+}
+
+// defaultModelForAgentProvider 返回指定 AI 提供商配置的默认模型。
+// 参数 providers 表示 AI 提供商列表；参数 providerId 表示需要查找的提供商 ID 文本。
+function defaultModelForAgentProvider(
+  providers: AIProviderItem[],
+  providerId: string,
+): string {
+  const provider = providers.find(function matchAgentProvider(item) {
+    return String(item.id) === providerId.trim();
+  });
+  return provider?.default_model?.trim() ?? "";
+}
+
+// modelsWithDefaultAgentModel 合并模型列表和提供商默认模型。
+// 参数 items 表示模型列表接口返回的模型选项；参数 defaultModel 表示提供商默认模型标识。
+function modelsWithDefaultAgentModel(
+  items: AIProviderModelItem[],
+  defaultModel: string,
+): AIProviderModelItem[] {
+  const normalizedDefaultModel = defaultModel.trim();
+  if (!normalizedDefaultModel) {
+    return items;
+  }
+  const hasDefaultModel = items.some(function matchDefaultModel(model) {
+    return model.id === normalizedDefaultModel;
+  });
+  if (hasDefaultModel) {
+    return items;
+  }
+  return [defaultAgentModelOption(normalizedDefaultModel), ...items];
+}
+
+// agentModelOptionsForProvider 返回指定提供商在表单中可选的模型列表。
+// 参数 providerId 表示当前选择的 AI 提供商 ID 文本；参数 configuredModel 表示配置文件中已保存的模型；参数 providers 表示 AI 提供商列表；参数 optionsByProvider 表示已加载的模型选项缓存。
+function agentModelOptionsForProvider(
+  providerId: string,
+  configuredModel: string,
+  providers: AIProviderItem[],
+  optionsByProvider: Record<string, AIProviderModelItem[]>,
+): AIProviderModelItem[] {
+  const normalizedProviderID = providerId.trim();
+  if (!normalizedProviderID) {
+    return [];
+  }
+  let items = optionsByProvider[normalizedProviderID] ?? [];
+  items = modelsWithDefaultAgentModel(
+    items,
+    defaultModelForAgentProvider(providers, normalizedProviderID),
+  );
+
+  const normalizedConfiguredModel = configuredModel.trim();
+  if (
+    normalizedConfiguredModel &&
+    !items.some(function matchConfiguredModel(model) {
+      return model.id === normalizedConfiguredModel;
+    })
+  ) {
+    return [defaultAgentModelOption(normalizedConfiguredModel), ...items];
+  }
+  return items;
+}
+
+// formatAgentModelOption 返回智能体设置页模型下拉选项文案。
+// 参数 model 表示需要展示的模型选项。
+function formatAgentModelOption(model: AIProviderModelItem): string {
+  if (!model.display_name || model.display_name === model.id) {
+    return model.id;
+  }
+  return `${model.display_name} (${model.id})`;
+}
+
+// formatAgentProviderOption 返回智能体设置页提供商下拉选项文案。
+// 参数 provider 表示需要展示的 AI 提供商。
+function formatAgentProviderOption(provider: AIProviderItem): string {
+  const suffix = provider.enabled ? "" : "（已停用）";
+  return `${provider.name}${suffix}`;
 }
 
 // formatTime 将接口返回的时间文本转换为本地展示文本。

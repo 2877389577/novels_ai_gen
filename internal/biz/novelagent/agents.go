@@ -3,6 +3,7 @@ package novelagent
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/schema"
 
@@ -13,6 +14,7 @@ import (
 const (
 	defaultSupervisorMaxIterations = 8
 	defaultChildMaxIterations      = 6
+	defaultAgentRetryBackoff       = 300 * time.Millisecond
 	taskDirect                     = "direct"
 )
 
@@ -20,6 +22,10 @@ const (
 type runtimeAgentDefinition struct {
 	// name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
 	name string
+	// providerID 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求的提供商。
+	providerID uint64
+	// model 表示该 Agent 自定义使用的模型标识。
+	model string
 	// task 表示子 Agent 产生流式事件时返回给前端的任务标识。
 	task string
 	// description 表示 Agent 能力描述。
@@ -42,6 +48,8 @@ type runtimeAgentConfig struct {
 	children []runtimeAgentDefinition
 	// taskByAgent 表示子 Agent 名称到前端任务标识的映射。
 	taskByAgent map[string]string
+	// retry 表示上游模型失败时的重试配置。
+	retry RuntimeRetryConfig
 }
 
 // newAgentRuntimeConfig 根据应用配置生成运行时 Agent 配置。
@@ -99,7 +107,25 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 		supervisor:  supervisor,
 		children:    children,
 		taskByAgent: taskByAgent,
+		retry:       normalizeAgentRetry(agentCfg.Retry),
 	}, nil
+}
+
+// normalizeAgentRetry 标准化小说写作 Agent 模型失败重试配置。
+// 参数 cfg 表示配置文件中的重试配置。
+func normalizeAgentRetry(cfg appconfig.AgentRetryConfig) RuntimeRetryConfig {
+	maxRetries := cfg.MaxRetries
+	if maxRetries < 0 {
+		maxRetries = 0
+	}
+	backoff := time.Duration(cfg.BackoffMS) * time.Millisecond
+	if backoff <= 0 {
+		backoff = defaultAgentRetryBackoff
+	}
+	return RuntimeRetryConfig{
+		MaxRetries: maxRetries,
+		Backoff:    backoff,
+	}
 }
 
 // normalizeSupervisorAgent 标准化顶层 Agent 配置。
@@ -117,6 +143,10 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition) (runtimeAgentDefini
 	if instruction == "" {
 		return runtimeAgentDefinition{}, fmt.Errorf("%w: 顶层 Agent instruction 不能为空", ErrAgentConfigInvalid)
 	}
+	model, err := normalizeAgentModelOverride(def, "顶层 Agent")
+	if err != nil {
+		return runtimeAgentDefinition{}, err
+	}
 
 	toolNames, err := normalizeAgentTools(def.Tools)
 	if err != nil {
@@ -129,6 +159,8 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition) (runtimeAgentDefini
 	}
 	return runtimeAgentDefinition{
 		name:          name,
+		providerID:    def.ProviderID,
+		model:         model,
 		description:   description,
 		instruction:   instruction,
 		maxIterations: maxIterations,
@@ -150,6 +182,10 @@ func normalizeChildAgent(def appconfig.AgentDefinition) (runtimeAgentDefinition,
 	}
 	if instruction == "" {
 		return runtimeAgentDefinition{}, fmt.Errorf("%w: 子 Agent instruction 不能为空", ErrAgentConfigInvalid)
+	}
+	model, err := normalizeAgentModelOverride(def, "子 Agent")
+	if err != nil {
+		return runtimeAgentDefinition{}, err
 	}
 
 	toolNames, err := normalizeAgentTools(def.Tools)
@@ -176,6 +212,8 @@ func normalizeChildAgent(def appconfig.AgentDefinition) (runtimeAgentDefinition,
 	}
 	return runtimeAgentDefinition{
 		name:          name,
+		providerID:    def.ProviderID,
+		model:         model,
 		task:          task,
 		description:   description,
 		instruction:   instruction,
@@ -183,6 +221,16 @@ func normalizeChildAgent(def appconfig.AgentDefinition) (runtimeAgentDefinition,
 		parameters:    parameters,
 		toolNames:     toolNames,
 	}, nil
+}
+
+// normalizeAgentModelOverride 标准化并校验 Agent 自定义模型字段。
+// 参数 def 表示配置文件中的 Agent 定义；参数 label 表示错误提示中的 Agent 类型。
+func normalizeAgentModelOverride(def appconfig.AgentDefinition, label string) (string, error) {
+	model := strings.TrimSpace(def.Model)
+	if model != "" && def.ProviderID == 0 {
+		return "", fmt.Errorf("%w: %s model 非空时 provider_id 不能为空", ErrAgentConfigInvalid, label)
+	}
+	return model, nil
 }
 
 // normalizeAgentTools 标准化并校验 Agent 可用普通工具列表。
@@ -329,6 +377,8 @@ func isEmptyAgentDefinition(def appconfig.AgentDefinition) bool {
 		strings.TrimSpace(def.Task) == "" &&
 		strings.TrimSpace(def.Description) == "" &&
 		strings.TrimSpace(def.Instruction) == "" &&
+		strings.TrimSpace(def.Model) == "" &&
+		def.ProviderID == 0 &&
 		def.MaxIterations == 0 &&
 		def.Enabled == nil &&
 		len(def.Tools) == 0 &&

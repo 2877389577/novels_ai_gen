@@ -85,6 +85,8 @@ type AgentConfig struct {
 	Agent []AgentDefinition `mapstructure:"agent" json:"agent" yaml:"agent"`
 	// Memory 表示小说写作 Agent 的持久记忆配置。
 	Memory AgentMemoryConfig `mapstructure:"memory" json:"memory" yaml:"memory"`
+	// Retry 表示小说写作 Agent 调用上游模型失败时的重试配置。
+	Retry AgentRetryConfig `mapstructure:"retry" json:"retry" yaml:"retry"`
 }
 
 // AgentMemoryConfig 表示小说写作 Agent 的持久记忆配置。
@@ -93,12 +95,24 @@ type AgentMemoryConfig struct {
 	RecentRounds int `mapstructure:"recent_rounds" json:"recent_rounds" yaml:"recent_rounds"`
 }
 
+// AgentRetryConfig 表示小说写作 Agent 调用上游模型失败时的重试配置。
+type AgentRetryConfig struct {
+	// MaxRetries 表示单次模型调用失败后的最大重试次数，0 表示不重试，小于 0 时按 0 处理。
+	MaxRetries int `mapstructure:"max_retries" json:"max_retries" yaml:"max_retries"`
+	// BackoffMS 表示模型重试间隔毫秒数，小于等于 0 时使用业务默认值。
+	BackoffMS int `mapstructure:"backoff_ms" json:"backoff_ms" yaml:"backoff_ms"`
+}
+
 // AgentDefinition 表示单个小说写作 Agent 的配置。
 type AgentDefinition struct {
 	// Name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
 	Name string `mapstructure:"name" json:"name" yaml:"name"`
 	// Enabled 表示子 Agent 是否启用，未配置时子 Agent 默认启用，顶层 Agent 忽略该字段。
 	Enabled *bool `mapstructure:"enabled" json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	// ProviderID 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求的提供商。
+	ProviderID uint64 `mapstructure:"provider_id" json:"provider_id" yaml:"provider_id"`
+	// Model 表示该 Agent 自定义使用的模型标识，空值表示继承本次请求模型或使用自定义提供商默认模型。
+	Model string `mapstructure:"model" json:"model" yaml:"model"`
 	// Task 表示子 Agent 产生流式事件时返回给前端的任务标识，顶层 Agent 可留空。
 	Task string `mapstructure:"task" json:"task" yaml:"task,omitempty"`
 	// Description 表示 Agent 能力描述，供顶层 Agent 判断是否调用该子 Agent。

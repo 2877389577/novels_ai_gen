@@ -31,6 +31,8 @@ const (
 	providerTypeGemini = "gemini"
 	apiTypeResponse    = "response"
 	apiTypeCompletions = "completions"
+	modelPathChat      = "chat"
+	modelPathAgentic   = "agentic"
 	defaultMaxTokens   = 4096
 	defaultTimeout     = 120 * time.Second
 )
@@ -52,98 +54,179 @@ func NewEinoAgentRuntimeFactory(chapterReader agenttools.ChapterReader) *EinoAge
 }
 
 // NewRuntime 按 AI 提供商协议创建 Eino 多层 Agent 运行时。
-// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
-func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg ModelConfig) (AgentRuntime, error) {
-	cfg.ProviderType = strings.ToLower(strings.TrimSpace(cfg.ProviderType))
-	cfg.APIType = strings.ToLower(strings.TrimSpace(cfg.APIType))
+// 参数 ctx 表示请求上下文；参数 cfg 表示入口模型和启用 Agent 自定义模型配置。
+func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeModelConfig) (AgentRuntime, error) {
+	cfg = normalizeRuntimeModelConfig(cfg)
+	defaultPath, err := modelPathForConfig(cfg.Default)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRuntimeModelPath(defaultPath, cfg); err != nil {
+		return nil, err
+	}
 
+	registry := newAgentModelConfigRegistry(cfg)
+	switch defaultPath {
+	case modelPathChat:
+		defaultModel, err := f.newChatModel(ctx, cfg.Default)
+		if err != nil {
+			return nil, err
+		}
+		supervisorModel := defaultModel
+		if cfg.Supervisor != nil {
+			supervisorModel, err = f.newChatModel(ctx, *cfg.Supervisor)
+			if err != nil {
+				return nil, err
+			}
+		}
+		childModels, err := f.newChatChildModels(ctx, cfg.Children)
+		if err != nil {
+			return nil, err
+		}
+		return chatAgentRuntime{
+			model:           defaultModel,
+			supervisorModel: supervisorModel,
+			childModels:     childModels,
+			modelConfigs:    registry,
+			chapterReader:   f.chapterReader,
+		}, nil
+	case modelPathAgentic:
+		defaultModel, err := f.newAgenticModel(ctx, cfg.Default, cfg.Retry)
+		if err != nil {
+			return nil, err
+		}
+		supervisorModel := defaultModel
+		if cfg.Supervisor != nil {
+			supervisorModel, err = f.newAgenticModel(ctx, *cfg.Supervisor, cfg.Retry)
+			if err != nil {
+				return nil, err
+			}
+		}
+		childModels, err := f.newAgenticChildModels(ctx, cfg.Children, cfg.Retry)
+		if err != nil {
+			return nil, err
+		}
+		return agenticAgentRuntime{
+			model:           defaultModel,
+			supervisorModel: supervisorModel,
+			childModels:     childModels,
+			modelConfigs:    registry,
+			chapterReader:   f.chapterReader,
+		}, nil
+	default:
+		return nil, fmt.Errorf("不支持的 Agent 模型路径: %s", defaultPath)
+	}
+}
+
+// newChatModel 创建 schema.Message 路径使用的 Eino ChatModel。
+// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
+func (f *EinoAgentRuntimeFactory) newChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseChatModel, error) {
+	_ = f
+	model, err := einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
+		APIKey:  cfg.APIKey,
+		BaseURL: cfg.BaseURL,
+		Model:   cfg.Model,
+		Timeout: defaultTimeout,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return model, nil
+}
+
+// newAgenticModel 创建 schema.AgenticMessage 路径使用的 Eino AgenticModel。
+// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
+func (f *EinoAgentRuntimeFactory) newAgenticModel(ctx context.Context, cfg ModelConfig, retry RuntimeRetryConfig) (einomodel.AgenticModel, error) {
+	_ = f
 	switch cfg.ProviderType {
 	case providerTypeOpenAI:
-		return f.newOpenAIRuntime(ctx, cfg)
-	case providerTypeClaude:
-		return f.newClaudeRuntime(ctx, cfg)
-	case providerTypeGemini:
-		return f.newGeminiRuntime(ctx, cfg)
-	default:
-		return nil, fmt.Errorf("不支持的 AI 提供商类型: %s", cfg.ProviderType)
-	}
-}
-
-// newOpenAIRuntime 根据 OpenAI API 类型创建 Eino Agent 运行时。
-// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
-func (f *EinoAgentRuntimeFactory) newOpenAIRuntime(ctx context.Context, cfg ModelConfig) (AgentRuntime, error) {
-	switch cfg.APIType {
-	case apiTypeResponse:
 		timeout := defaultTimeout
+		maxRetries := retry.MaxRetries
 		model, err := agenticopenai.NewResponsesModel(ctx, &agenticopenai.ResponsesConfig{
-			APIKey:  cfg.APIKey,
-			BaseURL: cfg.BaseURL,
-			Model:   cfg.Model,
-			Timeout: &timeout,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return agenticAgentRuntime{model: model, chapterReader: f.chapterReader}, nil
-	case "", apiTypeCompletions:
-		model, err := einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
-			APIKey:  cfg.APIKey,
-			BaseURL: cfg.BaseURL,
-			Model:   cfg.Model,
-			Timeout: defaultTimeout,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return chatAgentRuntime{model: model, chapterReader: f.chapterReader}, nil
-	default:
-		return nil, fmt.Errorf("不支持的 OpenAI API 类型: %s", cfg.APIType)
-	}
-}
-
-// newClaudeRuntime 创建 Claude 协议的 Eino Agent 运行时。
-// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
-func (f *EinoAgentRuntimeFactory) newClaudeRuntime(ctx context.Context, cfg ModelConfig) (AgentRuntime, error) {
-	model, err := agenticclaude.New(ctx, &agenticclaude.Config{
-		APIKey:     cfg.APIKey,
-		BaseURL:    cfg.BaseURL,
-		Model:      cfg.Model,
-		MaxTokens:  defaultMaxTokens,
-		HTTPClient: &http.Client{Timeout: defaultTimeout},
-	})
-	if err != nil {
-		return nil, err
-	}
-	return agenticAgentRuntime{model: model, chapterReader: f.chapterReader}, nil
-}
-
-// newGeminiRuntime 创建 Gemini 协议的 Eino Agent 运行时。
-// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
-func (f *EinoAgentRuntimeFactory) newGeminiRuntime(ctx context.Context, cfg ModelConfig) (AgentRuntime, error) {
-	timeout := defaultTimeout
-	clientConfig := &genai.ClientConfig{
-		APIKey: cfg.APIKey,
-		HTTPOptions: genai.HTTPOptions{
-			BaseURL:    normalizeGeminiBaseURL(cfg.BaseURL),
-			APIVersion: "v1beta",
+			APIKey:     cfg.APIKey,
+			BaseURL:    cfg.BaseURL,
+			Model:      cfg.Model,
 			Timeout:    &timeout,
-		},
-	}
-	client, err := genai.NewClient(ctx, clientConfig)
-	if err != nil {
-		return nil, err
-	}
+			MaxRetries: &maxRetries,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return model, nil
+	case providerTypeClaude:
+		model, err := agenticclaude.New(ctx, &agenticclaude.Config{
+			APIKey:     cfg.APIKey,
+			BaseURL:    cfg.BaseURL,
+			Model:      cfg.Model,
+			MaxTokens:  defaultMaxTokens,
+			HTTPClient: &http.Client{Timeout: defaultTimeout},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return model, nil
+	case providerTypeGemini:
+		timeout := defaultTimeout
+		clientConfig := &genai.ClientConfig{
+			APIKey: cfg.APIKey,
+			HTTPOptions: genai.HTTPOptions{
+				BaseURL:    normalizeGeminiBaseURL(cfg.BaseURL),
+				APIVersion: "v1beta",
+				Timeout:    &timeout,
+			},
+		}
+		client, err := genai.NewClient(ctx, clientConfig)
+		if err != nil {
+			return nil, err
+		}
 
-	maxTokens := defaultMaxTokens
-	model, err := agenticgemini.New(ctx, &agenticgemini.Config{
-		Client:    client,
-		Model:     cfg.Model,
-		MaxTokens: &maxTokens,
-	})
-	if err != nil {
-		return nil, err
+		maxTokens := defaultMaxTokens
+		model, err := agenticgemini.New(ctx, &agenticgemini.Config{
+			Client:    client,
+			Model:     cfg.Model,
+			MaxTokens: &maxTokens,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return model, nil
+	default:
+		return nil, fmt.Errorf("不支持的 Agentic AI 提供商类型: %s", cfg.ProviderType)
 	}
-	return agenticAgentRuntime{model: model, chapterReader: f.chapterReader}, nil
+}
+
+// newChatChildModels 创建启用子 Agent 的 ChatModel 覆盖集合。
+// 参数 ctx 表示请求上下文；参数 configs 表示按子 Agent 名称索引的模型覆盖配置。
+func (f *EinoAgentRuntimeFactory) newChatChildModels(ctx context.Context, configs map[string]ModelConfig) (map[string]einomodel.BaseChatModel, error) {
+	if len(configs) == 0 {
+		return nil, nil
+	}
+	models := make(map[string]einomodel.BaseChatModel, len(configs))
+	for name, cfg := range configs {
+		model, err := f.newChatModel(ctx, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("创建子 Agent %s 自定义模型失败: %w", name, err)
+		}
+		models[name] = model
+	}
+	return models, nil
+}
+
+// newAgenticChildModels 创建启用子 Agent 的 AgenticModel 覆盖集合。
+// 参数 ctx 表示请求上下文；参数 configs 表示按子 Agent 名称索引的模型覆盖配置。
+func (f *EinoAgentRuntimeFactory) newAgenticChildModels(ctx context.Context, configs map[string]ModelConfig, retry RuntimeRetryConfig) (map[string]einomodel.AgenticModel, error) {
+	if len(configs) == 0 {
+		return nil, nil
+	}
+	models := make(map[string]einomodel.AgenticModel, len(configs))
+	for name, cfg := range configs {
+		model, err := f.newAgenticModel(ctx, cfg, retry)
+		if err != nil {
+			return nil, fmt.Errorf("创建子 Agent %s 自定义模型失败: %w", name, err)
+		}
+		models[name] = model
+	}
+	return models, nil
 }
 
 // normalizeGeminiBaseURL 将系统保存的 Gemini API 根地址转换为 genai 客户端可用的基础地址。
@@ -158,10 +241,164 @@ func normalizeGeminiBaseURL(baseURL string) string {
 	return baseURL
 }
 
+// normalizeRuntimeModelConfig 标准化一次 Agent 运行中的所有模型配置。
+// 参数 cfg 表示入口模型和启用 Agent 自定义模型配置。
+func normalizeRuntimeModelConfig(cfg RuntimeModelConfig) RuntimeModelConfig {
+	cfg.Default = normalizeModelConfig(cfg.Default)
+	cfg.Retry = normalizeRuntimeRetryConfig(cfg.Retry)
+	if cfg.Supervisor != nil {
+		supervisor := normalizeModelConfig(*cfg.Supervisor)
+		cfg.Supervisor = &supervisor
+	}
+	if len(cfg.Children) > 0 {
+		children := make(map[string]ModelConfig, len(cfg.Children))
+		for name, childCfg := range cfg.Children {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			children[name] = normalizeModelConfig(childCfg)
+		}
+		cfg.Children = children
+	}
+	return cfg
+}
+
+// normalizeRuntimeRetryConfig 标准化一次 Agent 运行中的模型失败重试配置。
+// 参数 cfg 表示运行时重试配置。
+func normalizeRuntimeRetryConfig(cfg RuntimeRetryConfig) RuntimeRetryConfig {
+	if cfg.MaxRetries < 0 {
+		cfg.MaxRetries = 0
+	}
+	if cfg.Backoff <= 0 {
+		cfg.Backoff = defaultAgentRetryBackoff
+	}
+	return cfg
+}
+
+// normalizeModelConfig 标准化单个模型创建配置。
+// 参数 cfg 表示模型创建配置。
+func normalizeModelConfig(cfg ModelConfig) ModelConfig {
+	cfg.ProviderType = strings.ToLower(strings.TrimSpace(cfg.ProviderType))
+	cfg.APIType = strings.ToLower(strings.TrimSpace(cfg.APIType))
+	cfg.BaseURL = strings.TrimSpace(cfg.BaseURL)
+	cfg.Model = strings.TrimSpace(cfg.Model)
+	return cfg
+}
+
+// modelPathForConfig 判断模型配置使用的 Eino 消息路径。
+// 参数 cfg 表示模型创建配置。
+func modelPathForConfig(cfg ModelConfig) (string, error) {
+	switch cfg.ProviderType {
+	case providerTypeOpenAI:
+		switch cfg.APIType {
+		case "", apiTypeCompletions:
+			return modelPathChat, nil
+		case apiTypeResponse:
+			return modelPathAgentic, nil
+		default:
+			return "", fmt.Errorf("不支持的 OpenAI API 类型: %s", cfg.APIType)
+		}
+	case providerTypeClaude, providerTypeGemini:
+		return modelPathAgentic, nil
+	default:
+		return "", fmt.Errorf("不支持的 AI 提供商类型: %s", cfg.ProviderType)
+	}
+}
+
+// validateRuntimeModelPath 校验自定义模型是否与入口模型使用相同 Eino 消息路径。
+// 参数 defaultPath 表示入口模型路径；参数 cfg 表示一次运行中的模型配置集合。
+func validateRuntimeModelPath(defaultPath string, cfg RuntimeModelConfig) error {
+	if cfg.Supervisor != nil {
+		if err := validateModelPath("顶层 Agent", defaultPath, *cfg.Supervisor); err != nil {
+			return err
+		}
+	}
+	for name, childCfg := range cfg.Children {
+		if err := validateModelPath("子 Agent "+name, defaultPath, childCfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateModelPath 校验单个自定义模型路径是否兼容入口模型路径。
+// 参数 label 表示错误提示中的 Agent 名称；参数 defaultPath 表示入口模型路径；参数 cfg 表示自定义模型配置。
+func validateModelPath(label string, defaultPath string, cfg ModelConfig) error {
+	path, err := modelPathForConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("%w: %s 自定义模型协议无效: %v", ErrAgentConfigInvalid, label, err)
+	}
+	if path != defaultPath {
+		return fmt.Errorf("%w: %s 自定义模型路径 %s 与入口模型路径 %s 不兼容", ErrAgentConfigInvalid, label, path, defaultPath)
+	}
+	return nil
+}
+
+// agentModelConfigRegistry 表示 Agent 名称到实际模型配置的查询表。
+type agentModelConfigRegistry struct {
+	// defaultConfig 表示继承前端请求的入口模型配置。
+	defaultConfig ModelConfig
+	// supervisorConfigured 表示顶层 Agent 是否配置了自定义模型。
+	supervisorConfigured bool
+	// supervisorConfig 表示顶层 Agent 实际使用的模型配置。
+	supervisorConfig ModelConfig
+	// childConfigs 表示启用子 Agent 的自定义模型配置，未出现的子 Agent 继承入口模型。
+	childConfigs map[string]ModelConfig
+}
+
+// newAgentModelConfigRegistry 创建 Agent 模型配置查询表。
+// 参数 cfg 表示一次运行中的模型配置集合。
+func newAgentModelConfigRegistry(cfg RuntimeModelConfig) agentModelConfigRegistry {
+	registry := agentModelConfigRegistry{
+		defaultConfig: cfg.Default,
+		childConfigs:  cfg.Children,
+	}
+	if cfg.Supervisor != nil {
+		registry.supervisorConfigured = true
+		registry.supervisorConfig = *cfg.Supervisor
+	}
+	return registry
+}
+
+// configForAgent 返回指定 Agent 实际使用的模型配置。
+// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 supervisorName 表示顶层 Agent 名称。
+func (r agentModelConfigRegistry) configForAgent(agentName string, supervisorName string) ModelConfig {
+	agentName = strings.TrimSpace(agentName)
+	if agentName == "" || agentName == supervisorName {
+		if r.supervisorConfigured {
+			return r.supervisorConfig
+		}
+		return r.defaultConfig
+	}
+	if cfg, ok := r.childConfigs[agentName]; ok {
+		return cfg
+	}
+	return r.defaultConfig
+}
+
+// applyResultModelInfo 将最终回复来源 Agent 的实际模型信息写入结果。
+// 参数 result 表示 Agent 流式运行结果；参数 supervisorName 表示顶层 Agent 名称；参数 registry 表示 Agent 模型配置查询表。
+func applyResultModelInfo(result AgentResult, supervisorName string, registry agentModelConfigRegistry) AgentResult {
+	if strings.TrimSpace(result.AgentName) == "" {
+		result.AgentName = supervisorName
+	}
+	cfg := registry.configForAgent(result.AgentName, supervisorName)
+	result.ProviderID = cfg.ProviderID
+	result.Model = cfg.Model
+	return result
+}
+
 // chatAgentRuntime 表示基于 schema.Message 的 Eino ADK 多层 Agent 运行时。
 type chatAgentRuntime struct {
 	// model 表示支持 OpenAI completions 协议的 Eino ChatModel。
 	model einomodel.BaseChatModel
+	// supervisorModel 表示顶层 Agent 实际使用的 Eino ChatModel。
+	supervisorModel einomodel.BaseChatModel
+	// childModels 表示启用子 Agent 的自定义 ChatModel，未配置的子 Agent 使用入口模型。
+	childModels map[string]einomodel.BaseChatModel
+	// modelConfigs 表示 Agent 名称到实际模型配置的查询表。
+	modelConfigs agentModelConfigRegistry
 	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
 	chapterReader agenttools.ChapterReader
 }
@@ -174,7 +411,7 @@ func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, 
 		return AgentResult{Task: taskDirect}, err
 	}
 
-	agent, err := newChatSupervisorAgent(ctx, r.model, agentCfg, req, r.chapterReader)
+	agent, err := newChatSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
@@ -183,7 +420,11 @@ func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, 
 		Agent:           agent,
 		EnableStreaming: true,
 	})
-	return streamChatAgentEvents(runner.Run(ctx, chatRunMessages(req, memory)), agentCfg.taskByAgent, emit)
+	result, err := streamChatAgentEvents(runner.Run(ctx, chatRunMessages(req, memory)), agentCfg.taskByAgent, emit)
+	if err != nil {
+		return result, err
+	}
+	return applyResultModelInfo(result, agentCfg.supervisor.name, r.modelConfigs), nil
 }
 
 // Summarize 使用 schema.Message 模型生成小说级 Agent 滚动摘要。
@@ -225,6 +466,12 @@ func (r chatAgentRuntime) RecommendPromptType(ctx context.Context, cfg *appconfi
 type agenticAgentRuntime struct {
 	// model 表示 Eino AgenticModel。
 	model einomodel.AgenticModel
+	// supervisorModel 表示顶层 Agent 实际使用的 Eino AgenticModel。
+	supervisorModel einomodel.AgenticModel
+	// childModels 表示启用子 Agent 的自定义 AgenticModel，未配置的子 Agent 使用入口模型。
+	childModels map[string]einomodel.AgenticModel
+	// modelConfigs 表示 Agent 名称到实际模型配置的查询表。
+	modelConfigs agentModelConfigRegistry
 	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
 	chapterReader agenttools.ChapterReader
 }
@@ -237,7 +484,7 @@ func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfi
 		return AgentResult{Task: taskDirect}, err
 	}
 
-	agent, err := newAgenticSupervisorAgent(ctx, r.model, agentCfg, req, r.chapterReader)
+	agent, err := newAgenticSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
@@ -246,7 +493,11 @@ func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfi
 		Agent:           agent,
 		EnableStreaming: true,
 	})
-	return streamAgenticAgentEvents(runner.Run(ctx, agenticRunMessages(req, memory)), agentCfg.taskByAgent, emit)
+	result, err := streamAgenticAgentEvents(runner.Run(ctx, agenticRunMessages(req, memory)), agentCfg.taskByAgent, emit)
+	if err != nil {
+		return result, err
+	}
+	return applyResultModelInfo(result, agentCfg.supervisor.name, r.modelConfigs), nil
 }
 
 // Summarize 使用 schema.AgenticMessage 模型生成小说级 Agent 滚动摘要。
@@ -504,8 +755,8 @@ func normalizeSummaryContent(content string) (string, error) {
 }
 
 // newChatSupervisorAgent 创建基于 schema.Message 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
-// 参数 ctx 表示请求上下文；参数 model 表示 Eino ChatModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖。
-func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader) (*adk.TypedChatModelAgent[*schema.Message], error) {
+// 参数 ctx 表示请求上下文；参数 defaultModel 表示入口 ChatModel；参数 supervisorModel 表示顶层 Agent 使用的 ChatModel；参数 childModels 表示子 Agent 自定义 ChatModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖。
+func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChatModel, supervisorModel einomodel.BaseChatModel, childModels map[string]einomodel.BaseChatModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader) (*adk.TypedChatModelAgent[*schema.Message], error) {
 	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
 		return nil, err
 	}
@@ -523,13 +774,18 @@ func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, 
 		if err != nil {
 			return nil, err
 		}
+		childModel := defaultModel
+		if configuredModel, ok := childModels[child.name]; ok {
+			childModel = configuredModel
+		}
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
-			Name:          child.name,
-			Description:   child.description,
-			Instruction:   child.instruction,
-			Model:         model,
-			ToolsConfig:   childToolsConfig(childTools),
-			MaxIterations: child.maxIterations,
+			Name:             child.name,
+			Description:      child.description,
+			Instruction:      child.instruction,
+			Model:            childModel,
+			ToolsConfig:      childToolsConfig(childTools),
+			MaxIterations:    child.maxIterations,
+			ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("创建子 Agent %s 失败: %w", child.name, err)
@@ -546,7 +802,7 @@ func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, 
 		Name:        cfg.supervisor.name,
 		Description: cfg.supervisor.description,
 		Instruction: cfg.supervisor.instruction,
-		Model:       model,
+		Model:       supervisorModel,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools:               tools,
@@ -555,13 +811,14 @@ func newChatSupervisorAgent(ctx context.Context, model einomodel.BaseChatModel, 
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
-		MaxIterations: cfg.supervisor.maxIterations,
+		MaxIterations:    cfg.supervisor.maxIterations,
+		ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 	})
 }
 
 // newAgenticSupervisorAgent 创建基于 schema.AgenticMessage 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
-// 参数 ctx 表示请求上下文；参数 model 表示 Eino AgenticModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖。
-func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
+// 参数 ctx 表示请求上下文；参数 defaultModel 表示入口 AgenticModel；参数 supervisorModel 表示顶层 Agent 使用的 AgenticModel；参数 childModels 表示子 Agent 自定义 AgenticModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖。
+func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.AgenticModel, supervisorModel einomodel.AgenticModel, childModels map[string]einomodel.AgenticModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
 	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
 		return nil, err
 	}
@@ -579,13 +836,18 @@ func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel
 		if err != nil {
 			return nil, err
 		}
+		childModel := defaultModel
+		if configuredModel, ok := childModels[child.name]; ok {
+			childModel = configuredModel
+		}
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
-			Name:          child.name,
-			Description:   child.description,
-			Instruction:   child.instruction,
-			Model:         model,
-			ToolsConfig:   childToolsConfig(childTools),
-			MaxIterations: child.maxIterations,
+			Name:             child.name,
+			Description:      child.description,
+			Instruction:      child.instruction,
+			Model:            childModel,
+			ToolsConfig:      childToolsConfig(childTools),
+			MaxIterations:    child.maxIterations,
+			ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("创建子 Agent %s 失败: %w", child.name, err)
@@ -602,7 +864,7 @@ func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel
 		Name:        cfg.supervisor.name,
 		Description: cfg.supervisor.description,
 		Instruction: cfg.supervisor.instruction,
-		Model:       model,
+		Model:       supervisorModel,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools:               tools,
@@ -611,8 +873,58 @@ func newAgenticSupervisorAgent(ctx context.Context, model einomodel.AgenticModel
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
-		MaxIterations: cfg.supervisor.maxIterations,
+		MaxIterations:    cfg.supervisor.maxIterations,
+		ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 	})
+}
+
+// chatModelRetryConfig 创建 schema.Message 路径使用的 ADK 模型重试配置。
+// 参数 retry 表示当前 Agent 运行使用的模型失败重试配置。
+func chatModelRetryConfig(retry RuntimeRetryConfig) *adk.ModelRetryConfig {
+	if retry.MaxRetries <= 0 {
+		return nil
+	}
+	return &adk.ModelRetryConfig{
+		MaxRetries:  retry.MaxRetries,
+		IsRetryAble: isRetryableModelError,
+		BackoffFunc: fixedRetryBackoff(retry.Backoff),
+	}
+}
+
+// agenticModelRetryConfig 创建 schema.AgenticMessage 路径使用的 ADK 模型重试配置。
+// 参数 retry 表示当前 Agent 运行使用的模型失败重试配置。
+func agenticModelRetryConfig(retry RuntimeRetryConfig) *adk.TypedModelRetryConfig[*schema.AgenticMessage] {
+	if retry.MaxRetries <= 0 {
+		return nil
+	}
+	return &adk.TypedModelRetryConfig[*schema.AgenticMessage]{
+		MaxRetries:  retry.MaxRetries,
+		IsRetryAble: isRetryableModelError,
+		BackoffFunc: fixedRetryBackoff(retry.Backoff),
+	}
+}
+
+// isRetryableModelError 判断模型错误是否允许重试。
+// 参数 ctx 表示当前请求上下文；参数 err 表示模型调用返回的错误。
+func isRetryableModelError(ctx context.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return false
+	}
+	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+}
+
+// fixedRetryBackoff 返回固定间隔的 ADK 重试等待函数。
+// 参数 backoff 表示每次重试前等待的时间。
+func fixedRetryBackoff(backoff time.Duration) func(context.Context, int) time.Duration {
+	if backoff <= 0 {
+		backoff = defaultAgentRetryBackoff
+	}
+	return func(context.Context, int) time.Duration {
+		return backoff
+	}
 }
 
 // configuredAgentTools 根据 Agent 配置创建本次请求可用的普通工具。
@@ -674,7 +986,7 @@ func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*sch
 		if task == taskDirect && childSeen {
 			continue
 		}
-		if err := emitChatMessageVariant(task, event.Output.MessageOutput, &full, &result, emit); err != nil {
+		if err := emitChatMessageVariant(event.AgentName, task, event.Output.MessageOutput, &full, &result, emit); err != nil {
 			return result, err
 		}
 	}
@@ -706,7 +1018,7 @@ func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*
 		if task == taskDirect && childSeen {
 			continue
 		}
-		if err := emitAgenticMessageVariant(task, event.Output.MessageOutput, &full, &result, emit); err != nil {
+		if err := emitAgenticMessageVariant(event.AgentName, task, event.Output.MessageOutput, &full, &result, emit); err != nil {
 			return result, err
 		}
 	}
@@ -714,8 +1026,8 @@ func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*
 }
 
 // emitChatMessageVariant 输出 schema.Message 事件中的助手文本。
-// 参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
-func emitChatMessageVariant(task string, variant *adk.TypedMessageVariant[*schema.Message], full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
+// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
+func emitChatMessageVariant(agentName string, task string, variant *adk.TypedMessageVariant[*schema.Message], full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
 	if variant.IsStreaming {
 		if variant.MessageStream == nil {
 			return nil
@@ -732,7 +1044,7 @@ func emitChatMessageVariant(task string, variant *adk.TypedMessageVariant[*schem
 			if !isAssistantChatMessage(variant, chunk) {
 				continue
 			}
-			if err := emitTextDelta(task, chunk.Content, full, result, emit); err != nil {
+			if err := emitTextDelta(agentName, task, chunk.Content, full, result, emit); err != nil {
 				return err
 			}
 		}
@@ -741,12 +1053,12 @@ func emitChatMessageVariant(task string, variant *adk.TypedMessageVariant[*schem
 	if !isAssistantChatMessage(variant, variant.Message) {
 		return nil
 	}
-	return emitTextDelta(task, variant.Message.Content, full, result, emit)
+	return emitTextDelta(agentName, task, variant.Message.Content, full, result, emit)
 }
 
 // emitAgenticMessageVariant 输出 schema.AgenticMessage 事件中的助手文本。
-// 参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
-func emitAgenticMessageVariant(task string, variant *adk.TypedMessageVariant[*schema.AgenticMessage], full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
+// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
+func emitAgenticMessageVariant(agentName string, task string, variant *adk.TypedMessageVariant[*schema.AgenticMessage], full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
 	if variant.IsStreaming {
 		if variant.MessageStream == nil {
 			return nil
@@ -763,7 +1075,7 @@ func emitAgenticMessageVariant(task string, variant *adk.TypedMessageVariant[*sc
 			if !isAssistantAgenticMessage(variant, chunk) {
 				continue
 			}
-			if err := emitTextDelta(task, agenticMessageText(chunk), full, result, emit); err != nil {
+			if err := emitTextDelta(agentName, task, agenticMessageText(chunk), full, result, emit); err != nil {
 				return err
 			}
 		}
@@ -772,7 +1084,7 @@ func emitAgenticMessageVariant(task string, variant *adk.TypedMessageVariant[*sc
 	if !isAssistantAgenticMessage(variant, variant.Message) {
 		return nil
 	}
-	return emitTextDelta(task, agenticMessageText(variant.Message), full, result, emit)
+	return emitTextDelta(agentName, task, agenticMessageText(variant.Message), full, result, emit)
 }
 
 // isAssistantChatMessage 判断 schema.Message 是否为可展示的助手文本。
@@ -804,12 +1116,15 @@ func isAssistantAgenticMessage(variant *adk.TypedMessageVariant[*schema.AgenticM
 }
 
 // emitTextDelta 写出文本增量并累积完整结果。
-// 参数 task 表示事件对应任务；参数 content 表示文本增量；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
-func emitTextDelta(task string, content string, full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
+// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 content 表示文本增量；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
+func emitTextDelta(agentName string, task string, content string, full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
 	if content == "" {
 		return nil
 	}
 	result.Task = task
+	if strings.TrimSpace(agentName) != "" {
+		result.AgentName = agentName
+	}
 	full.WriteString(content)
 	result.Content = full.String()
 	return emit(AgentDelta{Task: task, Content: content})

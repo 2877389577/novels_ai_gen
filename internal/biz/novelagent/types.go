@@ -172,6 +172,8 @@ type EventWriter interface {
 
 // ModelConfig 表示创建 Eino 文本模型所需的运行时配置。
 type ModelConfig struct {
+	// ProviderID 表示 AI 提供商主键 ID。
+	ProviderID uint64
 	// ProviderType 表示 AI 提供商类型。
 	ProviderType string
 	// APIType 表示 AI 接口类型。
@@ -182,6 +184,26 @@ type ModelConfig struct {
 	BaseURL string
 	// Model 表示本次对话使用的模型标识。
 	Model string
+}
+
+// RuntimeRetryConfig 表示一次 Agent 运行中的模型失败重试配置。
+type RuntimeRetryConfig struct {
+	// MaxRetries 表示单次模型调用失败后的最大重试次数，0 表示不重试。
+	MaxRetries int
+	// Backoff 表示两次模型重试之间等待的时间。
+	Backoff time.Duration
+}
+
+// RuntimeModelConfig 表示一次 Agent 运行中父子 Agent 使用的模型配置集合。
+type RuntimeModelConfig struct {
+	// Default 表示前端请求传入并完成默认模型兜底后的入口模型配置。
+	Default ModelConfig
+	// Supervisor 表示顶层 Agent 自定义模型配置，nil 表示继承 Default。
+	Supervisor *ModelConfig
+	// Children 表示启用子 Agent 的自定义模型配置，键为子 Agent 名称。
+	Children map[string]ModelConfig
+	// Retry 表示本次 Agent 运行中模型调用失败时的重试配置。
+	Retry RuntimeRetryConfig
 }
 
 // AgentDelta 表示 Agent 流式生成的文本增量。
@@ -198,6 +220,12 @@ type AgentResult struct {
 	Task string
 	// Content 表示完整的模型回复文本。
 	Content string
+	// AgentName 表示最终产生回复的 Eino Agent 名称。
+	AgentName string
+	// ProviderID 表示最终产生回复的 AI 提供商 ID。
+	ProviderID uint64
+	// Model 表示最终产生回复的模型标识。
+	Model string
 }
 
 // AgentMemoryInput 表示运行 Agent 时需要注入模型上下文的小说级记忆。
@@ -250,6 +278,6 @@ type AgentRuntime interface {
 // AgentRuntimeFactory 表示 Eino 多层 Agent 运行时工厂。
 type AgentRuntimeFactory interface {
 	// NewRuntime 按提供商协议创建小说写作 Agent 运行时。
-	// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
-	NewRuntime(ctx context.Context, cfg ModelConfig) (AgentRuntime, error)
+	// 参数 ctx 表示请求上下文；参数 cfg 表示一次运行中的入口模型和 Agent 自定义模型配置。
+	NewRuntime(ctx context.Context, cfg RuntimeModelConfig) (AgentRuntime, error)
 }
