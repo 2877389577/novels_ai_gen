@@ -13,6 +13,7 @@ import (
 	loghandler "novels_ai_gen/internal/api/handler/log"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	novelagenthandler "novels_ai_gen/internal/api/handler/novelagent"
+	prompthandler "novels_ai_gen/internal/api/handler/prompt"
 	relationshiphandler "novels_ai_gen/internal/api/handler/relationship"
 	systemhandler "novels_ai_gen/internal/api/handler/system"
 	uploadhandler "novels_ai_gen/internal/api/handler/upload"
@@ -25,6 +26,7 @@ import (
 	biznovel "novels_ai_gen/internal/biz/novel"
 	biznovelagent "novels_ai_gen/internal/biz/novelagent"
 	agenttools "novels_ai_gen/internal/biz/novelagent/tools"
+	bizprompt "novels_ai_gen/internal/biz/prompt"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	bizsystem "novels_ai_gen/internal/biz/system"
 	bizupload "novels_ai_gen/internal/biz/upload"
@@ -38,6 +40,7 @@ import (
 	datanovel "novels_ai_gen/internal/data/novel"
 	datanovelagent "novels_ai_gen/internal/data/novelagent"
 	"novels_ai_gen/internal/data/objectstore"
+	dataprompt "novels_ai_gen/internal/data/prompt"
 	datarelationship "novels_ai_gen/internal/data/relationship"
 	"novels_ai_gen/internal/server"
 )
@@ -82,6 +85,10 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		datanovelagent.NewRepository,
 		wire.Bind(new(biznovelagent.MemoryRepository), new(*datanovelagent.Repository)),
 		biznovelagent.NewService,
+		dataprompt.NewRepository,
+		wire.Bind(new(bizprompt.Repository), new(*dataprompt.Repository)),
+		wire.Bind(new(bizprompt.PromptTypesProvider), new(*config.ConfigManager)),
+		bizprompt.NewService,
 		objectstore.NewClient,
 		wire.Bind(new(bizupload.ObjectStorage), new(*objectstore.Client)),
 		bizupload.NewService,
@@ -93,6 +100,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		eventhandler.NewHandler,
 		aiproviderhandler.NewHandler,
 		novelagenthandler.NewHandler,
+		prompthandler.NewHandler,
 		uploadhandler.NewHandler,
 		confighandler.NewHandler,
 		loghandler.NewHandler,

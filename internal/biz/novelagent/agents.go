@@ -76,6 +76,10 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 	taskByAgent := make(map[string]string, len(agentCfg.Agent))
 	names := make(map[string]struct{}, len(agentCfg.Agent))
 	for index, childCfg := range agentCfg.Agent {
+		if !isChildAgentEnabled(childCfg) {
+			continue
+		}
+
 		child, err := normalizeChildAgent(childCfg)
 		if err != nil {
 			return runtimeAgentConfig{}, fmt.Errorf("子 Agent 配置 %d 无效: %w", index+1, err)
@@ -86,6 +90,9 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 		names[child.name] = struct{}{}
 		children = append(children, child)
 		taskByAgent[child.name] = child.task
+	}
+	if err := validateSupervisorToolChildNameConflict(supervisor.toolNames, names); err != nil {
+		return runtimeAgentConfig{}, err
 	}
 
 	return runtimeAgentConfig{
@@ -111,6 +118,11 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition) (runtimeAgentDefini
 		return runtimeAgentDefinition{}, fmt.Errorf("%w: 顶层 Agent instruction 不能为空", ErrAgentConfigInvalid)
 	}
 
+	toolNames, err := normalizeAgentTools(def.Tools)
+	if err != nil {
+		return runtimeAgentDefinition{}, err
+	}
+
 	maxIterations := def.MaxIterations
 	if maxIterations <= 0 {
 		maxIterations = defaultSupervisorMaxIterations
@@ -120,6 +132,7 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition) (runtimeAgentDefini
 		description:   description,
 		instruction:   instruction,
 		maxIterations: maxIterations,
+		toolNames:     toolNames,
 	}, nil
 }
 
@@ -139,7 +152,7 @@ func normalizeChildAgent(def appconfig.AgentDefinition) (runtimeAgentDefinition,
 		return runtimeAgentDefinition{}, fmt.Errorf("%w: 子 Agent instruction 不能为空", ErrAgentConfigInvalid)
 	}
 
-	toolNames, err := normalizeChildAgentTools(def.Tools)
+	toolNames, err := normalizeAgentTools(def.Tools)
 	if err != nil {
 		return runtimeAgentDefinition{}, err
 	}
@@ -172,9 +185,9 @@ func normalizeChildAgent(def appconfig.AgentDefinition) (runtimeAgentDefinition,
 	}, nil
 }
 
-// normalizeChildAgentTools 标准化并校验子 Agent 可用普通工具列表。
+// normalizeAgentTools 标准化并校验 Agent 可用普通工具列表。
 // 参数 values 表示配置文件中的工具名称列表。
-func normalizeChildAgentTools(values []string) ([]string, error) {
+func normalizeAgentTools(values []string) ([]string, error) {
 	if len(values) == 0 {
 		return nil, nil
 	}
@@ -184,18 +197,35 @@ func normalizeChildAgentTools(values []string) ([]string, error) {
 	for _, rawValue := range values {
 		name := strings.TrimSpace(rawValue)
 		if name == "" {
-			return nil, fmt.Errorf("%w: 子 Agent tool 名称不能为空", ErrAgentConfigInvalid)
+			return nil, fmt.Errorf("%w: Agent tool 名称不能为空", ErrAgentConfigInvalid)
 		}
 		if _, ok := seen[name]; ok {
-			return nil, fmt.Errorf("%w: 子 Agent tool 名称重复 %s", ErrAgentConfigInvalid, name)
+			return nil, fmt.Errorf("%w: Agent tool 名称重复 %s", ErrAgentConfigInvalid, name)
 		}
 		if name != agenttools.ToolNameGetContent {
-			return nil, fmt.Errorf("%w: 未知子 Agent tool %s", ErrAgentConfigInvalid, name)
+			return nil, fmt.Errorf("%w: 未知 Agent tool %s", ErrAgentConfigInvalid, name)
 		}
 		seen[name] = struct{}{}
 		toolNames = append(toolNames, name)
 	}
 	return toolNames, nil
+}
+
+// isChildAgentEnabled 判断子 Agent 是否启用，未配置 enabled 时按启用处理。
+// 参数 def 表示配置文件中的子 Agent 定义。
+func isChildAgentEnabled(def appconfig.AgentDefinition) bool {
+	return def.Enabled == nil || *def.Enabled
+}
+
+// validateSupervisorToolChildNameConflict 校验顶层普通工具名称是否与启用子 Agent 名称冲突。
+// 参数 toolNames 表示顶层 Agent 普通工具名称列表；参数 childNames 表示启用子 Agent 名称集合。
+func validateSupervisorToolChildNameConflict(toolNames []string, childNames map[string]struct{}) error {
+	for _, toolName := range toolNames {
+		if _, ok := childNames[toolName]; ok {
+			return fmt.Errorf("%w: 顶层 Agent tool 名称与子 Agent 名称冲突 %s", ErrAgentConfigInvalid, toolName)
+		}
+	}
+	return nil
 }
 
 // agentParameterInfos 将配置文件中的工具参数定义转换为 Eino 参数信息。
@@ -300,6 +330,7 @@ func isEmptyAgentDefinition(def appconfig.AgentDefinition) bool {
 		strings.TrimSpace(def.Description) == "" &&
 		strings.TrimSpace(def.Instruction) == "" &&
 		def.MaxIterations == 0 &&
+		def.Enabled == nil &&
 		len(def.Tools) == 0 &&
 		len(def.Parameters) == 0
 }

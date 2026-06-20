@@ -22,6 +22,33 @@ type ChatRequest struct {
 	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
 }
 
+const (
+	// PromptRecommendationActionSearch 表示前端需要按提示词类型查询数据库提示词。
+	PromptRecommendationActionSearch = "prompt_search"
+	// PromptRecommendationActionNone 表示当前用户输入不需要推荐提示词。
+	PromptRecommendationActionNone = "none"
+)
+
+// PromptRecommendationRequest 表示提示词库推荐判定请求。
+type PromptRecommendationRequest struct {
+	// ProviderID 表示本次推荐判定使用的 AI 提供商 ID。
+	ProviderID uint64 `json:"provider_id" binding:"required" example:"1"`
+	// Model 表示本次推荐判定使用的模型标识，空值时使用提供商默认模型。
+	Model string `json:"model" example:"gpt-5"`
+	// Message 表示用户当前尚未发送的 AI 输入框原文。
+	Message string `json:"message" binding:"required" example:"帮我把这一段润色得更有压迫感"`
+}
+
+// PromptRecommendationResponse 表示提示词库推荐判定结果。
+type PromptRecommendationResponse struct {
+	// Action 表示前端下一步动作，prompt_search 表示查询数据库提示词，none 表示无需推荐。
+	Action string `json:"action" example:"prompt_search"`
+	// Matched 表示是否匹配到小说修改或润色相关意图。
+	Matched bool `json:"matched" example:"true"`
+	// PromptType 表示匹配到的提示词类型，不匹配时为空。
+	PromptType string `json:"prompt_type" example:"润色"`
+}
+
 // MessageRole 表示 Agent 记忆消息角色。
 type MessageRole string
 
@@ -189,6 +216,14 @@ type AgentSummaryInput struct {
 	Messages []MessageRecord
 }
 
+// PromptRecommendationInput 表示推荐判定模型需要的用户输入和可选提示词类型。
+type PromptRecommendationInput struct {
+	// Message 表示用户当前输入框中的原始需求。
+	Message string
+	// PromptTypes 表示配置文件中允许匹配的提示词类型列表。
+	PromptTypes []string
+}
+
 // ConversationSummaryUpdate 表示需要写回 Agent 会话的滚动摘要更新。
 type ConversationSummaryUpdate struct {
 	// Summary 表示新的长期记忆摘要正文。
@@ -207,6 +242,9 @@ type AgentRuntime interface {
 	// Summarize 生成小说级 Agent 滚动摘要。
 	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
 	Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error)
+	// RecommendPromptType 判断当前用户输入是否需要查询提示词库推荐。
+	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示推荐判定所需的用户输入和提示词类型。
+	RecommendPromptType(ctx context.Context, cfg *appconfig.AppConfig, input PromptRecommendationInput) (PromptRecommendationResponse, error)
 }
 
 // AgentRuntimeFactory 表示 Eino 多层 Agent 运行时工厂。
