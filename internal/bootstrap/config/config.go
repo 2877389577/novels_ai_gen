@@ -99,6 +99,10 @@ type AgentDefinition struct {
 	Name string `mapstructure:"name" json:"name" yaml:"name"`
 	// Enabled 表示子 Agent 是否启用，未配置时子 Agent 默认启用，顶层 Agent 忽略该字段。
 	Enabled *bool `mapstructure:"enabled" json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	// ProviderID 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求的提供商。
+	ProviderID uint64 `mapstructure:"provider_id" json:"provider_id" yaml:"provider_id"`
+	// Model 表示该 Agent 自定义使用的模型标识，空值表示继承本次请求模型或使用自定义提供商默认模型。
+	Model string `mapstructure:"model" json:"model" yaml:"model"`
 	// Task 表示子 Agent 产生流式事件时返回给前端的任务标识，顶层 Agent 可留空。
 	Task string `mapstructure:"task" json:"task" yaml:"task,omitempty"`
 	// Description 表示 Agent 能力描述，供顶层 Agent 判断是否调用该子 Agent。

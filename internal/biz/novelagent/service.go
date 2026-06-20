@@ -110,18 +110,23 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	}
 
 	cfg := s.currentConfig()
-	memory, err := s.memoryForRun(ctx, cfg, req.NovelID)
-	if err != nil {
-		return err
-	}
-
-	runtime, err := s.runtimeFactory.NewRuntime(ctx, ModelConfig{
+	modelConfig, err := s.runtimeModelConfig(ctx, cfg, ModelConfig{
+		ProviderID:   provider.ID,
 		ProviderType: provider.ProviderType,
 		APIType:      provider.APIType,
 		APIKey:       apiKey,
 		BaseURL:      provider.BaseURL,
 		Model:        req.Model,
 	})
+	if err != nil {
+		return err
+	}
+	memory, err := s.memoryForRun(ctx, cfg, req.NovelID)
+	if err != nil {
+		return err
+	}
+
+	runtime, err := s.runtimeFactory.NewRuntime(ctx, modelConfig)
 	if err != nil {
 		slog.ErrorContext(ctx, "小说写作 Agent 创建运行时失败",
 			"error", err,
@@ -131,7 +136,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 			"model", req.Model,
 			"base_url_configured", strings.TrimSpace(provider.BaseURL) != "",
 		)
-		return fmt.Errorf("%w: %v", ErrModelStreamFailed, err)
+		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
 	}
 
 	if err := writer.WriteEvent(StreamEvent{Type: "meta", Stage: "started", Message: "Agent 已开始处理"}); err != nil {
@@ -161,7 +166,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 			"base_url_configured", strings.TrimSpace(provider.BaseURL) != "",
 		)
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: friendlyError(err)})
-		return fmt.Errorf("%w: %v", ErrModelStreamFailed, err)
+		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
 	}
 	if IsCanceledError(ctx, nil) {
 		return nil
@@ -249,12 +254,15 @@ func (s *Service) RecommendPromptType(ctx context.Context, req PromptRecommendat
 		return noPromptRecommendation(), nil
 	}
 
-	runtime, err := s.runtimeFactory.NewRuntime(ctx, ModelConfig{
-		ProviderType: provider.ProviderType,
-		APIType:      provider.APIType,
-		APIKey:       apiKey,
-		BaseURL:      provider.BaseURL,
-		Model:        req.Model,
+	runtime, err := s.runtimeFactory.NewRuntime(ctx, RuntimeModelConfig{
+		Default: ModelConfig{
+			ProviderID:   provider.ID,
+			ProviderType: provider.ProviderType,
+			APIType:      provider.APIType,
+			APIKey:       apiKey,
+			BaseURL:      provider.BaseURL,
+			Model:        req.Model,
+		},
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "提示词库推荐判定运行时创建失败",
@@ -265,7 +273,7 @@ func (s *Service) RecommendPromptType(ctx context.Context, req PromptRecommendat
 			"model", req.Model,
 			"base_url_configured", strings.TrimSpace(provider.BaseURL) != "",
 		)
-		return PromptRecommendationResponse{}, fmt.Errorf("%w: %v", ErrModelStreamFailed, err)
+		return PromptRecommendationResponse{}, fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
 	}
 
 	result, err := runtime.RecommendPromptType(ctx, cfg, PromptRecommendationInput{
@@ -281,7 +289,7 @@ func (s *Service) RecommendPromptType(ctx context.Context, req PromptRecommendat
 			"model", req.Model,
 			"base_url_configured", strings.TrimSpace(provider.BaseURL) != "",
 		)
-		return PromptRecommendationResponse{}, fmt.Errorf("%w: %v", ErrModelStreamFailed, err)
+		return PromptRecommendationResponse{}, fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
 	}
 	if result.Action != PromptRecommendationActionSearch || !result.Matched || !promptRecommendationTypeAllowed(promptTypes, result.PromptType) {
 		return noPromptRecommendation(), nil
@@ -341,6 +349,60 @@ func (s *Service) providerCredential(ctx context.Context, id uint64) (*bizaiprov
 	return provider, apiKey, nil
 }
 
+// runtimeModelConfig 解析本轮 Agent 运行需要使用的入口模型和父子 Agent 自定义模型。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 defaultConfig 表示前端请求继承来源模型配置。
+func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConfig, defaultConfig ModelConfig) (RuntimeModelConfig, error) {
+	agentCfg, err := newAgentRuntimeConfig(cfg)
+	if err != nil {
+		return RuntimeModelConfig{}, err
+	}
+
+	runtimeConfig := RuntimeModelConfig{Default: defaultConfig}
+	if agentCfg.supervisor.providerID != 0 {
+		supervisorConfig, err := s.agentModelOverrideConfig(ctx, "顶层 Agent", agentCfg.supervisor.providerID, agentCfg.supervisor.model)
+		if err != nil {
+			return RuntimeModelConfig{}, err
+		}
+		runtimeConfig.Supervisor = &supervisorConfig
+	}
+
+	for _, child := range agentCfg.children {
+		if child.providerID == 0 {
+			continue
+		}
+		childConfig, err := s.agentModelOverrideConfig(ctx, "子 Agent "+child.name, child.providerID, child.model)
+		if err != nil {
+			return RuntimeModelConfig{}, err
+		}
+		if runtimeConfig.Children == nil {
+			runtimeConfig.Children = make(map[string]ModelConfig)
+		}
+		runtimeConfig.Children[child.name] = childConfig
+	}
+	return runtimeConfig, nil
+}
+
+// agentModelOverrideConfig 读取单个 Agent 自定义模型对应的提供商凭据并补齐默认模型。
+// 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示自定义模型提供商 ID；参数 model 表示配置文件中的模型标识。
+func (s *Service) agentModelOverrideConfig(ctx context.Context, label string, providerID uint64, model string) (ModelConfig, error) {
+	provider, apiKey, err := s.providerCredential(ctx, providerID)
+	if err != nil {
+		return ModelConfig{}, fmt.Errorf("%w: %s 自定义模型提供商 %d 不可用: %v", ErrAgentConfigInvalid, label, providerID, err)
+	}
+	model = modelForChatRequest(model, provider.DefaultModel)
+	if strings.TrimSpace(model) == "" {
+		return ModelConfig{}, fmt.Errorf("%w: %s 自定义模型为空且提供商未配置默认模型", ErrAgentConfigInvalid, label)
+	}
+	return ModelConfig{
+		ProviderID:   provider.ID,
+		ProviderType: provider.ProviderType,
+		APIType:      provider.APIType,
+		APIKey:       apiKey,
+		BaseURL:      provider.BaseURL,
+		Model:        model,
+	}, nil
+}
+
 // modelForChatRequest 返回本轮 Agent 对话最终使用的模型标识。
 // 参数 requestedModel 表示请求体传入的模型标识；参数 defaultModel 表示 AI 提供商配置的默认模型标识。
 func modelForChatRequest(requestedModel string, defaultModel string) string {
@@ -388,8 +450,8 @@ func (s *Service) memoryForRun(ctx context.Context, cfg *appconfig.AppConfig, no
 }
 
 // saveSuccessfulTurn 将成功完成的一轮用户消息和助手回复写入小说级 Agent 记忆。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 runtime 表示本轮使用的 Agent 运行时；参数 req 表示本轮聊天请求；参数 result 表示 Agent 最终生成结果；参数 providerID 表示实际使用的 AI 提供商 ID。
-func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConfig, runtime AgentRuntime, req ChatRequest, result AgentResult, providerID uint64) error {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 runtime 表示本轮使用的 Agent 运行时；参数 req 表示本轮聊天请求；参数 result 表示 Agent 最终生成结果；参数 entryProviderID 表示用户入口请求使用的 AI 提供商 ID。
+func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConfig, runtime AgentRuntime, req ChatRequest, result AgentResult, entryProviderID uint64) error {
 	if req.NovelID == 0 {
 		return nil
 	}
@@ -410,6 +472,14 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConf
 		value := req.ChapterID
 		chapterID = &value
 	}
+	assistantProviderID := result.ProviderID
+	if assistantProviderID == 0 {
+		assistantProviderID = entryProviderID
+	}
+	assistantModel := strings.TrimSpace(result.Model)
+	if assistantModel == "" {
+		assistantModel = req.Model
+	}
 	messages := []MessageRecord{
 		{
 			ConversationID: conversation.ID,
@@ -417,7 +487,7 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConf
 			ChapterID:      chapterID,
 			Role:           MessageRoleUser,
 			Content:        req.Message,
-			ProviderID:     providerID,
+			ProviderID:     entryProviderID,
 			Model:          req.Model,
 			RequestID:      requestid.FromContext(ctx),
 		},
@@ -428,8 +498,8 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConf
 			Role:           MessageRoleAssistant,
 			Task:           result.Task,
 			Content:        result.Content,
-			ProviderID:     providerID,
-			Model:          req.Model,
+			ProviderID:     assistantProviderID,
+			Model:          assistantModel,
 			RequestID:      requestid.FromContext(ctx),
 		},
 	}
@@ -584,6 +654,9 @@ func normalizePromptRecommendationRequest(req PromptRecommendationRequest) Promp
 func friendlyError(err error) string {
 	if err == nil {
 		return ""
+	}
+	if errors.Is(err, ErrAgentNotConfigured) || errors.Is(err, ErrAgentConfigInvalid) {
+		return "AI 写作智能体配置错误，请检查自定义模型配置"
 	}
 	if strings.TrimSpace(err.Error()) == "" {
 		return "AI 生成失败，请稍后再试"

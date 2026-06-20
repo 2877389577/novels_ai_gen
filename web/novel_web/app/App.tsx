@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -87,6 +88,7 @@ const chapterEditRoutePattern =
 export function App() {
   const [route, setRoute] = useState<AppRoute>(getInitialAppRoute);
   const [theme, setTheme] = useState<AppTheme>(() => readStoredAppTheme());
+  const previousRouteRef = useRef<AppRoute | null>(null);
 
   // syncAppTheme 将当前主题同步到页面根节点和浏览器本地存储。
   useLayoutEffect(
@@ -96,6 +98,33 @@ export function App() {
     },
     [theme],
   );
+
+  // resetWindowScrollOnRouteChange 在页面级路由切换后重置窗口滚动位置。
+  useLayoutEffect(
+    function resetWindowScrollOnRouteChange() {
+      const previousRoute = previousRouteRef.current;
+      previousRouteRef.current = route;
+      if (!previousRoute || !shouldResetWindowScroll(previousRoute, route)) {
+        return;
+      }
+
+      resetWindowScroll();
+    },
+    [route],
+  );
+
+  // useManualHistoryScrollRestoration 关闭浏览器原生滚动恢复，避免 SPA 视图复用旧滚动位置。
+  useEffect(function useManualHistoryScrollRestoration() {
+    if (!("scrollRestoration" in window.history)) {
+      return;
+    }
+
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return function restoreHistoryScrollRestoration() {
+      window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, []);
 
   // installRouteGuard 安装浏览器路由守卫，拦截未登录用户访问受保护路径。
   useEffect(
@@ -624,6 +653,40 @@ function chapterEditRoutePath(novelId: number, chapterId: number): string {
 // 参数 section 表示需要打开的设置中心分区。
 function settingsSectionRoutePath(section: SettingsSection): string {
   return `${settingsBaseRoutePath}/${section}`;
+}
+
+// shouldResetWindowScroll 判断一次路由变化是否需要重置窗口滚动位置。
+// 参数 previousRoute 表示切换前的页面路由；参数 nextRoute 表示切换后的页面路由。
+function shouldResetWindowScroll(
+  previousRoute: AppRoute,
+  nextRoute: AppRoute,
+): boolean {
+  if (previousRoute.view !== nextRoute.view) {
+    return true;
+  }
+  if (previousRoute.view === "novelDetail" && nextRoute.view === "novelDetail") {
+    return previousRoute.novelId !== nextRoute.novelId;
+  }
+  if (previousRoute.view === "settings" && nextRoute.view === "settings") {
+    return previousRoute.section !== nextRoute.section;
+  }
+  if (
+    previousRoute.view === "chapterEditor" &&
+    nextRoute.view === "chapterEditor"
+  ) {
+    if (previousRoute.chapterId === null || nextRoute.chapterId === null) {
+      return false;
+    }
+    return previousRoute.chapterId !== nextRoute.chapterId;
+  }
+  return false;
+}
+
+// resetWindowScroll 将浏览器窗口滚动位置恢复到页面顶部。
+function resetWindowScroll() {
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
 }
 
 // navigateToRoute 使用 React Transition 切换前端页面。

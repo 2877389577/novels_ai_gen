@@ -448,6 +448,10 @@ export interface AgentDefinition {
   name: string;
   // enabled 表示子 Agent 是否启用，未返回时按启用处理。
   enabled?: boolean | null;
+  // provider_id 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求提供商。
+  provider_id: number;
+  // model 表示该 Agent 自定义使用的模型标识，空值表示继承或使用提供商默认模型。
+  model: string;
   // task 表示子 Agent 产生流式事件时返回给前端的任务标识。
   task: string;
   // description 表示 Agent 能力描述。

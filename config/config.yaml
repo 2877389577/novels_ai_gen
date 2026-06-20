@@ -107,6 +107,8 @@ ai:
     # 顶层 Agent 配置；顶层 Agent 不放入子 Agent 数组。
     supervisor:
       name: novel_supervisor
+      provider_id: 0
+      model: ""
       description: 负责理解用户意图，并决定直接回答或调用小说写作子 Agent。
       instruction: |
         你是小说写作智能体的顶层 Agent，负责理解用户意图并决定下一步行动。
@@ -117,6 +119,8 @@ ai:
     agent:
       - name: polish
         enabled: true
+        provider_id: 0
+        model: ""
         task: polish
         description: 负责小说章节正文润色的机器人工具，用户需要对小说、句子等进行润色时使用。但仅支持润色，不支持扩写、续写等功能。
         instruction: |
