@@ -8691,6 +8691,16 @@ html[data-theme="dark"] .chapter-ai-input-shell:focus-within {
   transform: translateY(-1px);
 }
 
+.chapter-ai-send-stop {
+  background: #ef4444;
+}
+
+.chapter-ai-send-stop:not(:disabled):hover,
+.chapter-ai-send-stop:not(:disabled):focus-visible {
+  background: #dc2626;
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.28);
+}
+
 .chapter-ai-send:disabled {
   opacity: 0.5;
   cursor: wait;

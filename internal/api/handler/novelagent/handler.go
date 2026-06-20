@@ -238,6 +238,9 @@ func (h *Handler) StreamChat(c *gin.Context) {
 		flusher: flusher,
 	}
 	if err := h.service.StreamChat(c.Request.Context(), req, writer); err != nil && !writer.hasError {
+		if biznovelagent.IsCanceledError(c.Request.Context(), err) {
+			return
+		}
 		_ = writer.WriteEvent(biznovelagent.StreamEvent{
 			Type:      "error",
 			RequestID: requestid.FromContext(c.Request.Context()),

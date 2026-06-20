@@ -2,6 +2,7 @@ package novelagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -148,6 +149,9 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		return writer.WriteEvent(StreamEvent{Type: "delta", Task: delta.Task, Content: delta.Content})
 	})
 	if err != nil {
+		if IsCanceledError(ctx, err) {
+			return nil
+		}
 		slog.ErrorContext(ctx, "小说写作 Agent 执行失败",
 			"error", err,
 			"provider_id", req.ProviderID,
@@ -159,7 +163,13 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: friendlyError(err)})
 		return fmt.Errorf("%w: %v", ErrModelStreamFailed, err)
 	}
+	if IsCanceledError(ctx, nil) {
+		return nil
+	}
 	if err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, provider.ID); err != nil {
+		if IsCanceledError(ctx, err) {
+			return nil
+		}
 		slog.ErrorContext(ctx, "小说写作 Agent 记忆保存失败",
 			"error", err,
 			"provider_id", req.ProviderID,
@@ -383,6 +393,9 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConf
 	if req.NovelID == 0 {
 		return nil
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if s.memoryRepo == nil {
 		return fmt.Errorf("Agent 记忆仓储未初始化")
 	}
@@ -424,7 +437,19 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConf
 	if err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return s.memoryRepo.AppendMessagesAndUpdateSummary(ctx, conversation.ID, messages, summary)
+}
+
+// IsCanceledError 判断当前错误是否由请求上下文取消或超时引起。
+// 参数 ctx 表示请求上下文；参数 err 表示需要判断的错误。
+func IsCanceledError(ctx context.Context, err error) bool {
+	if ctx != nil && ctx.Err() != nil {
+		return true
+	}
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // summaryUpdateForTurn 计算本轮保存前是否需要生成新的滚动摘要。

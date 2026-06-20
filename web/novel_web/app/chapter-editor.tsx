@@ -6,6 +6,7 @@ import {
   IconDeleteStroked,
   IconEditStroked,
   IconRedoStroked,
+  IconStop,
 } from "@douyinfe/semi-icons";
 import { AIChatDialogue, Button, FloatButton, Toast } from "@douyinfe/semi-ui-19";
 import {
@@ -1501,6 +1502,11 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     props.onClose();
   }
 
+  // handleCancelAssistantMessage 中断当前正在进行的 AI 流式回复。
+  function handleCancelAssistantMessage() {
+    streamControllerRef.current?.abort();
+  }
+
   // handleClearAssistantHistory 清空当前小说的 AI 历史消息。
   async function handleClearAssistantHistory() {
     if (assistantSending) {
@@ -2035,13 +2041,26 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             />
             <div className="chapter-ai-input-actions">
               <button
-                aria-label="发送给 AI 写作助手"
-                className="chapter-ai-send"
-                disabled={modelLoading || assistantSending}
-                title="发送"
-                type="submit"
+                aria-label={assistantSending ? "中断 AI 回复" : "发送给 AI 写作助手"}
+                className={
+                  assistantSending
+                    ? "chapter-ai-send chapter-ai-send-stop"
+                    : "chapter-ai-send"
+                }
+                disabled={!assistantSending && modelLoading}
+                onClick={
+                  assistantSending
+                    ? handleCancelAssistantMessage
+                    : undefined
+                }
+                title={assistantSending ? "中断" : "发送"}
+                type={assistantSending ? "button" : "submit"}
               >
-                <IconArrowUp aria-hidden="true" />
+                {assistantSending ? (
+                  <IconStop aria-hidden="true" />
+                ) : (
+                  <IconArrowUp aria-hidden="true" />
+                )}
               </button>
             </div>
           </div>
