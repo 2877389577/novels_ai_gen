@@ -59,7 +59,7 @@ type QueryChaptersInput struct {
 	// EndChapterNumber 表示章节号范围终点，需要与 StartChapterNumber 同时传入。
 	EndChapterNumber int `json:"end_chapter_number,omitempty" jsonschema_description:"章节号范围终点，需要与 start_chapter_number 同时传入，且不能小于起始章节号。"`
 	// Fields 表示需要返回的章节字段列表，空列表表示返回全部字段。
-	Fields []string `json:"fields,omitempty" jsonschema_description:"需要返回的章节字段列表；空列表表示返回全部字段；可选字段为 id、novel_id、chapter_number、title、content、summary、word_count、created_at、updated_at。"`
+	Fields []string `json:"fields,omitempty" jsonschema_description:"需要返回的章节字段列表；空列表表示返回全部字段；可选字段为 id、novel_id(所属小说ID)、chapter_number(章节号)、title(章节名)、content(章节正文)、summary(章节总结)、word_count(章节正文字数)、created_at、updated_at。"`
 }
 
 // QueryChapterData 表示 query_chapters 工具返回的单章数据。
