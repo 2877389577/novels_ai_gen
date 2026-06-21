@@ -28,6 +28,8 @@ type runtimeAgentDefinition struct {
 	model string
 	// task 表示子 Agent 产生流式事件时返回给前端的任务标识。
 	task string
+	// shareChatHistory 表示父 Agent 调用该子 Agent 时是否传入完整聊天历史。
+	shareChatHistory bool
 	// description 表示 Agent 能力描述。
 	description string
 	// instruction 表示配置文件中的原始系统提示词。
@@ -244,9 +246,14 @@ func normalizeChildAgent(def appconfig.AgentDefinition, registry map[string]runt
 		return runtimeAgentDefinition{}, fmt.Errorf("%w: 子 Agent task 不能为 %s", ErrAgentConfigInvalid, taskDirect)
 	}
 
-	parameters, err := agentParameterInfos(def.Parameters)
-	if err != nil {
-		return runtimeAgentDefinition{}, err
+	shareChatHistory := def.ShareChatHistory != nil && *def.ShareChatHistory
+	var parameters map[string]*schema.ParameterInfo
+	if !shareChatHistory {
+		var err error
+		parameters, err = agentParameterInfos(def.Parameters)
+		if err != nil {
+			return runtimeAgentDefinition{}, err
+		}
 	}
 
 	maxIterations := def.MaxIterations
@@ -254,15 +261,16 @@ func normalizeChildAgent(def appconfig.AgentDefinition, registry map[string]runt
 		maxIterations = defaultChildMaxIterations
 	}
 	return runtimeAgentDefinition{
-		name:          name,
-		providerID:    def.ProviderID,
-		model:         model,
-		task:          task,
-		description:   description,
-		instruction:   instruction,
-		maxIterations: maxIterations,
-		parameters:    parameters,
-		toolNames:     toolNames,
+		name:             name,
+		providerID:       def.ProviderID,
+		model:            model,
+		task:             task,
+		shareChatHistory: shareChatHistory,
+		description:      description,
+		instruction:      instruction,
+		maxIterations:    maxIterations,
+		parameters:       parameters,
+		toolNames:        toolNames,
 	}, nil
 }
 

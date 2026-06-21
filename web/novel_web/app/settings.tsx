@@ -2,11 +2,14 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
 } from "react";
+import JsonViewer from "@douyinfe/semi-ui-19/lib/es/jsonViewer";
 import Modal from "@douyinfe/semi-ui-19/lib/es/modal";
+import Switch from "@douyinfe/semi-ui-19/lib/es/switch";
 import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
 
 import {
@@ -129,6 +132,8 @@ interface AgentChildFormState {
   id: string;
   // enabled 表示该子 Agent 是否启用。
   enabled: boolean;
+  // shareChatHistory 表示父 Agent 调用该子 Agent 时是否共享完整聊天历史。
+  shareChatHistory: boolean;
   // name 表示子 Agent 名称，同时也是工具名称。
   name: string;
   // task 表示子 Agent 流事件任务标识。
@@ -151,14 +156,19 @@ interface AgentChildFormState {
   parametersText: string;
 }
 
+// AgentParameterJsonViewerRef 表示子 Agent 参数 JSON 编辑器暴露给页面读取的实例方法。
+interface AgentParameterJsonViewerRef {
+  // getValue 表示读取编辑器中当前 JSON 文本的方法。
+  getValue: () => string;
+}
+
 // AgentChildTextField 表示子 Agent 表单中以文本方式编辑的字段名。
 type AgentChildTextField =
   | "name"
   | "task"
   | "description"
   | "instruction"
-  | "maxIterations"
-  | "parametersText";
+  | "maxIterations";
 
 // AgentSettingsFormState 表示智能体配置页完整表单状态。
 interface AgentSettingsFormState {
@@ -573,13 +583,49 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
 	const [modelLoadingByProvider, setModelLoadingByProvider] = useState<
 		Record<string, boolean>
 	>({});
+  const parameterEditorRefs = useRef<
+    Record<string, AgentParameterJsonViewerRef | null>
+  >({});
+  const [parameterEditorRevision, setParameterEditorRevision] = useState(0);
 
 	const dirty = useMemo(
     function calculateAgentSettingsDirty() {
-      return JSON.stringify(form) !== JSON.stringify(savedForm);
+      const currentForm = agentFormWithParameterEditorValues(form);
+      return JSON.stringify(currentForm) !== JSON.stringify(savedForm);
     },
-    [form, savedForm],
+    [form, savedForm, parameterEditorRevision],
   );
+
+  // getAgentParameterEditorValue 读取指定子 Agent 参数编辑器中的最新 JSON 文本。
+  // 参数 child 表示需要读取参数编辑器内容的子 Agent 表单项。
+  function getAgentParameterEditorValue(child: AgentChildFormState): string {
+    const editor = parameterEditorRefs.current[child.id];
+    if (!editor) {
+      return child.parametersText;
+    }
+
+    try {
+      return editor.getValue();
+    } catch {
+      return child.parametersText;
+    }
+  }
+
+  // agentFormWithParameterEditorValues 生成包含 JsonViewer 当前值的智能体表单快照。
+  // 参数 sourceForm 表示需要同步参数编辑器值的智能体表单状态。
+  function agentFormWithParameterEditorValues(
+    sourceForm: AgentSettingsFormState,
+  ): AgentSettingsFormState {
+    return {
+      ...sourceForm,
+      children: sourceForm.children.map(function syncChildParameters(child) {
+        return {
+          ...child,
+          parametersText: getAgentParameterEditorValue(child),
+        };
+      }),
+    };
+  }
 
   const loadAgentConfig = useCallback(
     // loadAgentConfig 读取后端结构化智能体配置。
@@ -877,6 +923,14 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
+  // handleChildShareChatHistoryChange 处理子 Agent 共享完整聊天历史开关变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 enabled 表示是否共享父 Agent 的完整聊天历史。
+  function handleChildShareChatHistoryChange(index: number, enabled: boolean) {
+    updateChildForm(index, function updateChildShareChatHistory(child) {
+      return { ...child, shareChatHistory: enabled };
+    });
+  }
+
   // handleChildInputChange 处理指定子 Agent 字段变化。
   // 参数 index 表示子 Agent 在表单列表中的位置；参数 field 表示需要更新的字段名；参数 value 表示新的字段值。
   function handleChildInputChange(
@@ -1026,7 +1080,8 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
       return;
     }
 
-    const validationMessage = validateAgentSettingsForm(form);
+    const currentForm = agentFormWithParameterEditorValues(form);
+    const validationMessage = validateAgentSettingsForm(currentForm);
     if (validationMessage) {
       setErrorMessage(validationMessage);
       Toast.error(validationMessage);
@@ -1040,14 +1095,15 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
       cancelText: "取消",
       className: "settings-confirm-modal",
       onOk: function confirmAgentSave() {
-        void saveAgentConfig();
+        void saveAgentConfig(currentForm);
       },
     });
   }
 
   // saveAgentConfig 保存当前结构化智能体配置。
-  async function saveAgentConfig() {
-    const buildResult = buildAgentConfigFromForm(form);
+  // 参数 sourceForm 表示已经同步 JsonViewer 当前值的智能体表单快照。
+  async function saveAgentConfig(sourceForm: AgentSettingsFormState) {
+    const buildResult = buildAgentConfigFromForm(sourceForm);
     if (buildResult.error || !buildResult.agent) {
       const message = buildResult.error || "智能体配置不完整";
       setErrorMessage(message);
@@ -1379,6 +1435,19 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                         />
                         <span>启用</span>
                       </label>
+                      <div className="agent-settings-inline-toggle">
+                        <Switch
+                          checked={child.shareChatHistory}
+                          disabled={saving}
+                          aria-label="共享历史"
+                          onChange={function handleChildShareChatHistoryToggle(
+                            checked,
+                          ) {
+                            handleChildShareChatHistoryChange(index, checked);
+                          }}
+                        />
+                        <span>共享历史</span>
+                      </div>
                       <button
                         type="button"
                         className="settings-secondary-button"
@@ -1572,22 +1641,39 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                         }}
                       />
                     </label>
-                    <label className="ai-provider-field ai-provider-field-wide">
+                    <div className="ai-provider-field ai-provider-field-wide agent-settings-json-field">
                       <span>Parameters JSON</span>
-                      <textarea
-                        className="agent-settings-textarea agent-settings-parameters"
-                        value={child.parametersText}
-                        disabled={saving}
-                        spellCheck={false}
-                        onChange={function handleChildParametersChange(event) {
-                          handleChildInputChange(
-                            index,
-                            "parametersText",
-                            event.target.value,
-                          );
-                        }}
-                      />
-                    </label>
+                      <div className="agent-settings-json-viewer-wrap">
+                        <JsonViewer
+                          ref={function bindChildParametersJsonViewer(instance) {
+                            parameterEditorRefs.current[child.id] =
+                              instance as AgentParameterJsonViewerRef | null;
+                          }}
+                          className="agent-settings-json-viewer"
+                          height={220}
+                          width="100%"
+                          showSearch={true}
+                          options={{
+                            autoWrap: true,
+                            lineHeight: 20,
+                            readOnly: saving,
+                            formatOptions: {
+                              tabSize: 2,
+                              insertSpaces: true,
+                              eol: "\n",
+                            },
+                          }}
+                          value={child.parametersText}
+                          onChange={function handleChildParametersJsonChange() {
+                            setParameterEditorRevision(function updateRevision(
+                              revision,
+                            ) {
+                              return revision + 1;
+                            });
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </article>
               ))
@@ -2392,6 +2478,7 @@ function createDefaultAgentChildFormState(): AgentChildFormState {
   return {
     id: createAgentChildID(),
     enabled: true,
+    shareChatHistory: false,
     name: "",
     task: "",
     description: "",
@@ -2492,6 +2579,7 @@ function agentDefinitionToChildFormState(
   return {
     id: `${createAgentChildID()}-${index}`,
     enabled: definition.enabled !== false,
+    shareChatHistory: definition.share_chat_history === true,
     name: definition.name ?? "",
     task: definition.task ?? "",
     description: definition.description ?? "",
@@ -2671,6 +2759,7 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     children.push({
       name: childName,
       enabled: child.enabled,
+      share_chat_history: child.shareChatHistory,
       provider_id: childModel.providerId,
       model: childModel.model,
       task: childTask,

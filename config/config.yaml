@@ -137,6 +137,7 @@ ai:
     agent:
       - name: polish
         enabled: true
+        share_chat_history: false
         provider_id: 0
         model: ""
         task: polish

@@ -119,6 +119,8 @@ type AgentDefinition struct {
 	Name string `mapstructure:"name" json:"name" yaml:"name"`
 	// Enabled 表示子 Agent 是否启用，未配置时子 Agent 默认启用，顶层 Agent 忽略该字段。
 	Enabled *bool `mapstructure:"enabled" json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	// ShareChatHistory 表示子 Agent 是否共享父 Agent 的完整聊天历史，未配置时默认关闭，顶层 Agent 忽略该字段。
+	ShareChatHistory *bool `mapstructure:"share_chat_history" json:"share_chat_history,omitempty" yaml:"share_chat_history,omitempty"`
 	// ProviderID 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求的提供商。
 	ProviderID uint64 `mapstructure:"provider_id" json:"provider_id" yaml:"provider_id"`
 	// Model 表示该 Agent 自定义使用的模型标识，空值表示继承本次请求模型或使用自定义提供商默认模型。

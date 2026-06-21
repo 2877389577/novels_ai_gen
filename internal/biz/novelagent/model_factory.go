@@ -807,7 +807,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 		tools = append(tools, adk.NewAgentTool(
 			ctx,
 			childAgent,
-			adk.WithAgentInputSchema(schema.NewParamsOneOfByParams(child.parameters)),
+			childAgentToolOptions(child)...,
 		))
 		returnDirectly[child.name] = true
 	}
@@ -834,6 +834,9 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 // 参数 ctx 表示请求上下文；参数 defaultModel 表示入口 AgenticModel；参数 supervisorModel 表示顶层 Agent 使用的 AgenticModel；参数 childModels 表示子 Agent 自定义 AgenticModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖；参数 novelSummaryStore 表示小说滚动总结读写依赖。
 func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.AgenticModel, supervisorModel einomodel.AgenticModel, childModels map[string]einomodel.AgenticModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader, novelSummaryStore agenttools.NovelSummaryStore) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
 	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
+		return nil, err
+	}
+	if err := validateAgenticChildHistorySharing(cfg); err != nil {
 		return nil, err
 	}
 
@@ -890,6 +893,28 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 		MaxIterations:    cfg.supervisor.maxIterations,
 		ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 	})
+}
+
+// childAgentToolOptions 根据子 Agent 配置生成父 Agent 包装子 Agent 时使用的 ADK tool 选项。
+// 参数 child 表示运行时子 Agent 配置。
+func childAgentToolOptions(child runtimeAgentDefinition) []adk.AgentToolOption {
+	if child.shareChatHistory {
+		return []adk.AgentToolOption{adk.WithFullChatHistoryAsInput()}
+	}
+	return []adk.AgentToolOption{
+		adk.WithAgentInputSchema(schema.NewParamsOneOfByParams(child.parameters)),
+	}
+}
+
+// validateAgenticChildHistorySharing 校验 Agentic 路径是否包含当前 Eino 不支持的子 Agent 历史共享配置。
+// 参数 cfg 表示本次请求使用的运行时 Agent 配置。
+func validateAgenticChildHistorySharing(cfg runtimeAgentConfig) error {
+	for _, child := range cfg.children {
+		if child.shareChatHistory {
+			return fmt.Errorf("%w: 子 Agent %s 开启了记忆共享，但当前模型路径暂不支持，请使用 Chat 路径模型或关闭该开关", ErrAgentConfigInvalid, child.name)
+		}
+	}
+	return nil
 }
 
 // chatModelRetryConfig 创建 schema.Message 路径使用的 ADK 模型重试配置。
