@@ -133,6 +133,8 @@ interface ChapterAiMessage extends Message {
   chapterAiPairID?: string;
   // chapterAiSourceID 表示助手消息流式更新时使用的基础消息 ID。
   chapterAiSourceID?: string;
+  // chapterAiReplyIndex 表示同一次 AI 请求中的助手回复段序号，从 1 开始。
+  chapterAiReplyIndex?: number;
   // chapterAiRetryable 表示该用户消息是否允许展示重试按钮。
   chapterAiRetryable?: boolean;
   // chapterAiRetryPayload 表示该用户消息重试时复用的原始发送参数。
@@ -151,6 +153,14 @@ interface ChapterAiStreamRequest {
   savedChapterNumber: number;
   // retryPayload 表示本次请求使用的原始 AI 调用参数。
   retryPayload: ChapterAiRetryPayload;
+}
+
+// ChapterAiReplyDraft 表示一次流式请求中单段助手回复的本地草稿。
+interface ChapterAiReplyDraft {
+  // messageID 表示该段助手回复在前端列表中的基础消息 ID。
+  messageID: string;
+  // content 表示该段助手回复当前已收到的文本。
+  content: string;
 }
 
 // ChapterAiSavedChapterContext 表示发送 AI 请求前已保存的章节上下文。
@@ -1792,6 +1802,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           chapterAiConversationID: retryPayload.conversationId,
           chapterAiPairID: pairID,
           chapterAiSourceID: assistantMessageID,
+          chapterAiReplyIndex: 1,
           role: "assistant",
           content: "",
           status: "in_progress",
@@ -1873,6 +1884,77 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
 
     let assistantContent = "";
     let handledFailure = false;
+    const assistantReplies = new Map<number, ChapterAiReplyDraft>();
+    assistantReplies.set(1, {
+      messageID: createChapterAiReplyMessageID(request.assistantMessageID, 1),
+      content: "",
+    });
+
+    // normalizeReplyIndex 标准化后端返回的回复段序号。
+    // 参数 value 表示后端流事件中的 reply_index。
+    function normalizeReplyIndex(value: number | undefined): number {
+      return Number.isSafeInteger(value) && value !== undefined && value > 0
+        ? value
+        : 1;
+    }
+
+    // ensureAssistantReplyDraft 确保指定回复段已有本地气泡草稿。
+    // 参数 replyIndex 表示同一次 AI 请求中的助手回复段序号。
+    function ensureAssistantReplyDraft(replyIndex: number): ChapterAiReplyDraft {
+      const existing = assistantReplies.get(replyIndex);
+      if (existing) {
+        return existing;
+      }
+
+      const messageID = createChapterAiReplyMessageID(
+        request.assistantMessageID,
+        replyIndex,
+      );
+      const draft: ChapterAiReplyDraft = { messageID, content: "" };
+      assistantReplies.set(replyIndex, draft);
+      appendAssistantReplyMessage(
+        request.assistantMessageID,
+        messageID,
+        request.pairID,
+        request.retryPayload.conversationId,
+        replyIndex,
+      );
+      return draft;
+    }
+
+    // completeAssistantReplies 按后端最终分段结果收口所有助手气泡。
+    // 参数 replies 表示后端 done 事件返回的完整分段回复列表。
+    function completeAssistantReplies(
+      replies: Array<{ reply_index: number; content: string }>,
+    ) {
+      if (replies.length === 0) {
+        updateAssistantReplyMessage(
+          request.assistantMessageID,
+          1,
+          assistantContent,
+          "completed",
+        );
+        return;
+      }
+
+      const completedReplyIndexes = new Set<number>();
+      for (const reply of replies) {
+        const replyIndex = normalizeReplyIndex(reply.reply_index);
+        const draft = ensureAssistantReplyDraft(replyIndex);
+        draft.content = reply.content ?? "";
+        completedReplyIndexes.add(replyIndex);
+        updateAssistantReplyMessage(
+          request.assistantMessageID,
+          replyIndex,
+          draft.content,
+          "completed",
+        );
+      }
+      removeAssistantRepliesNotIn(
+        request.assistantMessageID,
+        completedReplyIndexes,
+      );
+    }
 
     // handleChapterAiStreamFailure 将当前 AI 请求标记为失败并开启用户消息重试入口。
     // 参数 errorMessage 表示展示给用户的失败原因。
@@ -1907,21 +1989,28 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
               return;
             }
             if (event.type === "delta") {
-              assistantContent += event.content ?? "";
-              updateAssistantMessage(
+              const replyIndex = normalizeReplyIndex(event.reply_index);
+              const draft = ensureAssistantReplyDraft(replyIndex);
+              draft.content += event.content ?? "";
+              assistantContent = Array.from(assistantReplies.keys())
+                .sort(function sortReplyIndex(left, right) {
+                  return left - right;
+                })
+                .map(function mapReplyContent(index) {
+                  return assistantReplies.get(index)?.content ?? "";
+                })
+                .join("");
+              updateAssistantReplyMessage(
                 request.assistantMessageID,
-                assistantContent,
+                replyIndex,
+                draft.content,
                 "in_progress",
               );
               return;
             }
             if (event.type === "done") {
               assistantContent = event.content || assistantContent;
-              updateAssistantMessage(
-                request.assistantMessageID,
-                assistantContent,
-                "completed",
-              );
+              completeAssistantReplies(event.replies ?? []);
               if (event.conversation_id && event.conversation_id > 0) {
                 const conversationTitle =
                   event.conversation_title?.trim() || "新会话";
@@ -1960,7 +2049,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       }
       if (controller.signal.aborted) {
         updateChapterAiPairRetryable(request.pairID, false);
-        updateAssistantMessage(
+        collapseAssistantRepliesToStatus(
           request.assistantMessageID,
           "本次 AI 回复已取消。",
           "cancelled",
@@ -1990,7 +2079,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     errorMessage: string,
   ) {
     updateChapterAiPairRetryable(pairID, true);
-    updateAssistantMessage(assistantMessageID, errorMessage, "failed");
+    collapseAssistantRepliesToStatus(assistantMessageID, errorMessage, "failed");
   }
 
   // upsertChapterAiConversation 将后端返回的会话信息写入本地会话列表。
@@ -2048,36 +2137,90 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   // 参数 pairID 表示需要重试的消息配对 ID；参数 assistantMessageID 表示助手消息基础 ID。
   function resetChapterAiRequestForRetry(pairID: string, assistantMessageID: string) {
     setChats(function resetRetryMessages(currentChats) {
-      return currentChats.map(function resetRetryMessage(chat) {
+      let assistantReset = false;
+      return currentChats.flatMap(function resetRetryMessage(chat) {
         if (chat.chapterAiPairID !== pairID) {
-          return chat;
+          return [chat];
         }
         if (chat.role === "user") {
-          return {
+          return [{
             ...chat,
             chapterAiRetryable: false,
-          };
+          }];
         }
         if (chat.role === "assistant") {
-          return {
+          if (assistantReset) {
+            return [];
+          }
+          assistantReset = true;
+          return [{
             ...chat,
             id: assistantMessageID,
             chapterAiSourceID: assistantMessageID,
+            chapterAiReplyIndex: 1,
             content: "",
             status: "in_progress",
-          };
+          }];
         }
-        return chat;
+        return [chat];
       });
     });
   }
 
-  // updateAssistantMessage 更新指定 AI 助手消息内容。
-  // 参数 messageID 表示需要更新的基础消息 ID；参数 content 表示新的消息内容；参数 status 表示消息当前生成状态。
-  function updateAssistantMessage(messageID: string, content: string, status: string) {
+  // appendAssistantReplyMessage 追加一段新的 AI 助手回复气泡。
+  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 messageID 表示当前回复段消息 ID；参数 pairID 表示本轮消息配对 ID；参数 conversationID 表示当前会话 ID；参数 replyIndex 表示回复段序号。
+  function appendAssistantReplyMessage(
+    sourceMessageID: string,
+    messageID: string,
+    pairID: string,
+    conversationID: number | undefined,
+    replyIndex: number,
+  ) {
+    setChats(function appendReplyMessage(currentChats) {
+      if (
+        currentChats.some(function hasReplyMessage(chat) {
+          return (
+            chat.role === "assistant" &&
+            chat.chapterAiSourceID === sourceMessageID &&
+            chat.chapterAiReplyIndex === replyIndex
+          );
+        })
+      ) {
+        return currentChats;
+      }
+      return [
+        ...currentChats,
+        {
+          id: messageID,
+          chapterAiConversationID: conversationID,
+          chapterAiPairID: pairID,
+          chapterAiSourceID: sourceMessageID,
+          chapterAiReplyIndex: replyIndex,
+          role: "assistant",
+          content: "",
+          status: "in_progress",
+        },
+      ];
+    });
+  }
+
+  // updateAssistantReplyMessage 更新指定回复段的 AI 助手消息内容。
+  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 replyIndex 表示回复段序号；参数 content 表示新的消息内容；参数 status 表示消息当前生成状态。
+  function updateAssistantReplyMessage(
+    sourceMessageID: string,
+    replyIndex: number,
+    content: string,
+    status: string,
+  ) {
+    const messageID = createChapterAiReplyMessageID(sourceMessageID, replyIndex);
     setChats(function updateMessage(currentChats) {
       return currentChats.map(function updateChat(chat) {
-        if (chat.id !== messageID && chat.chapterAiSourceID !== messageID) {
+        const chatReplyIndex = chat.chapterAiReplyIndex ?? 1;
+        if (
+          chat.role !== "assistant" ||
+          chat.chapterAiSourceID !== sourceMessageID ||
+          chatReplyIndex !== replyIndex
+        ) {
           return chat;
         }
         return {
@@ -2086,10 +2229,66 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             status === "in_progress"
               ? chat.id
               : createChapterAiRenderMessageID(messageID, status, content.length),
-          chapterAiSourceID: messageID,
+          chapterAiSourceID: sourceMessageID,
+          chapterAiReplyIndex: replyIndex,
           content,
           status,
         };
+      });
+    });
+  }
+
+  // collapseAssistantRepliesToStatus 将本次请求的多个助手气泡折叠为一个状态气泡。
+  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 content 表示状态气泡文本；参数 status 表示消息状态。
+  function collapseAssistantRepliesToStatus(
+    sourceMessageID: string,
+    content: string,
+    status: string,
+  ) {
+    setChats(function collapseReplyMessages(currentChats) {
+      let statusMessageKept = false;
+      return currentChats.flatMap(function collapseReplyMessage(chat) {
+        if (
+          chat.role !== "assistant" ||
+          chat.chapterAiSourceID !== sourceMessageID
+        ) {
+          return [chat];
+        }
+        if (statusMessageKept) {
+          return [];
+        }
+        statusMessageKept = true;
+        return [{
+          ...chat,
+          id: createChapterAiRenderMessageID(
+            sourceMessageID,
+            status,
+            content.length,
+          ),
+          chapterAiSourceID: sourceMessageID,
+          chapterAiReplyIndex: 1,
+          content,
+          status,
+        }];
+      });
+    });
+  }
+
+  // removeAssistantRepliesNotIn 移除后端最终结果中不存在的临时助手分段气泡。
+  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 replyIndexes 表示需要保留的回复段序号集合。
+  function removeAssistantRepliesNotIn(
+    sourceMessageID: string,
+    replyIndexes: Set<number>,
+  ) {
+    setChats(function removeStaleReplies(currentChats) {
+      return currentChats.filter(function keepReplyMessage(chat) {
+        if (
+          chat.role !== "assistant" ||
+          chat.chapterAiSourceID !== sourceMessageID
+        ) {
+          return true;
+        }
+        return replyIndexes.has(chat.chapterAiReplyIndex ?? 1);
       });
     });
   }
@@ -2356,6 +2555,18 @@ function createChapterAiMessageID(role: string, createdAt: number): string {
   return `chapter-ai-${role}-${createdAt}`;
 }
 
+// createChapterAiReplyMessageID 创建章节 AI 分段助手消息 ID。
+// 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 replyIndex 表示回复段序号。
+function createChapterAiReplyMessageID(
+  sourceMessageID: string,
+  replyIndex: number,
+): string {
+  if (replyIndex <= 1) {
+    return sourceMessageID;
+  }
+  return `${sourceMessageID}-reply-${replyIndex}`;
+}
+
 // createChapterAiPairID 创建同一轮章节 AI 用户消息和助手消息共用的配对 ID。
 // 参数 createdAt 表示消息创建时间戳。
 function createChapterAiPairID(createdAt: number): string {
@@ -2368,6 +2579,7 @@ function chapterAiMessageFromHistory(item: NovelAgentMessageItem): ChapterAiMess
   return {
     id: `chapter-ai-history-${item.id}`,
     chapterAiConversationID: item.conversation_id,
+    chapterAiReplyIndex: 1,
     role: item.role,
     content: item.content,
     status: "completed",

@@ -6,7 +6,9 @@ import {
   useState,
   type ChangeEvent,
   type FormEvent,
+  type KeyboardEvent,
 } from "react";
+import Card from "@douyinfe/semi-ui-19/lib/es/card";
 import JsonViewer from "@douyinfe/semi-ui-19/lib/es/jsonViewer";
 import Modal from "@douyinfe/semi-ui-19/lib/es/modal";
 import Switch from "@douyinfe/semi-ui-19/lib/es/switch";
@@ -43,6 +45,7 @@ import { LogsPanel } from "./logs";
 export type SettingsSection =
   | "config"
   | "agents"
+  | "agent-tools"
   | "logs"
   | "system"
   | "ai-providers";
@@ -70,6 +73,12 @@ interface ConfigSettingsPanelProps {
 
 // AgentSettingsPanelProps 表示智能体配置面板需要的外部回调。
 interface AgentSettingsPanelProps {
+  // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+  onUnauthorized: () => void;
+}
+
+// AgentToolsSettingsPanelProps 表示智能体工具配置面板需要的外部回调。
+interface AgentToolsSettingsPanelProps {
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
@@ -162,6 +171,19 @@ interface AgentParameterJsonViewerRef {
   getValue: () => string;
 }
 
+// EditingAgentTarget 表示当前正在弹窗中编辑的 Agent 目标。
+type EditingAgentTarget =
+  | {
+      // kind 表示当前编辑目标为顶层 Agent。
+      kind: "supervisor";
+    }
+  | {
+      // kind 表示当前编辑目标为子 Agent。
+      kind: "child";
+      // childID 表示子 Agent 前端稳定标识，用于移动排序后继续定位。
+      childID: string;
+    };
+
 // AgentChildTextField 表示子 Agent 表单中以文本方式编辑的字段名。
 type AgentChildTextField =
   | "name"
@@ -242,6 +264,11 @@ export function SettingsPage(props: SettingsPageProps) {
     props.onSectionChange("agents");
   }
 
+  // handleAgentToolsSectionClick 切换到智能体工具分区。
+  function handleAgentToolsSectionClick() {
+    props.onSectionChange("agent-tools");
+  }
+
   // handleLogsSectionClick 切换到日志预览分区。
   function handleLogsSectionClick() {
     props.onSectionChange("logs");
@@ -309,6 +336,15 @@ export function SettingsPage(props: SettingsPageProps) {
             <button
               type="button"
               className="settings-sidebar-button"
+              aria-current={props.section === "agent-tools" ? "page" : undefined}
+              onClick={handleAgentToolsSectionClick}
+            >
+              <span aria-hidden="true">TO</span>
+              <span>智能体工具</span>
+            </button>
+            <button
+              type="button"
+              className="settings-sidebar-button"
               aria-current={props.section === "logs" ? "page" : undefined}
               onClick={handleLogsSectionClick}
             >
@@ -344,6 +380,9 @@ export function SettingsPage(props: SettingsPageProps) {
           ) : null}
           {props.section === "agents" ? (
             <AgentSettingsPanel onUnauthorized={props.onUnauthorized} />
+          ) : null}
+          {props.section === "agent-tools" ? (
+            <AgentToolsSettingsPanel onUnauthorized={props.onUnauthorized} />
           ) : null}
           {props.section === "logs" ? (
             <LogsPanel onUnauthorized={props.onUnauthorized} />
@@ -563,6 +602,364 @@ function ConfigSettingsPanel(props: ConfigSettingsPanelProps) {
   );
 }
 
+// AgentToolsSettingsPanel 渲染智能体普通工具注册表管理面板。
+// 参数 props 表示智能体工具面板需要的外部回调。
+function AgentToolsSettingsPanel(props: AgentToolsSettingsPanelProps) {
+  const [agentData, setAgentData] = useState<AgentConfigData | null>(null);
+  const [toolRegistry, setToolRegistry] = useState<AgentToolConfig[]>([]);
+  const [savedToolRegistry, setSavedToolRegistry] = useState<AgentToolConfig[]>(
+    [],
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [editingToolName, setEditingToolName] = useState<string | null>(null);
+
+  const dirty = useMemo(
+    function calculateAgentToolsDirty() {
+      return JSON.stringify(toolRegistry) !== JSON.stringify(savedToolRegistry);
+    },
+    [savedToolRegistry, toolRegistry],
+  );
+  const editingToolConfig =
+    editingToolName === null
+      ? null
+      : toolRegistry.find(function findEditingTool(toolConfig) {
+          return toolConfig.name === editingToolName;
+        }) ?? null;
+
+  const loadAgentToolsConfig = useCallback(
+    // loadAgentToolsConfig 读取后端结构化智能体配置中的普通工具注册表。
+    // 参数 signal 表示用于取消请求的浏览器 AbortSignal；参数 showSuccess 表示重新加载成功时是否展示提示。
+    async function loadAgentToolsConfig(
+      signal?: AbortSignal,
+      showSuccess = false,
+    ) {
+      setLoading(true);
+      setErrorMessage("");
+
+      try {
+        const data = await fetchAgentConfig(signal);
+        const nextTools = (data.agent.tools ?? []).map(copyAgentToolConfig);
+        setAgentData(data);
+        setToolRegistry(nextTools);
+        setSavedToolRegistry(nextTools);
+        setEditingToolName(null);
+        if (showSuccess) {
+          Toast.success("智能体工具已重新加载");
+        }
+      } catch (error) {
+        if (isAbortError(error)) {
+          return;
+        }
+        if (error instanceof UnauthorizedError) {
+          props.onUnauthorized();
+          return;
+        }
+        const message = getErrorMessage(error, "智能体工具加载失败，请稍后再试");
+        setErrorMessage(message);
+        Toast.error(message);
+      } finally {
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [props.onUnauthorized],
+  );
+
+  useEffect(
+    function loadAgentToolsOnMount() {
+      const controller = new AbortController();
+      void loadAgentToolsConfig(controller.signal);
+
+      // cancelAgentToolsLoad 取消卸载中的智能体工具配置加载请求。
+      return function cancelAgentToolsLoad() {
+        controller.abort();
+      };
+    },
+    [loadAgentToolsConfig],
+  );
+
+  // handleOpenToolEditor 打开指定工具描述编辑弹窗。
+  // 参数 toolName 表示需要编辑的工具固定名称。
+  function handleOpenToolEditor(toolName: string) {
+    setEditingToolName(toolName);
+  }
+
+  // handleToolCardKeyDown 处理工具卡片键盘打开编辑弹窗。
+  // 参数 event 表示卡片键盘事件；参数 toolName 表示需要编辑的工具固定名称。
+  function handleToolCardKeyDown(
+    event: KeyboardEvent<HTMLDivElement>,
+    toolName: string,
+  ) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    handleOpenToolEditor(toolName);
+  }
+
+  // handleToolEditorClose 关闭当前工具描述编辑弹窗。
+  function handleToolEditorClose() {
+    setEditingToolName(null);
+  }
+
+  // handleToolDescriptionChange 处理工具完整描述输入变化。
+  // 参数 event 表示工具描述文本域输入事件。
+  function handleToolDescriptionChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    const toolName = editingToolName;
+    if (!toolName) {
+      return;
+    }
+    const description = event.target.value;
+    setToolRegistry(function updateToolRegistry(current) {
+      return current.map(function updateToolDescription(toolConfig) {
+        return toolConfig.name === toolName
+          ? { ...toolConfig, description }
+          : toolConfig;
+      });
+    });
+  }
+
+  // handleReloadAgentToolsClick 处理重新加载智能体工具配置按钮点击。
+  function handleReloadAgentToolsClick() {
+    if (!dirty) {
+      void loadAgentToolsConfig(undefined, true);
+      return;
+    }
+
+    Modal.confirm({
+      title: "重新加载智能体工具",
+      content: "当前未保存的工具描述修改会被磁盘上的配置覆盖。",
+      okText: "重新加载",
+      cancelText: "取消",
+      className: "settings-confirm-modal",
+      onOk: function confirmAgentToolsReload() {
+        void loadAgentToolsConfig(undefined, true);
+      },
+    });
+  }
+
+  // handleSaveAgentToolsClick 处理保存智能体工具配置按钮点击。
+  function handleSaveAgentToolsClick() {
+    if (!dirty) {
+      Toast.info("智能体工具配置没有变化");
+      return;
+    }
+
+    const validation = normalizeAgentToolRegistryForSave(toolRegistry);
+    if (validation.error) {
+      setErrorMessage(validation.error);
+      Toast.error(validation.error);
+      return;
+    }
+
+    Modal.confirm({
+      title: "保存智能体工具",
+      content: "保存后会写入后端启动配置文件，并立即用于后续 AI Agent 请求。",
+      okText: "保存",
+      cancelText: "取消",
+      className: "settings-confirm-modal",
+      onOk: function confirmAgentToolsSave() {
+        void saveAgentToolsConfig(toolRegistry);
+      },
+    });
+  }
+
+  // saveAgentToolsConfig 保存普通工具注册表，并保留最新智能体主体配置。
+  // 参数 sourceTools 表示需要写入 ai.agent.tools 的工具注册表。
+  async function saveAgentToolsConfig(sourceTools: AgentToolConfig[]) {
+    const normalized = normalizeAgentToolRegistryForSave(sourceTools);
+    if (normalized.error || !normalized.value) {
+      const message = normalized.error || "智能体工具配置不完整";
+      setErrorMessage(message);
+      Toast.error(message);
+      return;
+    }
+
+    setSaving(true);
+    setErrorMessage("");
+
+    try {
+      const latestData = await fetchAgentConfig();
+      const data = await updateAgentConfig({
+        agent: {
+          ...latestData.agent,
+          tools: normalized.value,
+        },
+      });
+      const nextTools = (data.agent.tools ?? []).map(copyAgentToolConfig);
+      setAgentData(data);
+      setToolRegistry(nextTools);
+      setSavedToolRegistry(nextTools);
+      setEditingToolName(null);
+      Toast.success("智能体工具已保存");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        props.onUnauthorized();
+        return;
+      }
+      const message = getErrorMessage(error, "智能体工具保存失败，请稍后再试");
+      setErrorMessage(message);
+      Toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const modifiedAtText = formatTime(agentData?.modified_at);
+  const reloadedAtText = formatTime(agentData?.reloaded_at);
+
+  return (
+    <article
+      className="settings-panel agent-settings-panel"
+      aria-labelledby="settings-agent-tools-title"
+    >
+      <div className="settings-corner settings-corner-left-top" />
+      <div className="settings-corner settings-corner-right-top" />
+      <div className="settings-corner settings-corner-left-bottom" />
+      <div className="settings-corner settings-corner-right-bottom" />
+
+      <div className="settings-editor-heading">
+        <div>
+          <p className="settings-kicker">Agent Tools</p>
+          <h1 id="settings-agent-tools-title">智能体工具</h1>
+        </div>
+        <div className="settings-editor-actions">
+          <button
+            type="button"
+            className="settings-secondary-button"
+            disabled={loading || saving}
+            onClick={handleReloadAgentToolsClick}
+          >
+            重新加载
+          </button>
+          <button
+            type="button"
+            className="settings-primary-button"
+            disabled={loading || saving || !dirty}
+            onClick={handleSaveAgentToolsClick}
+          >
+            {saving ? "保存中..." : "保存工具"}
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-file-meta" aria-label="智能体工具配置文件状态">
+        <span title={agentData?.config_file || ""}>
+          文件：{agentData?.config_file || "加载中..."}
+        </span>
+        <span>修改：{modifiedAtText}</span>
+        <span>加载：{reloadedAtText}</span>
+      </div>
+
+      {errorMessage ? (
+        <p className="settings-error-message" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+
+      <section
+        className="agent-settings-section"
+        aria-labelledby="agent-tools-list-title"
+      >
+        <div className="ai-provider-section-heading">
+          <div>
+            <h2 id="agent-tools-list-title">工具列表</h2>
+          </div>
+        </div>
+        <div className="agent-card-grid">
+          {loading ? (
+            <p className="ai-provider-empty">正在加载智能体工具...</p>
+          ) : null}
+          {!loading && toolRegistry.length === 0 ? (
+            <p className="ai-provider-empty">当前配置中还没有可用工具。</p>
+          ) : null}
+          {!loading
+            ? toolRegistry.map(function renderAgentToolCard(toolConfig) {
+                const description = toolConfig.description.trim() || "暂无描述";
+                return (
+                  <div
+                    className="agent-card-shell"
+                    key={toolConfig.name}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`编辑工具 ${toolConfig.name}`}
+                    onClick={function handleToolCardClick() {
+                      handleOpenToolEditor(toolConfig.name);
+                    }}
+                    onKeyDown={function handleToolCardKeyboard(event) {
+                      handleToolCardKeyDown(event, toolConfig.name);
+                    }}
+                  >
+                    <Card
+                      className="agent-preview-card agent-tool-preview-card"
+                      shadows="hover"
+                      headerLine={false}
+                    >
+                      <div className="agent-preview-card-content">
+                        <h3>{toolConfig.name}</h3>
+                        <p title={description}>{description}</p>
+                      </div>
+                    </Card>
+                  </div>
+                );
+              })
+            : null}
+        </div>
+      </section>
+
+      <Modal
+        className="ai-provider-modal agent-settings-modal"
+        footer={null}
+        maskClosable={!saving}
+        onCancel={handleToolEditorClose}
+        title={editingToolConfig ? `编辑工具：${editingToolConfig.name}` : "编辑工具"}
+        visible={editingToolConfig !== null}
+        width={760}
+      >
+        {editingToolConfig ? (
+          <form
+            className="ai-provider-form"
+            onSubmit={function handleToolEditorSubmit(event) {
+              event.preventDefault();
+              handleToolEditorClose();
+            }}
+          >
+            <div className="agent-settings-modal-body">
+              <label className="ai-provider-field ai-provider-field-wide">
+                <span>工具名称</span>
+                <input value={editingToolConfig.name} disabled />
+              </label>
+              <label className="ai-provider-field ai-provider-field-wide">
+                <span>Description</span>
+                <textarea
+                  className="agent-settings-textarea agent-settings-tool-description"
+                  value={editingToolConfig.description}
+                  disabled={saving}
+                  spellCheck={false}
+                  onChange={handleToolDescriptionChange}
+                />
+              </label>
+            </div>
+            <div className="ai-provider-form-actions">
+              <button
+                type="button"
+                className="settings-secondary-button"
+                disabled={saving}
+                onClick={handleToolEditorClose}
+              >
+                关闭
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </Modal>
+    </article>
+  );
+}
+
 // AgentSettingsPanel 渲染结构化智能体配置面板。
 // 参数 props 表示智能体配置面板需要的外部回调。
 function AgentSettingsPanel(props: AgentSettingsPanelProps) {
@@ -587,14 +984,24 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     Record<string, AgentParameterJsonViewerRef | null>
   >({});
   const [parameterEditorRevision, setParameterEditorRevision] = useState(0);
+  const [editingAgentTarget, setEditingAgentTarget] =
+    useState<EditingAgentTarget | null>(null);
 
-	const dirty = useMemo(
+  const dirty = useMemo(
     function calculateAgentSettingsDirty() {
       const currentForm = agentFormWithParameterEditorValues(form);
       return JSON.stringify(currentForm) !== JSON.stringify(savedForm);
     },
     [form, savedForm, parameterEditorRevision],
   );
+  const editingChildIndex =
+    editingAgentTarget?.kind === "child"
+      ? form.children.findIndex(function findEditingChild(child) {
+          return child.id === editingAgentTarget.childID;
+        })
+      : -1;
+  const editingChild =
+    editingChildIndex >= 0 ? form.children[editingChildIndex] : null;
 
   // getAgentParameterEditorValue 读取指定子 Agent 参数编辑器中的最新 JSON 文本。
   // 参数 child 表示需要读取参数编辑器内容的子 Agent 表单项。
@@ -627,6 +1034,39 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     };
   }
 
+  // syncAgentParameterEditors 将当前 JsonViewer 文本同步回表单状态。
+  function syncAgentParameterEditors() {
+    setForm(function syncCurrentForm(current) {
+      return agentFormWithParameterEditorValues(current);
+    });
+  }
+
+  // handleOpenAgentEditor 打开指定 Agent 的完整配置编辑弹窗。
+  // 参数 target 表示需要打开的 Agent 编辑目标。
+  function handleOpenAgentEditor(target: EditingAgentTarget) {
+    syncAgentParameterEditors();
+    setEditingAgentTarget(target);
+  }
+
+  // handleAgentCardKeyDown 处理 Agent 卡片键盘打开编辑弹窗。
+  // 参数 event 表示卡片键盘事件；参数 target 表示需要打开的 Agent 编辑目标。
+  function handleAgentCardKeyDown(
+    event: KeyboardEvent<HTMLDivElement>,
+    target: EditingAgentTarget,
+  ) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    handleOpenAgentEditor(target);
+  }
+
+  // handleCloseAgentEditor 关闭 Agent 编辑弹窗，并同步当前 JSON 编辑器文本。
+  function handleCloseAgentEditor() {
+    syncAgentParameterEditors();
+    setEditingAgentTarget(null);
+  }
+
   const loadAgentConfig = useCallback(
     // loadAgentConfig 读取后端结构化智能体配置。
     // 参数 signal 表示用于取消请求的浏览器 AbortSignal；参数 showSuccess 表示重新加载成功时是否展示提示。
@@ -643,6 +1083,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
         setAgentData(data);
         setForm(nextForm);
         setSavedForm(nextForm);
+        setEditingAgentTarget(null);
         if (showSuccess) {
           Toast.success("智能体配置已重新加载");
         }
@@ -820,21 +1261,6 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           ...current.supervisor,
           [name]: value,
         },
-      };
-    });
-  }
-
-  // handleAgentToolDescriptionChange 处理普通工具注册表描述变化。
-  // 参数 toolName 表示工具固定名称；参数 description 表示新的工具描述。
-  function handleAgentToolDescriptionChange(toolName: string, description: string) {
-    setForm(function updateAgentToolDescription(current) {
-      return {
-        ...current,
-        toolRegistry: current.toolRegistry.map(function updateTool(toolConfig) {
-          return toolConfig.name === toolName
-            ? { ...toolConfig, description }
-            : toolConfig;
-        }),
       };
     });
   }
@@ -1019,12 +1445,14 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
 
   // handleAddChildClick 新增一个空白子 Agent 表单项。
   function handleAddChildClick() {
+    const nextChild = createDefaultAgentChildFormState();
     setForm(function addChild(current) {
       return {
         ...current,
-        children: [...current.children, createDefaultAgentChildFormState()],
+        children: [...current.children, nextChild],
       };
     });
+    setEditingAgentTarget({ kind: "child", childID: nextChild.id });
   }
 
   // handleRemoveChildClick 删除指定子 Agent 表单项。
@@ -1036,6 +1464,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
         children: current.children.filter((_, childIndex) => childIndex !== index),
       };
     });
+    setEditingAgentTarget(null);
   }
 
   // handleMoveChildClick 移动指定子 Agent 的排序位置。
@@ -1103,23 +1532,28 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
   // saveAgentConfig 保存当前结构化智能体配置。
   // 参数 sourceForm 表示已经同步 JsonViewer 当前值的智能体表单快照。
   async function saveAgentConfig(sourceForm: AgentSettingsFormState) {
-    const buildResult = buildAgentConfigFromForm(sourceForm);
-    if (buildResult.error || !buildResult.agent) {
-      const message = buildResult.error || "智能体配置不完整";
-      setErrorMessage(message);
-      Toast.error(message);
-      return;
-    }
-
     setSaving(true);
     setErrorMessage("");
 
     try {
+      const latestData = await fetchAgentConfig();
+      const latestTools = (latestData.agent.tools ?? []).map(copyAgentToolConfig);
+      const buildResult = buildAgentConfigFromForm({
+        ...sourceForm,
+        toolRegistry: latestTools,
+      });
+      if (buildResult.error || !buildResult.agent) {
+        const message = buildResult.error || "智能体配置不完整";
+        setErrorMessage(message);
+        Toast.error(message);
+        return;
+      }
       const data = await updateAgentConfig({ agent: buildResult.agent });
       const nextForm = agentConfigToFormState(data.agent);
       setAgentData(data);
       setForm(nextForm);
       setSavedForm(nextForm);
+      setEditingAgentTarget(null);
       Toast.success("智能体配置已保存");
     } catch (error) {
       if (error instanceof UnauthorizedError) {
@@ -1136,6 +1570,15 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
 
   const modifiedAtText = formatTime(agentData?.modified_at);
   const reloadedAtText = formatTime(agentData?.reloaded_at);
+  const agentEditorVisible =
+    editingAgentTarget?.kind === "supervisor" ||
+    (editingAgentTarget?.kind === "child" && editingChild !== null);
+  const agentEditorTitle =
+    editingAgentTarget?.kind === "supervisor"
+      ? "编辑顶层 Agent"
+      : editingChild
+        ? `编辑子 Agent：${editingChild.name.trim() || "未命名"}`
+        : "编辑 Agent";
 
   return (
     <article
@@ -1186,38 +1629,6 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
         </p>
       ) : null}
 
-      <section className="agent-settings-section" aria-labelledby="agent-tools-title">
-        <div className="ai-provider-section-heading">
-          <div>
-            <h2 id="agent-tools-title">工具注册表</h2>
-          </div>
-        </div>
-        <div className="agent-tool-registry">
-          {form.toolRegistry.length === 0 ? (
-            <p className="ai-provider-empty">当前配置中还没有可用工具。</p>
-          ) : null}
-          {form.toolRegistry.map(function renderAgentToolConfig(toolConfig) {
-            return (
-              <label className="ai-provider-field ai-provider-field-wide" key={toolConfig.name}>
-                <span>{toolConfig.name}</span>
-                <textarea
-                  className="agent-settings-textarea agent-settings-tool-description"
-                  value={toolConfig.description}
-                  disabled={loading || saving}
-                  spellCheck={false}
-                  onChange={function handleAgentToolDescriptionInput(event) {
-                    handleAgentToolDescriptionChange(
-                      toolConfig.name,
-                      event.target.value,
-                    );
-                  }}
-                />
-              </label>
-            );
-          })}
-        </div>
-      </section>
-
       <section className="agent-settings-section" aria-labelledby="agent-memory-title">
         <div className="ai-provider-section-heading">
           <div>
@@ -1267,125 +1678,36 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
             <h2 id="agent-supervisor-title">顶层 Agent</h2>
           </div>
         </div>
-        <div className="agent-settings-grid">
-          <label className="ai-provider-field">
-            <span>Name</span>
-            <input
-              name="name"
-              value={form.supervisor.name}
-              disabled={loading || saving}
-              onChange={handleSupervisorInputChange}
-            />
-          </label>
-          <label className="ai-provider-field">
-            <span>最大迭代次数</span>
-            <input
-              name="maxIterations"
-              type="number"
-              min="0"
-              step="1"
-              value={form.supervisor.maxIterations}
-              disabled={loading || saving}
-              onChange={handleSupervisorInputChange}
-            />
-          </label>
-          {form.toolRegistry.map(function renderSupervisorToolToggle(toolConfig) {
-            return (
-              <label className="agent-settings-tool-toggle" key={toolConfig.name}>
-                <input
-                  type="checkbox"
-                  checked={form.supervisor.toolNames.includes(toolConfig.name)}
-                  disabled={loading || saving}
-                  onChange={function handleSupervisorToolToggle(event) {
-                    handleSupervisorToolChange(
-                      toolConfig.name,
-                      event.target.checked,
-                    );
-                  }}
-                />
-                <span title={toolConfig.description}>{toolConfig.name}</span>
-              </label>
-            );
-          })}
-          <label className="agent-settings-tool-toggle">
-            <input
-              type="checkbox"
-              checked={form.supervisor.customModelEnabled}
-              disabled={loading || saving}
-              onChange={handleSupervisorCustomModelChange}
-            />
-            <span>自定义模型</span>
-          </label>
-          {form.supervisor.customModelEnabled ? (
-            <>
-              <label className="ai-provider-field">
-                <span>模型提供商</span>
-                <select
-                  value={form.supervisor.providerId}
-                  disabled={loading || saving || modelProviders.length === 0}
-                  onChange={handleSupervisorModelProviderChange}
-                >
-                  <option value="">选择提供商</option>
-                  {modelProviders.map(function renderAgentProviderOption(provider) {
-                    return (
-                      <option key={provider.id} value={String(provider.id)}>
-                        {formatAgentProviderOption(provider)}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-              <label className="ai-provider-field">
-                <span>模型</span>
-                <select
-                  value={form.supervisor.model}
-                  disabled={loading || saving || !form.supervisor.providerId}
-                  onFocus={function handleSupervisorModelSelectFocus() {
-                    handleAgentModelSelectFocus(form.supervisor.providerId);
-                  }}
-                  onChange={handleSupervisorModelChange}
-                >
-                  <option value="">
-                    {modelLoadingByProvider[form.supervisor.providerId]
-                      ? "正在加载模型..."
-                      : "使用提供商默认模型"}
-                  </option>
-                  {agentModelOptionsForProvider(
-                    form.supervisor.providerId,
-                    form.supervisor.model,
-                    modelProviders,
-                    modelOptionsByProvider,
-                  ).map(function renderSupervisorModelOption(model) {
-                    return (
-                      <option key={model.id} value={model.id}>
-                        {formatAgentModelOption(model)}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-            </>
-          ) : null}
-          <label className="ai-provider-field ai-provider-field-wide">
-            <span>Description</span>
-            <input
-              name="description"
-              value={form.supervisor.description}
-              disabled={loading || saving}
-              onChange={handleSupervisorInputChange}
-            />
-          </label>
-          <label className="ai-provider-field ai-provider-field-wide">
-            <span>Instruction</span>
-            <textarea
-              name="instruction"
-              className="agent-settings-textarea agent-settings-instruction"
-              value={form.supervisor.instruction}
-              disabled={loading || saving}
-              spellCheck={false}
-              onChange={handleSupervisorInputChange}
-            />
-          </label>
+        <div className="agent-card-grid agent-card-grid-single">
+          {loading ? (
+            <p className="ai-provider-empty">正在加载顶层 Agent...</p>
+          ) : (
+            <div
+              className="agent-card-shell"
+              role="button"
+              tabIndex={0}
+              aria-label="编辑顶层 Agent"
+              onClick={function handleSupervisorCardClick() {
+                handleOpenAgentEditor({ kind: "supervisor" });
+              }}
+              onKeyDown={function handleSupervisorCardKeyboard(event) {
+                handleAgentCardKeyDown(event, { kind: "supervisor" });
+              }}
+            >
+              <Card
+                className="agent-preview-card agent-supervisor-preview-card"
+                shadows="hover"
+                headerLine={false}
+              >
+                <div className="agent-preview-card-content">
+                  <h3>{form.supervisor.name.trim() || "顶层 Agent"}</h3>
+                  <p title={form.supervisor.description}>
+                    {form.supervisor.description.trim() || "暂无 Description"}
+                  </p>
+                </div>
+              </Card>
+            </div>
+          )}
         </div>
       </section>
 
@@ -1404,7 +1726,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           </button>
         </div>
 
-        <div className="agent-child-list">
+        <div className="agent-card-grid">
           {loading ? (
             <p className="ai-provider-empty">正在加载智能体配置...</p>
           ) : null}
@@ -1412,274 +1734,507 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
             <p className="ai-provider-empty">还没有子 Agent。</p>
           ) : null}
           {!loading
-            ? form.children.map((child, index) => (
-                <article
-                  className={
-                    child.enabled
-                      ? "agent-child-card"
-                      : "agent-child-card agent-child-card-disabled"
-                  }
-                  key={child.id}
-                >
-                  <div className="agent-child-card-heading">
-                    <h3>{child.name.trim() || `子 Agent ${index + 1}`}</h3>
-                    <div className="agent-child-card-actions">
-                      <label className="agent-settings-inline-toggle">
-                        <input
-                          type="checkbox"
-                          checked={child.enabled}
-                          disabled={saving}
-                          onChange={function handleChildEnabledToggle(event) {
-                            handleChildEnabledChange(index, event.target.checked);
-                          }}
-                        />
-                        <span>启用</span>
-                      </label>
-                      <div className="agent-settings-inline-toggle">
-                        <Switch
-                          checked={child.shareChatHistory}
-                          disabled={saving}
-                          aria-label="共享历史"
-                          onChange={function handleChildShareChatHistoryToggle(
-                            checked,
-                          ) {
-                            handleChildShareChatHistoryChange(index, checked);
-                          }}
-                        />
-                        <span>共享历史</span>
+            ? form.children.map(function renderAgentChildCard(child, index) {
+                return (
+                  <div
+                    className="agent-card-shell"
+                    key={child.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`编辑 ${child.name.trim() || `子 Agent ${index + 1}`}`}
+                    onClick={function handleChildCardClick() {
+                      handleOpenAgentEditor({
+                        kind: "child",
+                        childID: child.id,
+                      });
+                    }}
+                    onKeyDown={function handleChildCardKeyboard(event) {
+                      handleAgentCardKeyDown(event, {
+                        kind: "child",
+                        childID: child.id,
+                      });
+                    }}
+                  >
+                    <Card
+                      className={
+                        child.enabled
+                          ? "agent-preview-card"
+                          : "agent-preview-card agent-preview-card-disabled"
+                      }
+                      shadows="hover"
+                      headerLine={false}
+                    >
+                      <div className="agent-preview-card-content">
+                        <h3>{child.name.trim() || `子 Agent ${index + 1}`}</h3>
+                        <p title={child.description}>
+                          {child.description.trim() || "暂无 Description"}
+                        </p>
                       </div>
-                      <button
-                        type="button"
-                        className="settings-secondary-button"
-                        disabled={saving || index === 0}
-                        onClick={function handleMoveChildUpClick() {
-                          handleMoveChildClick(index, -1);
-                        }}
-                      >
-                        上移
-                      </button>
-                      <button
-                        type="button"
-                        className="settings-secondary-button"
-                        disabled={saving || index === form.children.length - 1}
-                        onClick={function handleMoveChildDownClick() {
-                          handleMoveChildClick(index, 1);
-                        }}
-                      >
-                        下移
-                      </button>
-                      <button
-                        type="button"
-                        className="settings-secondary-button ai-provider-danger-button"
-                        disabled={saving}
-                        onClick={function handleRemoveAgentChildClick() {
-                          handleRemoveChildClick(index);
-                        }}
-                      >
-                        删除
-                      </button>
-                    </div>
+                    </Card>
                   </div>
-
-                  <div className="agent-settings-grid">
-                    <label className="ai-provider-field">
-                      <span>Name</span>
-                      <input
-                        value={child.name}
-                        disabled={saving}
-                        onChange={function handleChildNameChange(event) {
-                          handleChildInputChange(index, "name", event.target.value);
-                        }}
-                      />
-                    </label>
-                    <label className="ai-provider-field">
-                      <span>Task</span>
-                      <input
-                        value={child.task}
-                        disabled={saving}
-                        onChange={function handleChildTaskChange(event) {
-                          handleChildInputChange(index, "task", event.target.value);
-                        }}
-                      />
-                    </label>
-                    <label className="ai-provider-field">
-                      <span>最大迭代次数</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={child.maxIterations}
-                        disabled={saving}
-                        onChange={function handleChildMaxIterationsChange(event) {
-                          handleChildInputChange(
-                            index,
-                            "maxIterations",
-                            event.target.value,
-                          );
-                        }}
-                      />
-                    </label>
-                    {form.toolRegistry.map(function renderChildToolToggle(toolConfig) {
-                      return (
-                        <label className="agent-settings-tool-toggle" key={toolConfig.name}>
-                          <input
-                            type="checkbox"
-                            checked={child.toolNames.includes(toolConfig.name)}
-                            disabled={saving}
-                            onChange={function handleChildToolToggle(event) {
-                              handleChildToolChange(
-                                index,
-                                toolConfig.name,
-                                event.target.checked,
-                              );
-                            }}
-                          />
-                          <span title={toolConfig.description}>{toolConfig.name}</span>
-                        </label>
-                      );
-                    })}
-                    <label className="agent-settings-tool-toggle">
-                      <input
-                        type="checkbox"
-                        checked={child.customModelEnabled}
-                        disabled={saving}
-                        onChange={function handleChildCustomModelToggle(event) {
-                          handleChildCustomModelChange(index, event.target.checked);
-                        }}
-                      />
-                      <span>自定义模型</span>
-                    </label>
-                    {child.customModelEnabled ? (
-                      <>
-                        <label className="ai-provider-field">
-                          <span>模型提供商</span>
-                          <select
-                            value={child.providerId}
-                            disabled={saving || modelProviders.length === 0}
-                            onChange={function handleChildProviderSelect(event) {
-                              handleChildModelProviderChange(
-                                index,
-                                event.target.value,
-                              );
-                            }}
-                          >
-                            <option value="">选择提供商</option>
-                            {modelProviders.map(function renderChildProviderOption(
-                              provider,
-                            ) {
-                              return (
-                                <option
-                                  key={provider.id}
-                                  value={String(provider.id)}
-                                >
-                                  {formatAgentProviderOption(provider)}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </label>
-                        <label className="ai-provider-field">
-                          <span>模型</span>
-                          <select
-                            value={child.model}
-                            disabled={saving || !child.providerId}
-                            onFocus={function handleChildModelSelectFocus() {
-                              handleAgentModelSelectFocus(child.providerId);
-                            }}
-                            onChange={function handleChildModelSelect(event) {
-                              handleChildModelChange(index, event.target.value);
-                            }}
-                          >
-                            <option value="">
-                              {modelLoadingByProvider[child.providerId]
-                                ? "正在加载模型..."
-                                : "使用提供商默认模型"}
-                            </option>
-                            {agentModelOptionsForProvider(
-                              child.providerId,
-                              child.model,
-                              modelProviders,
-                              modelOptionsByProvider,
-                            ).map(function renderChildModelOption(model) {
-                              return (
-                                <option key={model.id} value={model.id}>
-                                  {formatAgentModelOption(model)}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </label>
-                      </>
-                    ) : null}
-                    <label className="ai-provider-field ai-provider-field-wide">
-                      <span>Description</span>
-                      <input
-                        value={child.description}
-                        disabled={saving}
-                        onChange={function handleChildDescriptionChange(event) {
-                          handleChildInputChange(
-                            index,
-                            "description",
-                            event.target.value,
-                          );
-                        }}
-                      />
-                    </label>
-                    <label className="ai-provider-field ai-provider-field-wide">
-                      <span>Instruction</span>
-                      <textarea
-                        className="agent-settings-textarea agent-settings-instruction"
-                        value={child.instruction}
-                        disabled={saving}
-                        spellCheck={false}
-                        onChange={function handleChildInstructionChange(event) {
-                          handleChildInputChange(
-                            index,
-                            "instruction",
-                            event.target.value,
-                          );
-                        }}
-                      />
-                    </label>
-                    <div className="ai-provider-field ai-provider-field-wide agent-settings-json-field">
-                      <span>Parameters JSON</span>
-                      <div className="agent-settings-json-viewer-wrap">
-                        <JsonViewer
-                          ref={function bindChildParametersJsonViewer(instance) {
-                            parameterEditorRefs.current[child.id] =
-                              instance as AgentParameterJsonViewerRef | null;
-                          }}
-                          className="agent-settings-json-viewer"
-                          height={220}
-                          width="100%"
-                          showSearch={true}
-                          options={{
-                            autoWrap: true,
-                            lineHeight: 20,
-                            readOnly: saving,
-                            formatOptions: {
-                              tabSize: 2,
-                              insertSpaces: true,
-                              eol: "\n",
-                            },
-                          }}
-                          value={child.parametersText}
-                          onChange={function handleChildParametersJsonChange() {
-                            setParameterEditorRevision(function updateRevision(
-                              revision,
-                            ) {
-                              return revision + 1;
-                            });
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))
+                );
+              })
             : null}
         </div>
       </section>
+
+      <Modal
+        className="ai-provider-modal agent-settings-modal"
+        footer={null}
+        maskClosable={!saving}
+        onCancel={handleCloseAgentEditor}
+        title={agentEditorTitle}
+        visible={agentEditorVisible}
+        width={900}
+      >
+        {editingAgentTarget?.kind === "supervisor" ? (
+          <form
+            className="ai-provider-form"
+            onSubmit={function handleSupervisorEditorSubmit(event) {
+              event.preventDefault();
+              handleCloseAgentEditor();
+            }}
+          >
+            <div className="agent-settings-modal-body">
+              <div className="agent-settings-grid">
+                <label className="ai-provider-field">
+                  <span>Name</span>
+                  <input
+                    name="name"
+                    value={form.supervisor.name}
+                    disabled={loading || saving}
+                    onChange={handleSupervisorInputChange}
+                  />
+                </label>
+                <label className="ai-provider-field">
+                  <span>最大迭代次数</span>
+                  <input
+                    name="maxIterations"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={form.supervisor.maxIterations}
+                    disabled={loading || saving}
+                    onChange={handleSupervisorInputChange}
+                  />
+                </label>
+                {form.toolRegistry.map(function renderSupervisorToolToggle(
+                  toolConfig,
+                ) {
+                  return (
+                    <label
+                      className="agent-settings-tool-toggle"
+                      key={toolConfig.name}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.supervisor.toolNames.includes(
+                          toolConfig.name,
+                        )}
+                        disabled={loading || saving}
+                        onChange={function handleSupervisorToolToggle(event) {
+                          handleSupervisorToolChange(
+                            toolConfig.name,
+                            event.target.checked,
+                          );
+                        }}
+                      />
+                      <span title={toolConfig.description}>{toolConfig.name}</span>
+                    </label>
+                  );
+                })}
+                <label className="agent-settings-tool-toggle">
+                  <input
+                    type="checkbox"
+                    checked={form.supervisor.customModelEnabled}
+                    disabled={loading || saving}
+                    onChange={handleSupervisorCustomModelChange}
+                  />
+                  <span>自定义模型</span>
+                </label>
+                {form.supervisor.customModelEnabled ? (
+                  <>
+                    <label className="ai-provider-field">
+                      <span>模型提供商</span>
+                      <select
+                        value={form.supervisor.providerId}
+                        disabled={loading || saving || modelProviders.length === 0}
+                        onChange={handleSupervisorModelProviderChange}
+                      >
+                        <option value="">选择提供商</option>
+                        {modelProviders.map(function renderAgentProviderOption(
+                          provider,
+                        ) {
+                          return (
+                            <option key={provider.id} value={String(provider.id)}>
+                              {formatAgentProviderOption(provider)}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                    <label className="ai-provider-field">
+                      <span>模型</span>
+                      <select
+                        value={form.supervisor.model}
+                        disabled={
+                          loading || saving || !form.supervisor.providerId
+                        }
+                        onFocus={function handleSupervisorModelSelectFocus() {
+                          handleAgentModelSelectFocus(form.supervisor.providerId);
+                        }}
+                        onChange={handleSupervisorModelChange}
+                      >
+                        <option value="">
+                          {modelLoadingByProvider[form.supervisor.providerId]
+                            ? "正在加载模型..."
+                            : "使用提供商默认模型"}
+                        </option>
+                        {agentModelOptionsForProvider(
+                          form.supervisor.providerId,
+                          form.supervisor.model,
+                          modelProviders,
+                          modelOptionsByProvider,
+                        ).map(function renderSupervisorModelOption(model) {
+                          return (
+                            <option key={model.id} value={model.id}>
+                              {formatAgentModelOption(model)}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+                <label className="ai-provider-field ai-provider-field-wide">
+                  <span>Description</span>
+                  <input
+                    name="description"
+                    value={form.supervisor.description}
+                    disabled={loading || saving}
+                    onChange={handleSupervisorInputChange}
+                  />
+                </label>
+                <label className="ai-provider-field ai-provider-field-wide">
+                  <span>Instruction</span>
+                  <textarea
+                    name="instruction"
+                    className="agent-settings-textarea agent-settings-instruction"
+                    value={form.supervisor.instruction}
+                    disabled={loading || saving}
+                    spellCheck={false}
+                    onChange={handleSupervisorInputChange}
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="ai-provider-form-actions">
+              <button
+                type="button"
+                className="settings-secondary-button"
+                disabled={saving}
+                onClick={handleCloseAgentEditor}
+              >
+                关闭
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {editingAgentTarget?.kind === "child" && editingChild ? (
+          <form
+            className="ai-provider-form"
+            onSubmit={function handleChildEditorSubmit(event) {
+              event.preventDefault();
+              handleCloseAgentEditor();
+            }}
+          >
+            <div className="agent-settings-modal-body">
+              <div className="agent-child-card-actions agent-settings-modal-toolbar">
+                <label className="agent-settings-inline-toggle">
+                  <input
+                    type="checkbox"
+                    checked={editingChild.enabled}
+                    disabled={saving}
+                    onChange={function handleChildEnabledToggle(event) {
+                      handleChildEnabledChange(
+                        editingChildIndex,
+                        event.target.checked,
+                      );
+                    }}
+                  />
+                  <span>启用</span>
+                </label>
+                <div className="agent-settings-inline-toggle">
+                  <Switch
+                    checked={editingChild.shareChatHistory}
+                    disabled={saving}
+                    aria-label="共享历史"
+                    onChange={function handleChildShareChatHistoryToggle(checked) {
+                      handleChildShareChatHistoryChange(
+                        editingChildIndex,
+                        checked,
+                      );
+                    }}
+                  />
+                  <span>共享历史</span>
+                </div>
+                <button
+                  type="button"
+                  className="settings-secondary-button"
+                  disabled={saving || editingChildIndex === 0}
+                  onClick={function handleMoveChildUpClick() {
+                    handleMoveChildClick(editingChildIndex, -1);
+                  }}
+                >
+                  上移
+                </button>
+                <button
+                  type="button"
+                  className="settings-secondary-button"
+                  disabled={
+                    saving || editingChildIndex === form.children.length - 1
+                  }
+                  onClick={function handleMoveChildDownClick() {
+                    handleMoveChildClick(editingChildIndex, 1);
+                  }}
+                >
+                  下移
+                </button>
+                <button
+                  type="button"
+                  className="settings-secondary-button ai-provider-danger-button"
+                  disabled={saving}
+                  onClick={function handleRemoveAgentChildClick() {
+                    handleRemoveChildClick(editingChildIndex);
+                  }}
+                >
+                  删除
+                </button>
+              </div>
+
+              <div className="agent-settings-grid">
+                <label className="ai-provider-field">
+                  <span>Name</span>
+                  <input
+                    value={editingChild.name}
+                    disabled={saving}
+                    onChange={function handleChildNameChange(event) {
+                      handleChildInputChange(
+                        editingChildIndex,
+                        "name",
+                        event.target.value,
+                      );
+                    }}
+                  />
+                </label>
+                <label className="ai-provider-field">
+                  <span>Task</span>
+                  <input
+                    value={editingChild.task}
+                    disabled={saving}
+                    onChange={function handleChildTaskChange(event) {
+                      handleChildInputChange(
+                        editingChildIndex,
+                        "task",
+                        event.target.value,
+                      );
+                    }}
+                  />
+                </label>
+                <label className="ai-provider-field">
+                  <span>最大迭代次数</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={editingChild.maxIterations}
+                    disabled={saving}
+                    onChange={function handleChildMaxIterationsChange(event) {
+                      handleChildInputChange(
+                        editingChildIndex,
+                        "maxIterations",
+                        event.target.value,
+                      );
+                    }}
+                  />
+                </label>
+                {form.toolRegistry.map(function renderChildToolToggle(toolConfig) {
+                  return (
+                    <label
+                      className="agent-settings-tool-toggle"
+                      key={toolConfig.name}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editingChild.toolNames.includes(toolConfig.name)}
+                        disabled={saving}
+                        onChange={function handleChildToolToggle(event) {
+                          handleChildToolChange(
+                            editingChildIndex,
+                            toolConfig.name,
+                            event.target.checked,
+                          );
+                        }}
+                      />
+                      <span title={toolConfig.description}>{toolConfig.name}</span>
+                    </label>
+                  );
+                })}
+                <label className="agent-settings-tool-toggle">
+                  <input
+                    type="checkbox"
+                    checked={editingChild.customModelEnabled}
+                    disabled={saving}
+                    onChange={function handleChildCustomModelToggle(event) {
+                      handleChildCustomModelChange(
+                        editingChildIndex,
+                        event.target.checked,
+                      );
+                    }}
+                  />
+                  <span>自定义模型</span>
+                </label>
+                {editingChild.customModelEnabled ? (
+                  <>
+                    <label className="ai-provider-field">
+                      <span>模型提供商</span>
+                      <select
+                        value={editingChild.providerId}
+                        disabled={saving || modelProviders.length === 0}
+                        onChange={function handleChildProviderSelect(event) {
+                          handleChildModelProviderChange(
+                            editingChildIndex,
+                            event.target.value,
+                          );
+                        }}
+                      >
+                        <option value="">选择提供商</option>
+                        {modelProviders.map(function renderChildProviderOption(
+                          provider,
+                        ) {
+                          return (
+                            <option key={provider.id} value={String(provider.id)}>
+                              {formatAgentProviderOption(provider)}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                    <label className="ai-provider-field">
+                      <span>模型</span>
+                      <select
+                        value={editingChild.model}
+                        disabled={saving || !editingChild.providerId}
+                        onFocus={function handleChildModelSelectFocus() {
+                          handleAgentModelSelectFocus(editingChild.providerId);
+                        }}
+                        onChange={function handleChildModelSelect(event) {
+                          handleChildModelChange(
+                            editingChildIndex,
+                            event.target.value,
+                          );
+                        }}
+                      >
+                        <option value="">
+                          {modelLoadingByProvider[editingChild.providerId]
+                            ? "正在加载模型..."
+                            : "使用提供商默认模型"}
+                        </option>
+                        {agentModelOptionsForProvider(
+                          editingChild.providerId,
+                          editingChild.model,
+                          modelProviders,
+                          modelOptionsByProvider,
+                        ).map(function renderChildModelOption(model) {
+                          return (
+                            <option key={model.id} value={model.id}>
+                              {formatAgentModelOption(model)}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+                <label className="ai-provider-field ai-provider-field-wide">
+                  <span>Description</span>
+                  <input
+                    value={editingChild.description}
+                    disabled={saving}
+                    onChange={function handleChildDescriptionChange(event) {
+                      handleChildInputChange(
+                        editingChildIndex,
+                        "description",
+                        event.target.value,
+                      );
+                    }}
+                  />
+                </label>
+                <label className="ai-provider-field ai-provider-field-wide">
+                  <span>Instruction</span>
+                  <textarea
+                    className="agent-settings-textarea agent-settings-instruction"
+                    value={editingChild.instruction}
+                    disabled={saving}
+                    spellCheck={false}
+                    onChange={function handleChildInstructionChange(event) {
+                      handleChildInputChange(
+                        editingChildIndex,
+                        "instruction",
+                        event.target.value,
+                      );
+                    }}
+                  />
+                </label>
+                <div className="ai-provider-field ai-provider-field-wide agent-settings-json-field">
+                  <span>Parameters JSON</span>
+                  <div className="agent-settings-json-viewer-wrap">
+                    <JsonViewer
+                      ref={function bindChildParametersJsonViewer(instance) {
+                        parameterEditorRefs.current[editingChild.id] =
+                          instance as AgentParameterJsonViewerRef | null;
+                      }}
+                      className="agent-settings-json-viewer"
+                      height={220}
+                      width="100%"
+                      showSearch={true}
+                      options={{
+                        autoWrap: true,
+                        lineHeight: 20,
+                        readOnly: saving,
+                        formatOptions: {
+                          tabSize: 2,
+                          insertSpaces: true,
+                          eol: "\n",
+                        },
+                      }}
+                      value={editingChild.parametersText}
+                      onChange={function handleChildParametersJsonChange() {
+                        setParameterEditorRevision(function updateRevision(
+                          revision,
+                        ) {
+                          return revision + 1;
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="ai-provider-form-actions">
+              <button
+                type="button"
+                className="settings-secondary-button"
+                disabled={saving}
+                onClick={handleCloseAgentEditor}
+              >
+                关闭
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </Modal>
     </article>
   );
 }

@@ -66,14 +66,28 @@ type StreamEvent struct {
 	Stage string `json:"stage,omitempty" example:"routed"`
 	// Task 表示顶层 Agent 选择的任务类型。
 	Task string `json:"task,omitempty" example:"polish"`
+	// ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。
+	ReplyIndex int `json:"reply_index,omitempty" example:"1"`
 	// Content 表示增量文本或完整文本内容。
 	Content string `json:"content,omitempty" example:"雨夜里，门外的脚步声一点点逼近。"`
+	// Replies 表示 done 事件中返回的分段助手回复列表。
+	Replies []StreamReply `json:"replies,omitempty"`
 	// ConversationID 表示本轮回复保存到的 Agent 会话 ID，仅 done 事件返回。
 	ConversationID uint64 `json:"conversation_id,omitempty" example:"1"`
 	// ConversationTitle 表示本轮回复保存到的 Agent 会话标题，仅 done 事件返回。
 	ConversationTitle string `json:"conversation_title,omitempty" example:"讨论第三章节奏"`
 	// Message 表示错误或状态说明。
 	Message string `json:"message,omitempty" example:"ok"`
+}
+
+// StreamReply 表示 Swagger 文档中的单段 Agent 助手回复。
+type StreamReply struct {
+	// ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。
+	ReplyIndex int `json:"reply_index" example:"1"`
+	// Task 表示产生该回复段的任务来源。
+	Task string `json:"task,omitempty" example:"polish"`
+	// Content 表示该回复段的完整文本内容。
+	Content string `json:"content" example:"我先读取当前章节内容。"`
 }
 
 // MessageData 表示 Swagger 文档中的 Agent 历史消息响应数据。

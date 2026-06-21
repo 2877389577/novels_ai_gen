@@ -603,6 +603,7 @@ function parseSettingsSectionPath(pathname: string): SettingsSection | null {
   if (
     section === "config" ||
     section === "agents" ||
+    section === "agent-tools" ||
     section === "logs" ||
     section === "system" ||
     section === "ai-providers"

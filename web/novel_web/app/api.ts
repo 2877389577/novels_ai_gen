@@ -95,8 +95,20 @@ export interface NovelAgentStreamDeltaEvent {
   type: "delta";
   // task 表示顶层 Agent 选择的任务类型。
   task?: string;
+  // reply_index 表示同一次请求中的可见助手回复段序号，从 1 开始。
+  reply_index?: number;
   // content 表示模型生成的增量文本。
   content?: string;
+}
+
+// NovelAgentStreamReplyItem 表示小说写作 Agent 单段完整助手回复。
+export interface NovelAgentStreamReplyItem {
+  // reply_index 表示同一次请求中的可见助手回复段序号，从 1 开始。
+  reply_index: number;
+  // task 表示产生该回复段的任务来源。
+  task?: string;
+  // content 表示该回复段的完整文本。
+  content: string;
 }
 
 // NovelAgentStreamDoneEvent 表示小说写作 Agent 流式生成完成事件。
@@ -107,6 +119,8 @@ export interface NovelAgentStreamDoneEvent {
   task?: string;
   // content 表示完整生成文本。
   content?: string;
+  // replies 表示本轮请求按可见输出边界拆分后的助手回复列表。
+  replies?: NovelAgentStreamReplyItem[];
   // conversation_id 表示本轮回复保存到的 Agent 会话 ID。
   conversation_id?: number;
   // conversation_title 表示本轮回复保存到的 Agent 会话标题。

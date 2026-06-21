@@ -105,6 +105,53 @@ func (r *Repository) ListRecentMessages(ctx context.Context, conversationID uint
 	return items, nil
 }
 
+// ListRecentMessagesByUserRounds 查询指定会话最近若干个用户轮次的 Agent 记忆消息，并按时间正序返回。
+// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 rounds 表示最多返回的最近用户消息轮次数量。
+func (r *Repository) ListRecentMessagesByUserRounds(ctx context.Context, conversationID uint64, rounds int) ([]biznovelagent.MessageRecord, error) {
+	if rounds <= 0 {
+		return []biznovelagent.MessageRecord{}, nil
+	}
+
+	var boundary biznovelagent.MessageRecord
+	err := r.db.WithContext(ctx).
+		Where("conversation_id = ? AND role = ?", conversationID, biznovelagent.MessageRoleUser).
+		Order("created_at DESC").
+		Order("id DESC").
+		Offset(rounds - 1).
+		Limit(1).
+		Take(&boundary).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		var items []biznovelagent.MessageRecord
+		if err := r.db.WithContext(ctx).
+			Where("conversation_id = ?", conversationID).
+			Order("created_at ASC").
+			Order("id ASC").
+			Find(&items).Error; err != nil {
+			return nil, fmt.Errorf("查询 Agent 全部轮次消息失败: %w", err)
+		}
+		return items, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("查询 Agent 记忆轮次边界失败: %w", err)
+	}
+
+	var items []biznovelagent.MessageRecord
+	if err := r.db.WithContext(ctx).
+		Where(
+			"conversation_id = ? AND (created_at > ? OR (created_at = ? AND id >= ?))",
+			conversationID,
+			boundary.CreatedAt,
+			boundary.CreatedAt,
+			boundary.ID,
+		).
+		Order("created_at ASC").
+		Order("id ASC").
+		Find(&items).Error; err != nil {
+		return nil, fmt.Errorf("查询 Agent 记忆轮次消息失败: %w", err)
+	}
+	return items, nil
+}
+
 // CountMessagesAfterID 统计指定消息 ID 之后的 Agent 记忆消息数量。
 // 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID。
 func (r *Repository) CountMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64) (int64, error) {

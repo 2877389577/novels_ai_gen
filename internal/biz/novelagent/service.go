@@ -43,6 +43,9 @@ type MemoryRepository interface {
 	// ListRecentMessages 查询指定会话最近的 Agent 记忆消息，并按时间正序返回。
 	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 limit 表示最多返回的消息数量。
 	ListRecentMessages(ctx context.Context, conversationID uint64, limit int) ([]MessageRecord, error)
+	// ListRecentMessagesByUserRounds 查询指定会话最近若干个用户轮次的 Agent 记忆消息，并按时间正序返回。
+	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 rounds 表示最多返回的最近用户消息轮次数量。
+	ListRecentMessagesByUserRounds(ctx context.Context, conversationID uint64, rounds int) ([]MessageRecord, error)
 	// CountMessagesAfterID 统计指定消息 ID 之后的 Agent 记忆消息数量。
 	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID。
 	CountMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64) (int64, error)
@@ -172,7 +175,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		if delta.Content == "" {
 			return nil
 		}
-		return writer.WriteEvent(StreamEvent{Type: "delta", Task: delta.Task, Content: delta.Content})
+		return writer.WriteEvent(StreamEvent{Type: "delta", Task: delta.Task, ReplyIndex: delta.ReplyIndex, Content: delta.Content})
 	})
 	if err != nil {
 		if IsCanceledError(ctx, err) {
@@ -213,6 +216,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		Type:              "done",
 		Task:              result.Task,
 		Content:           result.Content,
+		Replies:           streamRepliesForResult(result),
 		ConversationID:    savedTurn.ConversationID,
 		ConversationTitle: savedTurn.ConversationTitle,
 		Message:           "ok",
@@ -257,7 +261,7 @@ func (s *Service) ListConversationMessages(ctx context.Context, novelID uint64, 
 		return MessageListResponse{}, ErrConversationNotFound
 	}
 
-	messages, err := s.memoryRepo.ListRecentMessages(ctx, conversation.ID, memoryMessageLimit(s.currentConfig()))
+	messages, err := s.memoryRepo.ListRecentMessagesByUserRounds(ctx, conversation.ID, memoryRecentRounds(s.currentConfig()))
 	if err != nil {
 		return MessageListResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
@@ -282,7 +286,7 @@ func (s *Service) ListMessages(ctx context.Context, novelID uint64) (MessageList
 		return MessageListResponse{Items: []MessageResponse{}}, nil
 	}
 
-	messages, err := s.memoryRepo.ListRecentMessages(ctx, conversation.ID, memoryMessageLimit(s.currentConfig()))
+	messages, err := s.memoryRepo.ListRecentMessagesByUserRounds(ctx, conversation.ID, memoryRecentRounds(s.currentConfig()))
 	if err != nil {
 		return MessageListResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
@@ -543,7 +547,7 @@ func (s *Service) memoryForRun(ctx context.Context, cfg *appconfig.AppConfig, no
 		return AgentMemoryInput{}, ErrConversationNotFound
 	}
 
-	messages, err := s.memoryRepo.ListRecentMessages(ctx, conversation.ID, memoryMessageLimit(cfg))
+	messages, err := s.memoryRepo.ListRecentMessagesByUserRounds(ctx, conversation.ID, memoryRecentRounds(cfg))
 	if err != nil {
 		return AgentMemoryInput{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
@@ -584,6 +588,7 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConf
 	if assistantModel == "" {
 		assistantModel = req.Model
 	}
+	requestID := requestid.FromContext(ctx)
 	messages := []MessageRecord{
 		{
 			ConversationID: conversation.ID,
@@ -593,19 +598,29 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConf
 			Content:        req.Message,
 			ProviderID:     entryProviderID,
 			Model:          req.Model,
-			RequestID:      requestid.FromContext(ctx),
+			RequestID:      requestID,
 		},
-		{
+	}
+	for _, reply := range agentRepliesForSave(result) {
+		replyProviderID := reply.ProviderID
+		if replyProviderID == 0 {
+			replyProviderID = assistantProviderID
+		}
+		replyModel := strings.TrimSpace(reply.Model)
+		if replyModel == "" {
+			replyModel = assistantModel
+		}
+		messages = append(messages, MessageRecord{
 			ConversationID: conversation.ID,
 			NovelID:        req.NovelID,
 			ChapterID:      chapterID,
 			Role:           MessageRoleAssistant,
-			Task:           result.Task,
-			Content:        result.Content,
-			ProviderID:     assistantProviderID,
-			Model:          assistantModel,
-			RequestID:      requestid.FromContext(ctx),
-		},
+			Task:           reply.Task,
+			Content:        reply.Content,
+			ProviderID:     replyProviderID,
+			Model:          replyModel,
+			RequestID:      requestID,
+		})
 	}
 	summary, err := s.summaryUpdateForTurn(ctx, cfg, runtime, conversation, messages)
 	if err != nil {
@@ -720,6 +735,68 @@ func memoryRecentRounds(cfg *appconfig.AppConfig) int {
 		return defaultMemoryRecentRounds
 	}
 	return cfg.AI.Agent.Memory.RecentRounds
+}
+
+// normalizedAgentReplies 返回可展示和可保存的分段助手回复列表。
+// 参数 result 表示 Agent 本轮运行的最终结果。
+func normalizedAgentReplies(result AgentResult) []AgentReply {
+	replies := make([]AgentReply, 0, len(result.Replies))
+	for _, reply := range result.Replies {
+		if reply.Content == "" {
+			continue
+		}
+		if reply.ReplyIndex <= 0 {
+			reply.ReplyIndex = len(replies) + 1
+		}
+		if strings.TrimSpace(reply.Task) == "" {
+			reply.Task = result.Task
+		}
+		if strings.TrimSpace(reply.AgentName) == "" {
+			reply.AgentName = result.AgentName
+		}
+		if reply.ProviderID == 0 {
+			reply.ProviderID = result.ProviderID
+		}
+		if strings.TrimSpace(reply.Model) == "" {
+			reply.Model = result.Model
+		}
+		replies = append(replies, reply)
+	}
+	if len(replies) == 0 && result.Content != "" {
+		replies = append(replies, AgentReply{
+			ReplyIndex: 1,
+			Task:       result.Task,
+			Content:    result.Content,
+			AgentName:  result.AgentName,
+			ProviderID: result.ProviderID,
+			Model:      result.Model,
+		})
+	}
+	return replies
+}
+
+// streamRepliesForResult 将 Agent 运行结果转换为 done 事件中的分段回复列表。
+// 参数 result 表示 Agent 本轮运行的最终结果。
+func streamRepliesForResult(result AgentResult) []StreamReply {
+	replies := normalizedAgentReplies(result)
+	if len(replies) == 0 {
+		return nil
+	}
+	items := make([]StreamReply, 0, len(replies))
+	for _, reply := range replies {
+		items = append(items, StreamReply{
+			ReplyIndex: reply.ReplyIndex,
+			Task:       reply.Task,
+			Content:    reply.Content,
+		})
+	}
+	return items
+}
+
+// agentRepliesForSave 返回需要写入记忆表的分段助手回复列表。
+// 参数 result 表示 Agent 本轮运行的最终结果。
+func agentRepliesForSave(result AgentResult) []AgentReply {
+	return normalizedAgentReplies(result)
 }
 
 // memoryMessageLimit 返回最近对话轮数对应的消息条数上限。

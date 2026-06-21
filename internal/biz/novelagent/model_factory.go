@@ -400,6 +400,16 @@ func applyResultModelInfo(result AgentResult, supervisorName string, registry ag
 	cfg := registry.configForAgent(result.AgentName, supervisorName)
 	result.ProviderID = cfg.ProviderID
 	result.Model = cfg.Model
+	for index := range result.Replies {
+		replyAgentName := result.Replies[index].AgentName
+		if strings.TrimSpace(replyAgentName) == "" {
+			replyAgentName = result.AgentName
+			result.Replies[index].AgentName = replyAgentName
+		}
+		replyCfg := registry.configForAgent(replyAgentName, supervisorName)
+		result.Replies[index].ProviderID = replyCfg.ProviderID
+		result.Replies[index].Model = replyCfg.Model
+	}
 	return result
 }
 
@@ -1149,6 +1159,7 @@ func childToolsConfig(tools []tool.BaseTool) adk.ToolsConfig {
 func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.Message]], taskByAgent map[string]string, emit func(delta AgentDelta) error) (AgentResult, error) {
 	result := AgentResult{Task: taskDirect}
 	var full strings.Builder
+	nextReplyIndex := 0
 	childSeen := false
 	for {
 		event, ok := iterator.Next()
@@ -1169,7 +1180,7 @@ func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*sch
 		if task == taskDirect && childSeen {
 			continue
 		}
-		if err := emitChatMessageVariant(event.AgentName, task, event.Output.MessageOutput, &full, &result, emit); err != nil {
+		if err := emitChatMessageVariant(event.AgentName, task, event.Output.MessageOutput, &nextReplyIndex, &full, &result, emit); err != nil {
 			return result, err
 		}
 	}
@@ -1181,6 +1192,7 @@ func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*sch
 func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.AgenticMessage]], taskByAgent map[string]string, emit func(delta AgentDelta) error) (AgentResult, error) {
 	result := AgentResult{Task: taskDirect}
 	var full strings.Builder
+	nextReplyIndex := 0
 	childSeen := false
 	for {
 		event, ok := iterator.Next()
@@ -1201,7 +1213,7 @@ func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*
 		if task == taskDirect && childSeen {
 			continue
 		}
-		if err := emitAgenticMessageVariant(event.AgentName, task, event.Output.MessageOutput, &full, &result, emit); err != nil {
+		if err := emitAgenticMessageVariant(event.AgentName, task, event.Output.MessageOutput, &nextReplyIndex, &full, &result, emit); err != nil {
 			return result, err
 		}
 	}
@@ -1209,13 +1221,14 @@ func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*
 }
 
 // emitChatMessageVariant 输出 schema.Message 事件中的助手文本。
-// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
-func emitChatMessageVariant(agentName string, task string, variant *adk.TypedMessageVariant[*schema.Message], full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
+// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 nextReplyIndex 表示下一段可见助手回复序号；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
+func emitChatMessageVariant(agentName string, task string, variant *adk.TypedMessageVariant[*schema.Message], nextReplyIndex *int, full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
 	if variant.IsStreaming {
 		if variant.MessageStream == nil {
 			return nil
 		}
 		defer variant.MessageStream.Close()
+		replyIndex := 0
 		for {
 			chunk, err := variant.MessageStream.Recv()
 			if errors.Is(err, io.EOF) {
@@ -1227,7 +1240,10 @@ func emitChatMessageVariant(agentName string, task string, variant *adk.TypedMes
 			if !isAssistantChatMessage(variant, chunk) {
 				continue
 			}
-			if err := emitTextDelta(agentName, task, chunk.Content, full, result, emit); err != nil {
+			if replyIndex == 0 {
+				replyIndex = allocateAgentReplyIndex(nextReplyIndex)
+			}
+			if err := emitTextDelta(agentName, task, replyIndex, chunk.Content, full, result, emit); err != nil {
 				return err
 			}
 		}
@@ -1236,17 +1252,18 @@ func emitChatMessageVariant(agentName string, task string, variant *adk.TypedMes
 	if !isAssistantChatMessage(variant, variant.Message) {
 		return nil
 	}
-	return emitTextDelta(agentName, task, variant.Message.Content, full, result, emit)
+	return emitTextDelta(agentName, task, allocateAgentReplyIndex(nextReplyIndex), variant.Message.Content, full, result, emit)
 }
 
 // emitAgenticMessageVariant 输出 schema.AgenticMessage 事件中的助手文本。
-// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
-func emitAgenticMessageVariant(agentName string, task string, variant *adk.TypedMessageVariant[*schema.AgenticMessage], full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
+// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 nextReplyIndex 表示下一段可见助手回复序号；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
+func emitAgenticMessageVariant(agentName string, task string, variant *adk.TypedMessageVariant[*schema.AgenticMessage], nextReplyIndex *int, full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
 	if variant.IsStreaming {
 		if variant.MessageStream == nil {
 			return nil
 		}
 		defer variant.MessageStream.Close()
+		replyIndex := 0
 		for {
 			chunk, err := variant.MessageStream.Recv()
 			if errors.Is(err, io.EOF) {
@@ -1258,7 +1275,10 @@ func emitAgenticMessageVariant(agentName string, task string, variant *adk.Typed
 			if !isAssistantAgenticMessage(variant, chunk) {
 				continue
 			}
-			if err := emitTextDelta(agentName, task, agenticMessageText(chunk), full, result, emit); err != nil {
+			if replyIndex == 0 {
+				replyIndex = allocateAgentReplyIndex(nextReplyIndex)
+			}
+			if err := emitTextDelta(agentName, task, replyIndex, agenticMessageText(chunk), full, result, emit); err != nil {
 				return err
 			}
 		}
@@ -1267,7 +1287,7 @@ func emitAgenticMessageVariant(agentName string, task string, variant *adk.Typed
 	if !isAssistantAgenticMessage(variant, variant.Message) {
 		return nil
 	}
-	return emitTextDelta(agentName, task, agenticMessageText(variant.Message), full, result, emit)
+	return emitTextDelta(agentName, task, allocateAgentReplyIndex(nextReplyIndex), agenticMessageText(variant.Message), full, result, emit)
 }
 
 // isAssistantChatMessage 判断 schema.Message 是否为可展示的助手文本。
@@ -1299,10 +1319,13 @@ func isAssistantAgenticMessage(variant *adk.TypedMessageVariant[*schema.AgenticM
 }
 
 // emitTextDelta 写出文本增量并累积完整结果。
-// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 content 表示文本增量；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
-func emitTextDelta(agentName string, task string, content string, full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
+// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 replyIndex 表示同一次请求中的可见助手回复段序号；参数 content 表示文本增量；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
+func emitTextDelta(agentName string, task string, replyIndex int, content string, full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
 	if content == "" {
 		return nil
+	}
+	if replyIndex <= 0 {
+		replyIndex = 1
 	}
 	result.Task = task
 	if strings.TrimSpace(agentName) != "" {
@@ -1310,7 +1333,39 @@ func emitTextDelta(agentName string, task string, content string, full *strings.
 	}
 	full.WriteString(content)
 	result.Content = full.String()
-	return emit(AgentDelta{Task: task, Content: content})
+	appendAgentReplyDelta(result, replyIndex, agentName, task, content)
+	return emit(AgentDelta{Task: task, ReplyIndex: replyIndex, Content: content})
+}
+
+// allocateAgentReplyIndex 分配下一段可见助手回复的序号。
+// 参数 nextReplyIndex 表示当前已分配的最大回复段序号。
+func allocateAgentReplyIndex(nextReplyIndex *int) int {
+	if nextReplyIndex == nil {
+		return 1
+	}
+	*nextReplyIndex = *nextReplyIndex + 1
+	return *nextReplyIndex
+}
+
+// appendAgentReplyDelta 将文本增量追加到对应的分段助手回复结果中。
+// 参数 result 表示 Agent 最终结果；参数 replyIndex 表示回复段序号；参数 agentName 表示产生回复段的 Eino Agent 名称；参数 task 表示回复段任务来源；参数 content 表示需要追加的文本增量。
+func appendAgentReplyDelta(result *AgentResult, replyIndex int, agentName string, task string, content string) {
+	if result == nil || content == "" {
+		return
+	}
+	if len(result.Replies) == 0 || result.Replies[len(result.Replies)-1].ReplyIndex != replyIndex {
+		result.Replies = append(result.Replies, AgentReply{
+			ReplyIndex: replyIndex,
+			Task:       task,
+			AgentName:  strings.TrimSpace(agentName),
+		})
+	}
+	reply := &result.Replies[len(result.Replies)-1]
+	reply.Task = task
+	if strings.TrimSpace(agentName) != "" {
+		reply.AgentName = agentName
+	}
+	reply.Content += content
 }
 
 // taskForAgent 根据 Eino Agent 名称映射前端展示任务。

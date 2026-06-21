@@ -185,14 +185,28 @@ type StreamEvent struct {
 	Stage string `json:"stage,omitempty" example:"routed"`
 	// Task 表示顶层 Agent 选择的任务类型。
 	Task string `json:"task,omitempty" example:"polish"`
+	// ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。
+	ReplyIndex int `json:"reply_index,omitempty" example:"1"`
 	// Content 表示增量文本或完整文本内容。
 	Content string `json:"content,omitempty" example:"雨夜里，门外的脚步声一点点逼近。"`
+	// Replies 表示 done 事件中返回的分段助手回复列表。
+	Replies []StreamReply `json:"replies,omitempty"`
 	// ConversationID 表示本轮回复保存到的 Agent 会话 ID，仅 done 事件返回。
 	ConversationID uint64 `json:"conversation_id,omitempty" example:"1"`
 	// ConversationTitle 表示本轮回复保存到的 Agent 会话标题，仅 done 事件返回。
 	ConversationTitle string `json:"conversation_title,omitempty" example:"讨论第三章节奏"`
 	// Message 表示错误或状态说明。
 	Message string `json:"message,omitempty" example:"ok"`
+}
+
+// StreamReply 表示一次 Agent 请求中的单段可见助手回复。
+type StreamReply struct {
+	// ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。
+	ReplyIndex int `json:"reply_index" example:"1"`
+	// Task 表示产生该回复段的任务来源。
+	Task string `json:"task,omitempty" example:"polish"`
+	// Content 表示该回复段的完整文本内容。
+	Content string `json:"content" example:"我先读取当前章节内容。"`
 }
 
 // EventWriter 表示 Agent 流事件写出器。
@@ -242,8 +256,26 @@ type RuntimeModelConfig struct {
 type AgentDelta struct {
 	// Task 表示产生该增量的任务来源，direct 表示顶层 Agent 直接回答。
 	Task string
+	// ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。
+	ReplyIndex int
 	// Content 表示模型生成的增量文本。
 	Content string
+}
+
+// AgentReply 表示 Agent 运行过程中产生的一段可见助手回复。
+type AgentReply struct {
+	// ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。
+	ReplyIndex int
+	// Task 表示产生该回复段的任务来源。
+	Task string
+	// Content 表示该回复段的完整文本。
+	Content string
+	// AgentName 表示产生该回复段的 Eino Agent 名称。
+	AgentName string
+	// ProviderID 表示产生该回复段的实际 AI 提供商 ID。
+	ProviderID uint64
+	// Model 表示产生该回复段的实际模型标识。
+	Model string
 }
 
 // AgentResult 表示 Agent 流式对话完成后的结果。
@@ -252,6 +284,8 @@ type AgentResult struct {
 	Task string
 	// Content 表示完整的模型回复文本。
 	Content string
+	// Replies 表示本轮请求中按可见输出边界拆分后的助手回复。
+	Replies []AgentReply
 	// AgentName 表示最终产生回复的 Eino Agent 名称。
 	AgentName string
 	// ProviderID 表示最终产生回复的 AI 提供商 ID。
