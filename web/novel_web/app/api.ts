@@ -173,6 +173,8 @@ export interface NovelAgentChatParams {
   novelId: number;
   // chapterId 表示当前请求关联的章节 ID，普通对话可为空。
   chapterId?: number;
+  // chapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。
+  chapterNumber: number;
   // signal 表示用于取消 AI 流式请求的浏览器 AbortSignal。
   signal?: AbortSignal;
 }
@@ -1705,6 +1707,12 @@ export async function streamNovelAgentChat(
   if (!Number.isSafeInteger(params.novelId) || params.novelId <= 0) {
     throw new Error("当前小说信息缺失，请刷新后重试");
   }
+  if (
+    !Number.isSafeInteger(params.chapterNumber) ||
+    params.chapterNumber <= 0
+  ) {
+    throw new Error("当前章节号缺失，请刷新后重试");
+  }
 
   const response = await fetch("/api/v1/ai/agents/chat/stream", {
     method: "POST",
@@ -1718,6 +1726,7 @@ export async function streamNovelAgentChat(
       message: params.message,
       novel_id: params.novelId,
       chapter_id: params.chapterId,
+      chapter_number: params.chapterNumber,
     }),
     signal: params.signal,
   });

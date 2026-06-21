@@ -1469,6 +1469,10 @@ definitions:
         description: ChapterID 表示当前请求关联的章节 ID，普通对话可为空。
         example: 1
         type: integer
+      chapter_number:
+        description: ChapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。
+        example: 3
+        type: integer
       message:
         description: Message 表示用户输入的写作需求或问题。
         example: 帮我润色这一段，让语气更紧张

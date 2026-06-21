@@ -5972,6 +5972,11 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 1
                 },
+                "chapter_number": {
+                    "description": "ChapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。",
+                    "type": "integer",
+                    "example": 3
+                },
                 "message": {
                     "description": "Message 表示用户输入的写作需求或问题。",
                     "type": "string",

@@ -20,6 +20,8 @@ type ChatRequest struct {
 	NovelID uint64 `json:"novel_id" example:"1"`
 	// ChapterID 表示当前请求关联的章节 ID，普通对话可为空。
 	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
+	// ChapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。
+	ChapterNumber int `json:"chapter_number,omitempty" example:"3"`
 }
 
 const (

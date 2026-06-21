@@ -147,8 +147,18 @@ interface ChapterAiStreamRequest {
   assistantMessageID: string;
   // savedChapterID 表示发送请求前已保存到后端的章节 ID。
   savedChapterID: number;
+  // savedChapterNumber 表示发送请求前已确认的章节号，即“第 x 章”中的 x。
+  savedChapterNumber: number;
   // retryPayload 表示本次请求使用的原始 AI 调用参数。
   retryPayload: ChapterAiRetryPayload;
+}
+
+// ChapterAiSavedChapterContext 表示发送 AI 请求前已保存的章节上下文。
+interface ChapterAiSavedChapterContext {
+  // chapterId 表示章节数据库主键 ID。
+  chapterId: number;
+  // chapterNumber 表示章节号，即“第 x 章”中的 x。
+  chapterNumber: number;
 }
 
 // ChapterAiPromptRecommendationCache 表示章节 AI 输入推荐结果的本地缓存。
@@ -216,8 +226,10 @@ type ChapterEditorState = "loading" | "ready" | "error";
 interface ChapterAiAssistantPanelProps {
   // novelId 表示当前章节所属小说主键 ID。
   novelId: number;
-  // ensureChapterSavedForAgent 表示发送 AI 前确保章节已保存并返回章节 ID 的方法。
-  ensureChapterSavedForAgent: () => Promise<number | null>;
+  // ensureChapterSavedForAgent 表示发送 AI 前确保章节已保存并返回章节上下文的方法。
+  ensureChapterSavedForAgent: () => Promise<
+    ChapterAiSavedChapterContext | null
+  >;
   // prefillMessage 表示需要填入 AI 输入框的一次性正文选中文本。
   prefillMessage: ChapterAiPrefillMessage | null;
   // onClose 表示关闭章节 AI 助手侧栏时执行的回调。
@@ -460,7 +472,9 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
 
   // ensureChapterSavedForAgent 在发送 AI 请求前确保当前章节已经保存到后端。
   const ensureChapterSavedForAgent = useCallback(
-    async function ensureChapterSavedForAgent(): Promise<number | null> {
+    async function ensureChapterSavedForAgent(): Promise<
+      ChapterAiSavedChapterContext | null
+    > {
       if (stateRef.current !== "ready") {
         Toast.info("章节仍在加载，请稍后再试");
         return null;
@@ -470,7 +484,20 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
       if (!readCurrentChapterValues().title) {
         return null;
       }
-      return persistedChapterIDRef.current;
+      const savedChapterID = persistedChapterIDRef.current;
+      const savedChapterNumber = chapterNumberRef.current;
+      if (
+        savedChapterID === null ||
+        savedChapterNumber === null ||
+        savedChapterNumber <= 0
+      ) {
+        Toast.warning("当前章节信息缺失，请保存后重试");
+        return null;
+      }
+      return {
+        chapterId: savedChapterID,
+        chapterNumber: savedChapterNumber,
+      };
     },
     [readCurrentChapterValues, saveCurrentChapter],
   );
@@ -1562,9 +1589,9 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     }
 
     setAssistantSending(true);
-    let savedChapterID: number | null;
+    let savedChapterContext: ChapterAiSavedChapterContext | null;
     try {
-      savedChapterID = await props.ensureChapterSavedForAgent();
+      savedChapterContext = await props.ensureChapterSavedForAgent();
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         setAssistantSending(false);
@@ -1575,7 +1602,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       setAssistantSending(false);
       return;
     }
-    if (savedChapterID === null) {
+    if (savedChapterContext === null) {
       setAssistantSending(false);
       return;
     }
@@ -1621,7 +1648,8 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     await runChapterAiStream({
       pairID,
       assistantMessageID,
-      savedChapterID,
+      savedChapterID: savedChapterContext.chapterId,
+      savedChapterNumber: savedChapterContext.chapterNumber,
       retryPayload,
     });
   }
@@ -1651,9 +1679,9 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     }
 
     setAssistantSending(true);
-    let savedChapterID: number | null;
+    let savedChapterContext: ChapterAiSavedChapterContext | null;
     try {
-      savedChapterID = await props.ensureChapterSavedForAgent();
+      savedChapterContext = await props.ensureChapterSavedForAgent();
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         setAssistantSending(false);
@@ -1664,7 +1692,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       setAssistantSending(false);
       return;
     }
-    if (savedChapterID === null) {
+    if (savedChapterContext === null) {
       setAssistantSending(false);
       return;
     }
@@ -1673,7 +1701,8 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     await runChapterAiStream({
       pairID,
       assistantMessageID,
-      savedChapterID,
+      savedChapterID: savedChapterContext.chapterId,
+      savedChapterNumber: savedChapterContext.chapterNumber,
       retryPayload,
     });
   }
@@ -1711,6 +1740,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           message: request.retryPayload.message,
           novelId: props.novelId,
           chapterId: request.savedChapterID,
+          chapterNumber: request.savedChapterNumber,
           signal: controller.signal,
         },
         {

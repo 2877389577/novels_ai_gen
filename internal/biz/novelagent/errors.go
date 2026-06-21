@@ -11,6 +11,8 @@ var (
 	ErrMessageRequired = errors.New("novel agent message required")
 	// ErrNovelIDRequired 表示小说 ID 不能为空。
 	ErrNovelIDRequired = errors.New("novel agent novel id required")
+	// ErrChapterNumberInvalid 表示章节号不能为负数。
+	ErrChapterNumberInvalid = errors.New("novel agent chapter number invalid")
 	// ErrChapterContextInvalid 表示章节上下文缺少小说 ID。
 	ErrChapterContextInvalid = errors.New("novel agent chapter context invalid")
 	// ErrProviderDisabled 表示 AI 提供商未启用。

@@ -30,6 +30,8 @@ type ChatRequest struct {
 	NovelID uint64 `json:"novel_id" binding:"required" example:"1"`
 	// ChapterID 表示当前请求关联的章节 ID，普通对话可为空。
 	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
+	// ChapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。
+	ChapterNumber int `json:"chapter_number,omitempty" example:"3"`
 }
 
 // PromptRecommendationRequest 表示 Swagger 文档中的提示词库推荐判定请求。
@@ -318,6 +320,8 @@ func agentErrorMessage(err error) string {
 		return "请输入要发送给 AI 的内容"
 	case errors.Is(err, biznovelagent.ErrNovelIDRequired):
 		return "当前请求缺少小说 ID"
+	case errors.Is(err, biznovelagent.ErrChapterNumberInvalid):
+		return "当前章节号无效"
 	case errors.Is(err, biznovelagent.ErrChapterContextInvalid):
 		return "章节上下文缺少小说 ID"
 	case errors.Is(err, biznovelagent.ErrProviderDisabled):
@@ -351,6 +355,7 @@ func writeAgentError(c *gin.Context, err error) {
 		errors.Is(err, biznovelagent.ErrModelRequired),
 		errors.Is(err, biznovelagent.ErrMessageRequired),
 		errors.Is(err, biznovelagent.ErrNovelIDRequired),
+		errors.Is(err, biznovelagent.ErrChapterNumberInvalid),
 		errors.Is(err, biznovelagent.ErrProviderDisabled):
 		response.Error(c, http.StatusBadRequest, agentErrorMessage(err))
 	case errors.Is(err, biznovelagent.ErrChapterContextInvalid):

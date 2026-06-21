@@ -601,7 +601,22 @@ func requestContextPrompt(req ChatRequest) string {
 	if req.ChapterID == 0 {
 		chapterIDText = "0（未关联具体章节）"
 	}
-	return fmt.Sprintf("本轮请求上下文：\nnovel_id: %d\nchapter_id: %s\n说明：调用需要小说或章节上下文的工具时，可以使用以上 ID；当前章节的真实章节号以工具查询到的数据为准。", req.NovelID, chapterIDText)
+	chapterNumberText := fmt.Sprintf("%d", req.ChapterNumber)
+	if req.ChapterNumber == 0 {
+		chapterNumberText = "0（未传当前章节号）"
+	}
+	return fmt.Sprintf(`本轮请求上下文：
+- novel_id: %d
+  含义：当前小说的数据库主键 ID；调用小说级工具或章节查询工具时可用于定位小说；不是作品排序号。
+- chapter_id: %s
+  含义：当前章节的数据库主键 ID；用于按章节 ID 定位章节；不是“第几章”，禁止根据它推断章节号。
+- chapter_number: %s
+  含义：当前章节号，即“第 N 章”中的 N；当需要判断当前是第几章，或按章节号查询/更新章节时使用它。
+说明：chapter_id 和 chapter_number 是两个不同字段；当前章节真实顺序以 chapter_number 或工具查询结果为准。`,
+		req.NovelID,
+		chapterIDText,
+		chapterNumberText,
+	)
 }
 
 // instructionWithRequestContext 将本轮请求上下文追加到 Agent 系统提示词末尾。

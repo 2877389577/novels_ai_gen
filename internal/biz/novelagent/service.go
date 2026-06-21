@@ -181,6 +181,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 			"model", req.Model,
 			"novel_id", req.NovelID,
 			"chapter_id", req.ChapterID,
+			"chapter_number", req.ChapterNumber,
 		)
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: "AI 记忆保存失败，本次回复未完成入库"})
 		return fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
@@ -308,6 +309,9 @@ func ValidateChatRequest(req ChatRequest) error {
 	}
 	if req.NovelID == 0 {
 		return ErrNovelIDRequired
+	}
+	if req.ChapterNumber < 0 {
+		return ErrChapterNumberInvalid
 	}
 	return nil
 }
