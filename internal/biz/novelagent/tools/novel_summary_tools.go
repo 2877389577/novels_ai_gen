@@ -25,7 +25,7 @@ type NovelSummaryStore interface {
 // QueryNovelSummaryInput 表示 query_novel_summary 工具的输入参数。
 type QueryNovelSummaryInput struct {
 	// NovelID 表示所属小说 ID，未传时使用本次 Agent 请求关联的小说 ID。
-	NovelID uint64 `json:"novel_id,omitempty"`
+	NovelID uint64 `json:"novel_id,omitempty" jsonschema_description:"可选；所属小说 ID，未传时使用本轮 Agent 请求上下文中的小说 ID。"`
 }
 
 // NovelSummaryData 表示小说滚动总结工具返回的总结数据。
@@ -59,13 +59,13 @@ type QueryNovelSummaryOutput struct {
 // UpdateNovelSummaryInput 表示 update_novel_summary 工具的输入参数。
 type UpdateNovelSummaryInput struct {
 	// NovelID 表示所属小说 ID，未传时使用本次 Agent 请求关联的小说 ID。
-	NovelID uint64 `json:"novel_id,omitempty"`
+	NovelID uint64 `json:"novel_id,omitempty" jsonschema_description:"可选；所属小说 ID，未传时使用本轮 Agent 请求上下文中的小说 ID。"`
 	// Content 表示需要写入或覆盖的小说滚动剧情总结内容。
-	Content string `json:"content"`
+	Content string `json:"content" jsonschema:"required" jsonschema_description:"要写入或覆盖的小说滚动剧情总结内容；允许传空字符串以清空总结内容。"`
 	// StartChapterNumber 表示当前总结覆盖的起始章节号，0 表示未知或未记录。
-	StartChapterNumber int `json:"start_chapter_number"`
+	StartChapterNumber int `json:"start_chapter_number" jsonschema:"required" jsonschema_description:"当前总结覆盖的起始章节号；0 表示未知或暂不记录范围；记录范围时必须和 end_chapter_number 一起大于 0。"`
 	// EndChapterNumber 表示当前总结覆盖的结束章节号，0 表示未知或未记录。
-	EndChapterNumber int `json:"end_chapter_number"`
+	EndChapterNumber int `json:"end_chapter_number" jsonschema:"required" jsonschema_description:"当前总结覆盖的结束章节号；0 表示未知或暂不记录范围；记录范围时必须大于等于 start_chapter_number。"`
 }
 
 // UpdateNovelSummaryOutput 表示 update_novel_summary 工具返回给 Agent 的保存结果。

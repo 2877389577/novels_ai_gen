@@ -49,17 +49,17 @@ var allowedQueryChapterFields = map[string]struct{}{
 // QueryChaptersInput 表示 query_chapters 工具的输入参数。
 type QueryChaptersInput struct {
 	// NovelID 表示所属小说 ID，未传时使用本次 Agent 请求关联的小说 ID。
-	NovelID uint64 `json:"novel_id,omitempty"`
+	NovelID uint64 `json:"novel_id,omitempty" jsonschema_description:"可选；所属小说 ID，未传时使用本轮 Agent 请求上下文中的小说 ID。"`
 	// ChapterID 表示章节主键 ID，非 0 时按主键查询单章。
-	ChapterID uint64 `json:"chapter_id,omitempty"`
+	ChapterID uint64 `json:"chapter_id,omitempty" jsonschema_description:"章节主键 ID，用于按数据库章节 ID 定位并查询单章；不能和 chapter_number 或章节号范围同时使用。"`
 	// ChapterNumber 表示章节号，非 0 时按章节号查询单章。
-	ChapterNumber int `json:"chapter_number,omitempty"`
+	ChapterNumber int `json:"chapter_number,omitempty" jsonschema_description:"章节号，用于按“第几章”定位并查询单章；不能和 chapter_id 或章节号范围同时使用。"`
 	// StartChapterNumber 表示章节号范围起点，需要与 EndChapterNumber 同时传入。
-	StartChapterNumber int `json:"start_chapter_number,omitempty"`
+	StartChapterNumber int `json:"start_chapter_number,omitempty" jsonschema_description:"章节号范围起点，需要与 end_chapter_number 同时传入；用于查询连续章节范围。"`
 	// EndChapterNumber 表示章节号范围终点，需要与 StartChapterNumber 同时传入。
-	EndChapterNumber int `json:"end_chapter_number,omitempty"`
+	EndChapterNumber int `json:"end_chapter_number,omitempty" jsonschema_description:"章节号范围终点，需要与 start_chapter_number 同时传入，且不能小于起始章节号。"`
 	// Fields 表示需要返回的章节字段列表，空列表表示返回全部字段。
-	Fields []string `json:"fields,omitempty"`
+	Fields []string `json:"fields,omitempty" jsonschema_description:"需要返回的章节字段列表；空列表表示返回全部字段；可选字段为 id、novel_id、chapter_number、title、content、summary、word_count、created_at、updated_at。"`
 }
 
 // QueryChapterData 表示 query_chapters 工具返回的单章数据。
@@ -99,13 +99,13 @@ type QueryChaptersOutput struct {
 // UpdateChapterSummaryInput 表示 update_chapter_summary 工具的输入参数。
 type UpdateChapterSummaryInput struct {
 	// NovelID 表示所属小说 ID，未传时使用本次 Agent 请求关联的小说 ID。
-	NovelID uint64 `json:"novel_id,omitempty"`
+	NovelID uint64 `json:"novel_id,omitempty" jsonschema_description:"可选；所属小说 ID，未传时使用本轮 Agent 请求上下文中的小说 ID。"`
 	// ChapterID 表示章节主键 ID，非 0 时按主键定位章节。
-	ChapterID uint64 `json:"chapter_id,omitempty"`
+	ChapterID uint64 `json:"chapter_id,omitempty" jsonschema_description:"章节主键 ID，用于按数据库章节 ID 定位单章；必须和 chapter_number 二选一，不能同时传入。"`
 	// ChapterNumber 表示章节号，非 0 时按章节号定位章节。
-	ChapterNumber int `json:"chapter_number,omitempty"`
+	ChapterNumber int `json:"chapter_number,omitempty" jsonschema_description:"章节号，用于按“第几章”定位单章；必须和 chapter_id 二选一，不能同时传入。"`
 	// Summary 表示需要写入的章节总结，允许为空字符串以清空总结。
-	Summary string `json:"summary"`
+	Summary string `json:"summary" jsonschema:"required" jsonschema_description:"要写入的章节总结，只会更新章节 summary 字段；允许传空字符串以清空总结。"`
 }
 
 // UpdateChapterSummaryOutput 表示 update_chapter_summary 工具返回给 Agent 的章节总结更新结果。
