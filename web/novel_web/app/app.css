@@ -8367,6 +8367,88 @@ html[data-theme="dark"] .chapter-editor-paper {
   gap: 14px;
 }
 
+.agent-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.agent-card-grid-single {
+  grid-template-columns: minmax(0, 420px);
+}
+
+.agent-card-shell {
+  min-width: 0;
+  border-radius: 6px;
+  outline: none;
+}
+
+.agent-card-shell:focus-visible .agent-preview-card {
+  border-color: color-mix(in srgb, var(--color-primary) 56%, var(--color-outline-variant));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+.agent-preview-card {
+  height: 100%;
+  cursor: pointer;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), transparent 58%),
+    color-mix(in srgb, var(--color-surface-container-low) 66%, transparent);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+.agent-card-shell:hover .agent-preview-card {
+  border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-outline-variant));
+  transform: translateY(-1px);
+}
+
+.agent-preview-card-disabled {
+  border-style: dashed;
+  opacity: 0.68;
+}
+
+.agent-preview-card .semi-card-body {
+  height: 100%;
+}
+
+.agent-preview-card-content {
+  display: grid;
+  min-height: 124px;
+  align-content: flex-start;
+  gap: 10px;
+}
+
+.agent-tool-preview-card .agent-preview-card-content {
+  min-height: 150px;
+}
+
+.agent-preview-card-content h3 {
+  margin: 0;
+  color: var(--color-on-surface);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+  overflow-wrap: anywhere;
+}
+
+.agent-preview-card-content p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-on-surface-variant);
+  font-size: 14px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
 .agent-settings-textarea {
   width: 100%;
   resize: vertical;
@@ -8419,6 +8501,23 @@ html[data-theme="dark"] .chapter-editor-paper {
 .agent-settings-json-viewer {
   width: 100%;
   font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+.agent-settings-modal .semi-modal-body {
+  max-height: min(78vh, 820px);
+  overflow-y: auto;
+}
+
+.agent-settings-modal-body {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.agent-settings-modal-toolbar {
+  justify-content: flex-start;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-outline-variant) 42%, transparent);
+  padding-bottom: 14px;
 }
 
 .agent-settings-child-heading {
@@ -8615,6 +8714,16 @@ html[data-theme="dark"] .chapter-editor-paper {
 
   .agent-settings-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-card-grid,
+  .agent-card-grid-single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-preview-card-content,
+  .agent-tool-preview-card .agent-preview-card-content {
+    min-height: 118px;
   }
 
   .ai-provider-form-grid {
@@ -9031,6 +9140,26 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
 
 .chapter-ai-dialogue .semi-ai-chat-dialogue-wrapper {
   padding-inline: 18px 20px;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-avatar {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 52%, transparent);
+  background: var(--color-surface-container-high);
+  box-shadow: 0 4px 12px rgba(40, 52, 70, 0.12);
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-avatar {
+  border-color: color-mix(in srgb, var(--color-outline-variant) 68%, transparent);
+  background: var(--color-surface-container-highest);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
 }
 
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble,

@@ -95,8 +95,20 @@ export interface NovelAgentStreamDeltaEvent {
   type: "delta";
   // task 表示顶层 Agent 选择的任务类型。
   task?: string;
+  // reply_index 表示同一次请求中的可见助手回复段序号，从 1 开始。
+  reply_index?: number;
   // content 表示模型生成的增量文本。
   content?: string;
+}
+
+// NovelAgentStreamReplyItem 表示小说写作 Agent 单段完整助手回复。
+export interface NovelAgentStreamReplyItem {
+  // reply_index 表示同一次请求中的可见助手回复段序号，从 1 开始。
+  reply_index: number;
+  // task 表示产生该回复段的任务来源。
+  task?: string;
+  // content 表示该回复段的完整文本。
+  content: string;
 }
 
 // NovelAgentStreamDoneEvent 表示小说写作 Agent 流式生成完成事件。
@@ -107,6 +119,8 @@ export interface NovelAgentStreamDoneEvent {
   task?: string;
   // content 表示完整生成文本。
   content?: string;
+  // replies 表示本轮请求按可见输出边界拆分后的助手回复列表。
+  replies?: NovelAgentStreamReplyItem[];
   // conversation_id 表示本轮回复保存到的 Agent 会话 ID。
   conversation_id?: number;
   // conversation_title 表示本轮回复保存到的 Agent 会话标题。
@@ -181,10 +195,10 @@ export interface NovelAgentConversationListData {
   items: NovelAgentConversationItem[];
 }
 
-// NovelAgentClearMessagesData 表示清空 Agent 历史消息后的响应数据。
-export interface NovelAgentClearMessagesData {
-  // cleared 表示本次清空的消息数量。
-  cleared: number;
+// NovelAgentDeleteConversationData 表示删除 Agent 会话后的响应数据。
+export interface NovelAgentDeleteConversationData {
+  // deleted 表示 Agent 会话是否已经删除。
+  deleted: boolean;
 }
 
 // NovelAgentChatParams 表示小说写作 Agent 流式对话请求参数。
@@ -2210,20 +2224,20 @@ export async function fetchNovelAgentConversationMessages(
   return payload.data;
 }
 
-// clearNovelAgentConversationMessages 清空指定 Agent 会话的历史消息。
+// deleteNovelAgentConversation 删除指定 Agent 会话及其历史消息。
 // 参数 novelId 表示小说主键 ID；参数 conversationId 表示 Agent 会话主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
-export async function clearNovelAgentConversationMessages(
+export async function deleteNovelAgentConversation(
   novelId: number,
   conversationId: number,
   signal?: AbortSignal,
-): Promise<NovelAgentClearMessagesData> {
+): Promise<NovelAgentDeleteConversationData> {
   const authData = readAuthData();
   if (!authData) {
     throw new UnauthorizedError("登录已过期，请重新登录");
   }
 
   const response = await fetch(
-    `/api/v1/novels/${novelId}/agent-conversations/${conversationId}/messages`,
+    `/api/v1/novels/${novelId}/agent-conversations/${conversationId}`,
     {
       method: "DELETE",
       headers: {
@@ -2232,13 +2246,13 @@ export async function clearNovelAgentConversationMessages(
       signal,
     },
   );
-  const payload = await parseApiResponse<NovelAgentClearMessagesData>(response);
+  const payload = await parseApiResponse<NovelAgentDeleteConversationData>(response);
   if (response.status === 401) {
     clearAuthData();
     throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
   }
   if (!response.ok || !payload?.data) {
-    throw new Error(payload?.message || "AI 历史消息清空失败，请稍后再试");
+    throw new Error(payload?.message || "AI 会话删除失败，请稍后再试");
   }
   return payload.data;
 }
@@ -2267,35 +2281,6 @@ export async function fetchNovelAgentMessages(
   }
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "AI 历史消息加载失败，请稍后再试");
-  }
-  return payload.data;
-}
-
-// clearNovelAgentMessages 清空指定小说的 Agent 历史消息。
-// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
-export async function clearNovelAgentMessages(
-  novelId: number,
-  signal?: AbortSignal,
-): Promise<NovelAgentClearMessagesData> {
-  const authData = readAuthData();
-  if (!authData) {
-    throw new UnauthorizedError("登录已过期，请重新登录");
-  }
-
-  const response = await fetch(`/api/v1/novels/${novelId}/agent-messages`, {
-    method: "DELETE",
-    headers: {
-      Authorization: formatAuthorizationHeader(authData),
-    },
-    signal,
-  });
-  const payload = await parseApiResponse<NovelAgentClearMessagesData>(response);
-  if (response.status === 401) {
-    clearAuthData();
-    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
-  }
-  if (!response.ok || !payload?.data) {
-    throw new Error(payload?.message || "AI 历史消息清空失败，请稍后再试");
   }
   return payload.data;
 }
