@@ -8948,6 +8948,65 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
   cursor: wait;
 }
 
+.chapter-ai-conversation-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-outline-variant) 34%, transparent);
+  padding: 10px 26px;
+}
+
+.chapter-ai-conversation-label {
+  flex: 0 0 auto;
+  color: var(--color-on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.chapter-ai-conversation-select {
+  width: 252px;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 252px;
+}
+
+.chapter-ai-new-conversation {
+  display: inline-flex;
+  height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 42%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-primary-container) 34%, var(--color-surface));
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+  padding: 0 12px;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.chapter-ai-new-conversation:not(:disabled):hover,
+.chapter-ai-new-conversation:not(:disabled):focus-visible {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary-container) 58%, var(--color-surface));
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.chapter-ai-new-conversation:disabled {
+  opacity: 0.62;
+  cursor: wait;
+}
+
 .chapter-ai-dialogue-wrap {
   min-height: 0;
   flex: 1 1 auto;
@@ -9826,6 +9885,21 @@ html[data-theme="dark"] .chapter-ai-input-shell:focus-within {
 
   .event-detail-template {
     padding: 24px 20px 32px;
+  }
+
+  .chapter-ai-conversation-bar {
+    align-items: stretch;
+    flex-direction: column;
+    padding-inline: 18px;
+  }
+
+  .chapter-ai-conversation-select {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .chapter-ai-new-conversation {
+    width: 100%;
   }
 
   .event-form-template {

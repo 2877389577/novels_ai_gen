@@ -5,10 +5,17 @@ import {
   IconDelete,
   IconDeleteStroked,
   IconEditStroked,
+  IconPlus,
   IconRedoStroked,
   IconStop,
 } from "@douyinfe/semi-icons";
-import { AIChatDialogue, Button, FloatButton, Toast } from "@douyinfe/semi-ui-19";
+import {
+  AIChatDialogue,
+  Button,
+  FloatButton,
+  Select,
+  Toast,
+} from "@douyinfe/semi-ui-19";
 import {
   useCallback,
   useEffect,
@@ -32,11 +39,12 @@ import type {
 
 import {
   UnauthorizedError,
-  clearNovelAgentMessages,
+  clearNovelAgentConversationMessages,
   createChapter,
   fetchChapterDetail,
   fetchAIProviderModelsByProviderID,
-  fetchNovelAgentMessages,
+  fetchNovelAgentConversationMessages,
+  fetchNovelAgentConversations,
   fetchAIProviders,
   fetchRecommendedPrompts,
   fetchNextChapterNumber,
@@ -48,6 +56,7 @@ import {
   type ChapterCreateParams,
   type ChapterDetailItem,
   type ChapterUpdateParams,
+  type NovelAgentConversationItem,
   type NovelAgentMessageItem,
   type RecommendedPromptItem,
 } from "./api";
@@ -70,20 +79,7 @@ const emptyChapterFormValues: ChapterFormValues = {
   content: "",
 };
 
-const chapterAiAssistantMessages: ChapterAiMessage[] = [
-  {
-    id: "chapter-ai-assistant-welcome",
-    role: "assistant",
-    content:
-      "你好，我是章节写作助手。你可以选择提供商和模型，把润色需求发给我，我会在需要时读取当前章节正文。",
-  },
-  {
-    id: "chapter-ai-assistant-suggestion",
-    role: "assistant",
-    content:
-      "当前首版会优先处理润色任务。你可以描述想要的语气、节奏或氛围，我会尽量让文字更贴近你的目标。",
-  },
-];
+const chapterAiAssistantMessages: ChapterAiMessage[] = [];
 
 const chapterAiAssistantRoleConfig: RoleConfig = {
   assistant: {
@@ -115,6 +111,8 @@ interface ChapterFormValues {
 
 // ChapterAiRetryPayload 表示章节 AI 用户消息失败后可复用的原始发送参数。
 interface ChapterAiRetryPayload {
+  // conversationId 表示重试时必须复用的 Agent 会话 ID，未保存的新会话为空。
+  conversationId?: number;
   // providerId 表示原始请求使用的 AI 提供商 ID。
   providerId: number;
   // modelId 表示原始请求使用的模型标识。
@@ -129,6 +127,8 @@ interface ChapterAiRetryPayload {
 
 // ChapterAiMessage 表示章节 AI 对话在前端本地增强后的消息。
 interface ChapterAiMessage extends Message {
+  // chapterAiConversationID 表示消息所属 Agent 会话 ID，本地新会话草稿可为空。
+  chapterAiConversationID?: number;
   // chapterAiPairID 表示同一轮用户消息与助手消息的配对 ID。
   chapterAiPairID?: string;
   // chapterAiSourceID 表示助手消息流式更新时使用的基础消息 ID。
@@ -213,6 +213,8 @@ interface ChapterEditorPageProps {
   chapterId: number | null;
   // onBackToNovelDetail 表示返回小说详情页时执行的回调。
   onBackToNovelDetail: (novelId: number) => void;
+  // onAiPanelOpenChange 表示 AI 侧栏打开状态变化时通知应用层的回调。
+  onAiPanelOpenChange: (open: boolean) => void;
   // onChapterPersisted 表示新增章节首次保存成功后执行的路由替换回调。
   onChapterPersisted: (novelId: number, chapterId: number) => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
@@ -279,6 +281,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     content: emptyChapterFormValues.content,
   });
   const onUnauthorized = props.onUnauthorized;
+  const onAiPanelOpenChange = props.onAiPanelOpenChange;
   const liveWordCount = useMemo(
     function calculateLiveWordCount() {
       return countNonWhitespaceCharacters(contentValue);
@@ -309,6 +312,18 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
       document.body.classList.remove(chapterEditorScrollbarHiddenClass);
     };
   }, []);
+
+  // syncAiPanelOpenState 将 AI 侧栏打开状态同步给应用层页脚布局。
+  useEffect(
+    function syncAiPanelOpenState() {
+      onAiPanelOpenChange(aiPanelOpen);
+
+      return function resetAiPanelOpenState() {
+        onAiPanelOpenChange(false);
+      };
+    },
+    [aiPanelOpen, onAiPanelOpenChange],
+  );
 
   // syncContentEditorSnapshot 将后端正文或路由切换后的正文同步到段落编辑器。
   useEffect(
@@ -1094,6 +1109,8 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
 // 参数 props 表示章节 AI 助手侧栏需要的回调。
 function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const [chats, setChats] = useState<ChapterAiMessage[]>(chapterAiAssistantMessages);
+  const [conversations, setConversations] = useState<NovelAgentConversationItem[]>([]);
+  const [selectedConversationID, setSelectedConversationID] = useState<number | null>(null);
   const [providers, setProviders] = useState<AIProviderItem[]>([]);
   const [models, setModels] = useState<AIProviderModelItem[]>([]);
   const [selectedProviderID, setSelectedProviderID] = useState("");
@@ -1101,6 +1118,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const [inputValue, setInputValue] = useState("");
   const [providerLoading, setProviderLoading] = useState(true);
   const [modelLoading, setModelLoading] = useState(false);
+  const [conversationLoading, setConversationLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyClearing, setHistoryClearing] = useState(false);
   const [assistantSending, setAssistantSending] = useState(false);
@@ -1112,14 +1130,47 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   >([]);
   const assistantInputRef = useRef<HTMLTextAreaElement | null>(null);
   const streamControllerRef = useRef<AbortController | null>(null);
+  const selectedConversationIDRef = useRef<number | null>(null);
   const promptRecommendationControllerRef = useRef<AbortController | null>(null);
   const promptRecommendationCacheRef = useRef<
     Map<string, ChapterAiPromptRecommendationCache>
   >(new Map());
+
+  const conversationSelectOptions = useMemo(
+    // buildConversationSelectOptions 将 AI 会话列表转换为 Semi Select 选项。
+    function buildConversationSelectOptions() {
+      const titleCounts = new Map<string, number>();
+      for (const conversation of conversations) {
+        const title = conversation.title?.trim() || "未命名会话";
+        titleCounts.set(title, (titleCounts.get(title) ?? 0) + 1);
+      }
+      return conversations.map(function mapConversationToOption(conversation) {
+        const title = conversation.title?.trim() || "未命名会话";
+        const duplicateTitle = (titleCounts.get(title) ?? 0) > 1;
+        return {
+          label: duplicateTitle ? `${title} #${conversation.id}` : title,
+          value: String(conversation.id),
+        };
+      });
+    },
+    [conversations],
+  );
+  const conversationSelectPlaceholder = conversationLoading
+    ? "会话加载中..."
+    : conversations.length === 0
+      ? "暂无会话记录"
+      : "选择会话记录";
   // promptRecommendationSuppressedInputRef 记录由推荐提示词插入产生、无需再次推荐的输入内容。
   const promptRecommendationSuppressedInputRef = useRef<string | null>(null);
   const consumedPrefillMessageIDRef = useRef<number | null>(null);
   const onUnauthorized = props.onUnauthorized;
+
+  useEffect(
+    function syncSelectedConversationRef() {
+      selectedConversationIDRef.current = selectedConversationID;
+    },
+    [selectedConversationID],
+  );
 
   const selectedProvider = useMemo(
     function findSelectedProvider() {
@@ -1156,13 +1207,83 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   );
 
   useEffect(
-    function loadAgentHistory() {
+    function loadAgentConversations() {
+      const controller = new AbortController();
+      setConversationLoading(true);
+      setHistoryLoading(true);
+
+      async function loadConversations() {
+        try {
+          const data = await fetchNovelAgentConversations(props.novelId, controller.signal);
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          setConversations(data.items);
+          if (data.items.length === 0) {
+            setSelectedConversationID(null);
+            setChats(chapterAiAssistantMessages);
+            setHistoryLoading(false);
+            return;
+          }
+          setSelectedConversationID(function selectConversation(currentID) {
+            if (
+              currentID !== null &&
+              data.items.some(function matchConversation(item) {
+                return item.id === currentID;
+              })
+            ) {
+              return currentID;
+            }
+            return data.items[0].id;
+          });
+        } catch (error) {
+          if (controller.signal.aborted) {
+            return;
+          }
+          if (error instanceof UnauthorizedError) {
+            onUnauthorized();
+            return;
+          }
+          setConversations([]);
+          setSelectedConversationID(null);
+          setChats(chapterAiAssistantMessages);
+          setHistoryLoading(false);
+          Toast.error(getErrorMessage(error, "AI 会话列表加载失败，请稍后再试"));
+        } finally {
+          if (!controller.signal.aborted) {
+            setConversationLoading(false);
+          }
+        }
+      }
+
+      void loadConversations();
+      return function cancelConversationLoad() {
+        controller.abort();
+      };
+    },
+    [onUnauthorized, props.novelId],
+  );
+
+  useEffect(
+    function loadSelectedConversationHistory() {
+      if (selectedConversationID === null) {
+        setChats(chapterAiAssistantMessages);
+        setHistoryLoading(false);
+        return;
+      }
+
+      const conversationID = selectedConversationID;
       const controller = new AbortController();
       setHistoryLoading(true);
 
       async function loadHistory() {
         try {
-          const data = await fetchNovelAgentMessages(props.novelId, controller.signal);
+          const data = await fetchNovelAgentConversationMessages(
+            props.novelId,
+            conversationID,
+            controller.signal,
+          );
           if (controller.signal.aborted) {
             return;
           }
@@ -1194,7 +1315,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         controller.abort();
       };
     },
-    [onUnauthorized, props.novelId],
+    [onUnauthorized, props.novelId, selectedConversationID],
   );
 
   useEffect(
@@ -1534,7 +1655,34 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     streamControllerRef.current?.abort();
   }
 
-  // handleClearAssistantHistory 清空当前小说的 AI 历史消息。
+  // handleConversationChange 切换当前 AI 会话。
+  // 参数 value 表示 Semi 会话选择器返回的会话 ID。
+  function handleConversationChange(value: string | string[] | undefined) {
+    if (assistantSending) {
+      Toast.info("AI 正在回复，稍后再切换会话");
+      return;
+    }
+    if (!value || Array.isArray(value)) {
+      return;
+    }
+    const conversationID = Number(value);
+    if (!Number.isSafeInteger(conversationID) || conversationID <= 0) {
+      return;
+    }
+    setSelectedConversationID(conversationID);
+  }
+
+  // handleStartNewConversation 进入新的 AI 会话草稿。
+  function handleStartNewConversation() {
+    if (assistantSending) {
+      Toast.info("AI 正在回复，稍后再开启新会话");
+      return;
+    }
+    setSelectedConversationID(null);
+    setChats(chapterAiAssistantMessages);
+  }
+
+  // handleClearAssistantHistory 清空当前 AI 会话的历史消息。
   async function handleClearAssistantHistory() {
     if (assistantSending) {
       Toast.info("AI 正在回复，稍后再清空历史");
@@ -1544,9 +1692,15 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       return;
     }
 
+    if (selectedConversationID === null) {
+      setChats(chapterAiAssistantMessages);
+      Toast.success("新会话草稿已清空");
+      return;
+    }
+
     setHistoryClearing(true);
     try {
-      await clearNovelAgentMessages(props.novelId);
+      await clearNovelAgentConversationMessages(props.novelId, selectedConversationID);
       setChats(chapterAiAssistantMessages);
       Toast.success("AI 历史消息已清空");
     } catch (error) {
@@ -1614,6 +1768,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     const userMessageID = createChapterAiMessageID("user", createdAt);
     const assistantMessageID = createChapterAiMessageID("assistant", createdAt);
     const retryPayload: ChapterAiRetryPayload = {
+      conversationId: selectedConversationIDRef.current ?? undefined,
       providerId: Number(selectedProviderID),
       modelId: selectedModelID,
       message: normalizedInput,
@@ -1625,6 +1780,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         ...currentChats,
         {
           id: userMessageID,
+          chapterAiConversationID: retryPayload.conversationId,
           chapterAiPairID: pairID,
           chapterAiRetryable: false,
           chapterAiRetryPayload: retryPayload,
@@ -1633,6 +1789,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         },
         {
           id: assistantMessageID,
+          chapterAiConversationID: retryPayload.conversationId,
           chapterAiPairID: pairID,
           chapterAiSourceID: assistantMessageID,
           role: "assistant",
@@ -1739,6 +1896,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           model: request.retryPayload.modelId,
           message: request.retryPayload.message,
           novelId: props.novelId,
+          conversationId: request.retryPayload.conversationId,
           chapterId: request.savedChapterID,
           chapterNumber: request.savedChapterNumber,
           signal: controller.signal,
@@ -1764,6 +1922,22 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
                 assistantContent,
                 "completed",
               );
+              if (event.conversation_id && event.conversation_id > 0) {
+                const conversationTitle =
+                  event.conversation_title?.trim() || "新会话";
+                setSelectedConversationID(event.conversation_id);
+                upsertChapterAiConversation({
+                  id: event.conversation_id,
+                  novel_id: props.novelId,
+                  title: conversationTitle,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                });
+                updateChapterAiPairConversation(
+                  request.pairID,
+                  event.conversation_id,
+                );
+              }
               updateChapterAiPairRetryable(request.pairID, false);
               return;
             }
@@ -1817,6 +1991,41 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   ) {
     updateChapterAiPairRetryable(pairID, true);
     updateAssistantMessage(assistantMessageID, errorMessage, "failed");
+  }
+
+  // upsertChapterAiConversation 将后端返回的会话信息写入本地会话列表。
+  // 参数 conversation 表示需要插入或更新的 Agent 会话。
+  function upsertChapterAiConversation(conversation: NovelAgentConversationItem) {
+    setConversations(function updateConversationList(currentConversations) {
+      const filteredConversations = currentConversations.filter(
+        function removeSameConversation(item) {
+          return item.id !== conversation.id;
+        },
+      );
+      return [conversation, ...filteredConversations];
+    });
+  }
+
+  // updateChapterAiPairConversation 将本地一轮消息绑定到后端会话 ID。
+  // 参数 pairID 表示需要更新的消息配对 ID；参数 conversationID 表示后端返回的 Agent 会话 ID。
+  function updateChapterAiPairConversation(pairID: string, conversationID: number) {
+    setChats(function updateConversationID(currentChats) {
+      return currentChats.map(function updateChatConversationID(chat) {
+        if (chat.chapterAiPairID !== pairID) {
+          return chat;
+        }
+        return {
+          ...chat,
+          chapterAiConversationID: conversationID,
+          chapterAiRetryPayload: chat.chapterAiRetryPayload
+            ? {
+                ...chat.chapterAiRetryPayload,
+                conversationId: conversationID,
+              }
+            : undefined,
+        };
+      });
+    });
   }
 
   // updateChapterAiPairRetryable 更新指定配对中用户消息的可重试状态。
@@ -1957,7 +2166,12 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             <button
               aria-label="清空 AI 历史消息"
               className="chapter-ai-assistant-clear"
-              disabled={historyLoading || historyClearing || assistantSending}
+              disabled={
+                conversationLoading ||
+                historyLoading ||
+                historyClearing ||
+                assistantSending
+              }
               onClick={handleClearAssistantHistory}
               title="清空历史"
               type="button"
@@ -1974,6 +2188,42 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             </button>
           </div>
         </header>
+        <div className="chapter-ai-conversation-bar">
+          <span
+            className="chapter-ai-conversation-label"
+            id="chapter-ai-conversation-label"
+          >
+            会话
+          </span>
+          <Select<string>
+            aria-labelledby="chapter-ai-conversation-label"
+            className="chapter-ai-conversation-select"
+            disabled={
+              conversationLoading || assistantSending || conversations.length === 0
+            }
+            loading={conversationLoading}
+            onChange={handleConversationChange}
+            optionList={conversationSelectOptions}
+            placeholder={conversationSelectPlaceholder}
+            size="small"
+            value={
+              selectedConversationID === null
+                ? undefined
+                : String(selectedConversationID)
+            }
+          />
+          <button
+            aria-label="开启新 AI 会话"
+            className="chapter-ai-new-conversation"
+            disabled={conversationLoading || assistantSending}
+            onClick={handleStartNewConversation}
+            title="新会话"
+            type="button"
+          >
+            <IconPlus aria-hidden="true" />
+            <span>新会话</span>
+          </button>
+        </div>
         <div className="chapter-ai-dialogue-wrap">
           <AIChatDialogue
             align="leftRight"
@@ -2117,6 +2367,7 @@ function createChapterAiPairID(createdAt: number): string {
 function chapterAiMessageFromHistory(item: NovelAgentMessageItem): ChapterAiMessage {
   return {
     id: `chapter-ai-history-${item.id}`,
+    chapterAiConversationID: item.conversation_id,
     role: item.role,
     content: item.content,
     status: "completed",

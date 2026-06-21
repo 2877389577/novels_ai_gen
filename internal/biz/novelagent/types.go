@@ -18,6 +18,8 @@ type ChatRequest struct {
 	Message string `json:"message" binding:"required" example:"帮我润色这一段，让语气更紧张"`
 	// NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
 	NovelID uint64 `json:"novel_id" example:"1"`
+	// ConversationID 表示本轮请求所属 Agent 会话 ID，空值表示开启新会话。
+	ConversationID uint64 `json:"conversation_id,omitempty" example:"1"`
 	// ChapterID 表示当前请求关联的章节 ID，普通对话可为空。
 	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
 	// ChapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。
@@ -61,14 +63,16 @@ const (
 	MessageRoleAssistant MessageRole = "assistant"
 )
 
-// Conversation 表示小说级 Agent 会话数据库模型。
+// Conversation 表示小说下的 Agent 会话数据库模型。
 type Conversation struct {
 	// ID 表示 Agent 会话主键 ID。
 	ID uint64 `json:"id" gorm:"column:id;primaryKey;autoIncrement;comment:Agent会话主键ID" example:"1"`
-	// NovelID 表示会话所属小说 ID，一部小说只保留一条 Agent 会话。
-	NovelID uint64 `json:"novel_id" gorm:"column:novel_id;not null;uniqueIndex:idx_agent_conversations_novel_id;comment:会话所属小说ID，一部小说只保留一条Agent会话" example:"1"`
+	// NovelID 表示会话所属小说 ID，同一小说可以拥有多个 Agent 会话。
+	NovelID uint64 `json:"novel_id" gorm:"column:novel_id;not null;index:idx_agent_conversations_novel_id;index:idx_agent_conversations_novel_updated,priority:1;comment:会话所属小说ID，同一小说可以拥有多个Agent会话" example:"1"`
 	// Novel 表示所属小说关联，用于生成外键和级联删除约束。
 	Novel biznovel.Novel `json:"-" gorm:"foreignKey:NovelID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;comment:所属小说关联"`
+	// Title 表示 Agent 会话标题，由新会话首轮用户消息自动生成。
+	Title string `json:"title" gorm:"column:title;type:varchar(255);not null;default:新会话;comment:Agent会话标题，由新会话首轮用户消息自动生成" example:"讨论第三章节奏"`
 	// Summary 表示已经滚动压缩后的 Agent 长期记忆摘要。
 	Summary string `json:"summary,omitempty" gorm:"column:summary;type:text;comment:已经滚动压缩后的Agent长期记忆摘要"`
 	// SummaryMessageID 表示已经纳入摘要的最新 Agent 消息 ID。
@@ -78,7 +82,7 @@ type Conversation struct {
 	// CreatedAt 表示创建时间。
 	CreatedAt time.Time `json:"created_at" gorm:"column:created_at;comment:创建时间" example:"2026-06-19T22:00:00+08:00"`
 	// UpdatedAt 表示更新时间。
-	UpdatedAt time.Time `json:"updated_at" gorm:"column:updated_at;comment:更新时间" example:"2026-06-19T22:00:00+08:00"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"column:updated_at;index:idx_agent_conversations_novel_updated,priority:2;comment:更新时间" example:"2026-06-19T22:00:00+08:00"`
 }
 
 // TableName 返回 Agent 会话模型对应的数据表名称。
@@ -123,6 +127,8 @@ func (MessageRecord) TableName() string {
 type MessageResponse struct {
 	// ID 表示 Agent 消息主键 ID。
 	ID uint64 `json:"id" example:"1"`
+	// ConversationID 表示消息所属 Agent 会话 ID。
+	ConversationID uint64 `json:"conversation_id" example:"1"`
 	// NovelID 表示消息所属小说 ID。
 	NovelID uint64 `json:"novel_id" example:"1"`
 	// ChapterID 表示本轮消息关联的章节 ID，普通小说级对话可为空。
@@ -143,6 +149,26 @@ type MessageListResponse struct {
 	Items []MessageResponse `json:"items"`
 }
 
+// ConversationResponse 表示前端展示用的 Agent 会话摘要。
+type ConversationResponse struct {
+	// ID 表示 Agent 会话主键 ID。
+	ID uint64 `json:"id" example:"1"`
+	// NovelID 表示会话所属小说 ID。
+	NovelID uint64 `json:"novel_id" example:"1"`
+	// Title 表示 Agent 会话标题。
+	Title string `json:"title" example:"讨论第三章节奏"`
+	// CreatedAt 表示创建时间。
+	CreatedAt time.Time `json:"created_at" example:"2026-06-19T22:00:00+08:00"`
+	// UpdatedAt 表示更新时间。
+	UpdatedAt time.Time `json:"updated_at" example:"2026-06-19T22:00:00+08:00"`
+}
+
+// ConversationListResponse 表示 Agent 会话列表响应。
+type ConversationListResponse struct {
+	// Items 表示当前小说下的 Agent 会话列表，按更新时间倒序排列。
+	Items []ConversationResponse `json:"items"`
+}
+
 // ClearMessagesResponse 表示清空 Agent 历史消息后的响应。
 type ClearMessagesResponse struct {
 	// Cleared 表示本次清空的消息数量。
@@ -161,6 +187,10 @@ type StreamEvent struct {
 	Task string `json:"task,omitempty" example:"polish"`
 	// Content 表示增量文本或完整文本内容。
 	Content string `json:"content,omitempty" example:"雨夜里，门外的脚步声一点点逼近。"`
+	// ConversationID 表示本轮回复保存到的 Agent 会话 ID，仅 done 事件返回。
+	ConversationID uint64 `json:"conversation_id,omitempty" example:"1"`
+	// ConversationTitle 表示本轮回复保存到的 Agent 会话标题，仅 done 事件返回。
+	ConversationTitle string `json:"conversation_title,omitempty" example:"讨论第三章节奏"`
 	// Message 表示错误或状态说明。
 	Message string `json:"message,omitempty" example:"ok"`
 }
@@ -230,7 +260,7 @@ type AgentResult struct {
 	Model string
 }
 
-// AgentMemoryInput 表示运行 Agent 时需要注入模型上下文的小说级记忆。
+// AgentMemoryInput 表示运行 Agent 时需要注入模型上下文的会话级记忆。
 type AgentMemoryInput struct {
 	// Summary 表示已经滚动压缩后的长期记忆摘要。
 	Summary string
@@ -244,6 +274,12 @@ type AgentSummaryInput struct {
 	PreviousSummary string
 	// Messages 表示本次需要滚入长期摘要的旧 Agent 记忆消息。
 	Messages []MessageRecord
+}
+
+// AgentConversationTitleInput 表示生成新会话标题所需的用户首轮输入。
+type AgentConversationTitleInput struct {
+	// Message 表示新会话第一轮用户消息。
+	Message string
 }
 
 // PromptRecommendationInput 表示推荐判定模型需要的用户输入和可选提示词类型。
@@ -267,14 +303,17 @@ type ConversationSummaryUpdate struct {
 // AgentRuntime 表示可执行小说写作多层 Agent 的运行时。
 type AgentRuntime interface {
 	// Stream 流式执行小说写作 Agent。
-	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆；参数 emit 表示文本增量回调。
+	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 emit 表示文本增量回调。
 	Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, emit func(delta AgentDelta) error) (AgentResult, error)
-	// Summarize 生成小说级 Agent 滚动摘要。
+	// Summarize 生成会话级 Agent 滚动摘要。
 	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
 	Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error)
 	// RecommendPromptType 判断当前用户输入是否需要查询提示词库推荐。
 	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示推荐判定所需的用户输入和提示词类型。
 	RecommendPromptType(ctx context.Context, cfg *appconfig.AppConfig, input PromptRecommendationInput) (PromptRecommendationResponse, error)
+	// GenerateConversationTitle 根据新会话第一轮用户输入生成会话标题。
+	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示标题生成输入。
+	GenerateConversationTitle(ctx context.Context, cfg *appconfig.AppConfig, input AgentConversationTitleInput) (string, error)
 }
 
 // AgentRuntimeFactory 表示 Eino 多层 Agent 运行时工厂。

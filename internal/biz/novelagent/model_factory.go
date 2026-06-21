@@ -39,6 +39,8 @@ const (
 
 const summarySystemPrompt = "你是小说写作 Agent 的长期记忆摘要器。请把旧摘要和新增对话整理成一份紧凑、准确、可持续更新的中文摘要，保留用户偏好、小说设定、角色关系、写作要求、已经确认的修改方向和重要上下文。不要输出寒暄、标题或 Markdown 代码块，只输出摘要正文。"
 
+const conversationTitleSystemPrompt = "你是小说写作 AI 会话标题生成器。请根据用户开启会话时发送的第一句话，生成一个中文会话标题。标题必须不超过 50 个字，简洁具体，不要输出解释、引号、前缀、Markdown 或多行内容。"
+
 const promptRecommendationSystemPrompt = "你是小说提示词库推荐判定器。你的任务是判断用户当前输入是否属于小说正文修改、润色、扩写、缩写、风格调整、情绪强化、节奏调整、氛围调整、语言优化或类似写作修改需求，并从用户提供的提示词类型列表中选择最匹配的一项。你必须只输出 JSON，不要输出 Markdown、解释或额外文本。匹配时输出 {\"action\":\"prompt_search\",\"matched\":true,\"prompt_type\":\"类型名\"}；不匹配或无法确定时输出 {\"action\":\"none\",\"matched\":false,\"prompt_type\":\"\"}。prompt_type 必须严格来自可选类型列表。"
 
 // EinoAgentRuntimeFactory 表示基于 Eino ADK 的多层 Agent 运行时工厂。
@@ -416,7 +418,7 @@ type chatAgentRuntime struct {
 }
 
 // Stream 流式执行基于 schema.Message 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆；参数 emit 表示文本增量回调。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 emit 表示文本增量回调。
 func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, emit func(delta AgentDelta) error) (AgentResult, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
@@ -439,7 +441,7 @@ func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, 
 	return applyResultModelInfo(result, agentCfg.supervisor.name, r.modelConfigs), nil
 }
 
-// Summarize 使用 schema.Message 模型生成小说级 Agent 滚动摘要。
+// Summarize 使用 schema.Message 模型生成会话级 Agent 滚动摘要。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
 func (r chatAgentRuntime) Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error) {
 	messages := []*schema.Message{
@@ -474,6 +476,24 @@ func (r chatAgentRuntime) RecommendPromptType(ctx context.Context, cfg *appconfi
 	return parsePromptRecommendation(output.Content, input.PromptTypes), nil
 }
 
+// GenerateConversationTitle 使用 schema.Message 模型生成新 Agent 会话标题。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示标题生成输入。
+func (r chatAgentRuntime) GenerateConversationTitle(ctx context.Context, cfg *appconfig.AppConfig, input AgentConversationTitleInput) (string, error) {
+	_ = cfg
+	messages := []*schema.Message{
+		schema.SystemMessage(conversationTitleSystemPrompt),
+		schema.UserMessage(conversationTitleUserPrompt(input)),
+	}
+	output, err := r.model.Generate(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	if output == nil {
+		return "", fmt.Errorf("会话标题模型返回空消息")
+	}
+	return normalizeConversationTitleContent(output.Content)
+}
+
 // agenticAgentRuntime 表示基于 schema.AgenticMessage 的 Eino ADK 多层 Agent 运行时。
 type agenticAgentRuntime struct {
 	// model 表示 Eino AgenticModel。
@@ -493,7 +513,7 @@ type agenticAgentRuntime struct {
 }
 
 // Stream 流式执行基于 schema.AgenticMessage 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆；参数 emit 表示文本增量回调。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 emit 表示文本增量回调。
 func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, emit func(delta AgentDelta) error) (AgentResult, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
@@ -516,7 +536,7 @@ func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfi
 	return applyResultModelInfo(result, agentCfg.supervisor.name, r.modelConfigs), nil
 }
 
-// Summarize 使用 schema.AgenticMessage 模型生成小说级 Agent 滚动摘要。
+// Summarize 使用 schema.AgenticMessage 模型生成会话级 Agent 滚动摘要。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
 func (r agenticAgentRuntime) Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error) {
 	messages := []*schema.AgenticMessage{
@@ -545,8 +565,23 @@ func (r agenticAgentRuntime) RecommendPromptType(ctx context.Context, cfg *appco
 	return parsePromptRecommendation(agenticMessageText(output), input.PromptTypes), nil
 }
 
+// GenerateConversationTitle 使用 schema.AgenticMessage 模型生成新 Agent 会话标题。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示标题生成输入。
+func (r agenticAgentRuntime) GenerateConversationTitle(ctx context.Context, cfg *appconfig.AppConfig, input AgentConversationTitleInput) (string, error) {
+	_ = cfg
+	messages := []*schema.AgenticMessage{
+		schema.SystemAgenticMessage(conversationTitleSystemPrompt),
+		schema.UserAgenticMessage(conversationTitleUserPrompt(input)),
+	}
+	output, err := r.model.Generate(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	return normalizeConversationTitleContent(agenticMessageText(output))
+}
+
 // chatRunMessages 构造 schema.Message 路径的 Agent 输入消息列表。
-// 参数 req 表示本轮聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆。
+// 参数 req 表示本轮聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆。
 func chatRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Message {
 	messages := make([]*schema.Message, 0, len(memory.Messages)+3)
 	if prompt := memorySummaryPrompt(memory.Summary); prompt != "" {
@@ -569,7 +604,7 @@ func chatRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Message
 }
 
 // agenticRunMessages 构造 schema.AgenticMessage 路径的 Agent 输入消息列表。
-// 参数 req 表示本轮聊天请求；参数 memory 表示需要注入模型上下文的小说级记忆。
+// 参数 req 表示本轮聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆。
 func agenticRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.AgenticMessage {
 	messages := make([]*schema.AgenticMessage, 0, len(memory.Messages)+3)
 	if prompt := memorySummaryPrompt(memory.Summary); prompt != "" {
@@ -672,6 +707,26 @@ func summaryUserPrompt(input AgentSummaryInput) string {
 		builder.WriteString("\n")
 	}
 	return builder.String()
+}
+
+// conversationTitleUserPrompt 生成会话标题模型的用户消息。
+// 参数 input 表示新会话标题生成输入。
+func conversationTitleUserPrompt(input AgentConversationTitleInput) string {
+	return "用户第一句话：\n" + strings.TrimSpace(input.Message)
+}
+
+// normalizeConversationTitleContent 标准化标题模型返回的标题正文。
+// 参数 content 表示模型生成的原始标题文本。
+func normalizeConversationTitleContent(content string) (string, error) {
+	title := strings.TrimSpace(content)
+	title = strings.TrimPrefix(title, "标题：")
+	title = strings.TrimPrefix(title, "标题:")
+	title = strings.Trim(title, "\"'`“”‘’")
+	title = strings.Join(strings.Fields(title), " ")
+	if title == "" {
+		return "", fmt.Errorf("会话标题模型返回空内容")
+	}
+	return truncateRunes(title, maxConversationTitleLength), nil
 }
 
 // summaryMessageRoleLabel 返回摘要提示中使用的消息角色名称。
