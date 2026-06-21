@@ -9143,6 +9143,9 @@ html[data-theme="dark"] .chapter-ai-assistant-card {
 }
 
 .chapter-ai-dialogue .semi-ai-chat-dialogue-avatar {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--color-outline-variant) 52%, transparent);
   background: var(--color-surface-container-high);
