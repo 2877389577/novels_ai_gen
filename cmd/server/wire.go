@@ -97,6 +97,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		biznovelsummary.NewService,
 		datanoveloutline.NewRepository,
 		wire.Bind(new(biznoveloutline.Repository), new(*datanoveloutline.Repository)),
+		wire.Bind(new(agenttools.NovelOutlineStore), new(*datanoveloutline.Repository)),
 		biznoveloutline.NewService,
 		biznovelagent.NewService,
 		dataprompt.NewRepository,

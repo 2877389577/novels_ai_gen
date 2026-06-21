@@ -189,6 +189,20 @@ ai:
           updated_at: 小说总结最近更新时间。
 
           范围规则：start_chapter_number=0 且 end_chapter_number=0 表示当前总结没有记录覆盖章节范围。正常范围应理解为“总结内容覆盖第 start_chapter_number 章到第 end_chapter_number 章”。
+      - name: query_novel_outline
+        description: |-
+          根据小说 ID 查询小说大纲正文；未传 novel_id 时使用当前 Agent 请求关联的小说 ID。
+
+          **返回值说明：**
+          工具直接返回字符串，不返回 JSON。返回的字符串就是小说大纲正文全文。
+          如果该小说还没有创建大纲，则返回空字符串。
+      - name: update_novel_outline
+        description: |-
+          根据小说 ID 写入或覆盖小说大纲正文；未传 novel_id 时使用当前 Agent 请求关联的小说 ID。该工具只能修改大纲 content 字段，不能修改小说或大纲的其他字段。
+
+          **返回值说明：**
+          工具直接返回字符串，不返回 JSON。返回的字符串就是保存后的小说大纲正文全文。
+          content 允许为空字符串，表示清空大纲正文。
       - name: list_characters
         description: |-
           分页读取指定小说的角色核心设定，每页固定 5 个，按角色 ID 升序返回，并返回当前页、每页数量、总数和总页数。
