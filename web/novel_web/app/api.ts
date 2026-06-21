@@ -169,8 +169,8 @@ export interface NovelAgentChatParams {
   model: string;
   // message 表示用户输入的写作需求或问题。
   message: string;
-  // novelId 表示当前请求关联的小说 ID，普通对话可为空。
-  novelId?: number;
+  // novelId 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
+  novelId: number;
   // chapterId 表示当前请求关联的章节 ID，普通对话可为空。
   chapterId?: number;
   // signal 表示用于取消 AI 流式请求的浏览器 AbortSignal。
@@ -727,6 +727,40 @@ export interface NovelWordCountData {
   novel_id: number;
   // word_count 表示小说所有章节累计后的总字数。
   word_count: number;
+}
+
+// NovelSummaryItem 表示小说滚动总结详情数据。
+export interface NovelSummaryItem {
+  // id 表示小说总结主键 ID。
+  id: number;
+  // novel_id 表示总结所属小说 ID。
+  novel_id: number;
+  // content 表示小说滚动剧情总结内容。
+  content: string;
+  // start_chapter_number 表示当前总结覆盖的起始章节号，0 表示未知或未记录。
+  start_chapter_number: number;
+  // end_chapter_number 表示当前总结覆盖的结束章节号，0 表示未知或未记录。
+  end_chapter_number: number;
+  // created_at 表示创建时间。
+  created_at: string;
+  // updated_at 表示更新时间。
+  updated_at: string;
+}
+
+// NovelSummarySaveParams 表示创建或更新小说总结时提交的数据。
+export interface NovelSummarySaveParams {
+  // content 表示需要保存的小说滚动剧情总结内容，允许为空字符串。
+  content: string;
+  // start_chapter_number 表示当前总结覆盖的起始章节号，0 表示未知或未记录。
+  start_chapter_number: number;
+  // end_chapter_number 表示当前总结覆盖的结束章节号，0 表示未知或未记录。
+  end_chapter_number: number;
+}
+
+// NovelSummaryDeleteData 表示删除小说总结接口返回的数据。
+export interface NovelSummaryDeleteData {
+  // deleted 表示后端是否已经删除小说总结。
+  deleted: boolean;
 }
 
 // ChapterSummaryItem 表示章节列表中的章节摘要数据，不包含正文。
@@ -1666,6 +1700,9 @@ export async function streamNovelAgentChat(
   if (!authData) {
     throw new UnauthorizedError("登录已过期，请重新登录");
   }
+  if (!Number.isSafeInteger(params.novelId) || params.novelId <= 0) {
+    throw new Error("当前小说信息缺失，请刷新后重试");
+  }
 
   const response = await fetch("/api/v1/ai/agents/chat/stream", {
     method: "POST",
@@ -2375,6 +2412,133 @@ export async function deleteNovel(id: number): Promise<NovelDeleteData> {
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "小说删除失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchNovelSummary 查询指定小说的滚动总结。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNovelSummary(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<NovelSummaryItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/summary`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelSummaryItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说总结加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// createNovelSummary 为指定小说创建滚动总结。
+// 参数 novelId 表示小说主键 ID；参数 params 表示需要创建的小说总结内容和覆盖章节范围。
+export async function createNovelSummary(
+  novelId: number,
+  params: NovelSummarySaveParams,
+): Promise<NovelSummaryItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/summary`, {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelSummaryItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说总结保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateNovelSummary 更新指定小说的滚动总结。
+// 参数 novelId 表示小说主键 ID；参数 params 表示需要覆盖保存的小说总结内容和覆盖章节范围。
+export async function updateNovelSummary(
+  novelId: number,
+  params: NovelSummarySaveParams,
+): Promise<NovelSummaryItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/summary`, {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelSummaryItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说总结保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteNovelSummary 删除指定小说的滚动总结。
+// 参数 novelId 表示小说主键 ID。
+export async function deleteNovelSummary(
+  novelId: number,
+): Promise<NovelSummaryDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/summary`, {
+    method: "DELETE",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+  });
+  const payload = await parseApiResponse<NovelSummaryDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说总结删除失败，请稍后再试");
   }
 
   return payload.data;

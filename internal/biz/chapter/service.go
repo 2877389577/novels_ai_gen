@@ -30,6 +30,12 @@ type Repository interface {
 	// GetByID 根据小说 ID 和章节 ID 查询章节。
 	// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 chapterID 表示章节主键 ID。
 	GetByID(ctx context.Context, novelID uint64, chapterID uint64) (*Chapter, error)
+	// QueryChapters 根据条件查询章节数据。
+	// 参数 ctx 表示请求上下文；参数 condition 表示章节查询条件。
+	QueryChapters(ctx context.Context, condition QueryChaptersCondition) ([]Chapter, error)
+	// UpdateChapterSummary 只更新章节总结字段并返回更新后的章节。
+	// 参数 ctx 表示请求上下文；参数 condition 表示章节总结更新条件。
+	UpdateChapterSummary(ctx context.Context, condition UpdateChapterSummaryCondition) (*Chapter, error)
 	// Update 更新章节记录。
 	// 参数 ctx 表示请求上下文；参数 item 表示需要保存的章节模型。
 	Update(ctx context.Context, item *Chapter) error
@@ -254,6 +260,7 @@ func toResponse(item Chapter) ChapterResponse {
 		ChapterNumber: item.ChapterNumber,
 		Title:         item.Title,
 		Content:       item.Content,
+		Summary:       item.Summary,
 		WordCount:     item.WordCount,
 		CreatedAt:     item.CreatedAt,
 		UpdatedAt:     item.UpdatedAt,

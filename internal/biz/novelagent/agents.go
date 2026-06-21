@@ -305,7 +305,16 @@ func normalizeAgentTools(values []string, registry map[string]runtimeAgentTool) 
 // isImplementedAgentTool 判断工具名称是否已经由后端代码实现。
 // 参数 name 表示配置文件中的工具名称。
 func isImplementedAgentTool(name string) bool {
-	return name == agenttools.ToolNameGetContent
+	switch name {
+	case agenttools.ToolNameGetContent,
+		agenttools.ToolNameQueryChapters,
+		agenttools.ToolNameUpdateChapterSummary,
+		agenttools.ToolNameQueryNovelSummary,
+		agenttools.ToolNameUpdateNovelSummary:
+		return true
+	default:
+		return false
+	}
 }
 
 // isChildAgentEnabled 判断子 Agent 是否启用，未配置 enabled 时按启用处理。

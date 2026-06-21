@@ -78,7 +78,7 @@ type Service struct {
 // 参数 repo 表示 AI 提供商仓储；参数 cipher 表示 API Key 解密器；参数 prompts 表示提示词配置来源；参数 runtimeFactory 表示 Eino 多层 Agent 运行时工厂；参数 memoryRepo 表示小说级 Agent 记忆仓储。
 func NewService(repo Repository, cipher Cipher, prompts PromptProvider, runtimeFactory AgentRuntimeFactory, memoryRepo MemoryRepository) *Service {
 	if runtimeFactory == nil {
-		runtimeFactory = NewEinoAgentRuntimeFactory(nil)
+		runtimeFactory = NewEinoAgentRuntimeFactory(nil, nil)
 	}
 	return &Service{
 		repo:           repo,
@@ -306,8 +306,8 @@ func ValidateChatRequest(req ChatRequest) error {
 	if strings.TrimSpace(req.Message) == "" {
 		return ErrMessageRequired
 	}
-	if req.ChapterID != 0 && req.NovelID == 0 {
-		return ErrChapterContextInvalid
+	if req.NovelID == 0 {
+		return ErrNovelIDRequired
 	}
 	return nil
 }

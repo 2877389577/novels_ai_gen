@@ -13,6 +13,7 @@ import (
 	loghandler "novels_ai_gen/internal/api/handler/log"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	novelagenthandler "novels_ai_gen/internal/api/handler/novelagent"
+	novelsummaryhandler "novels_ai_gen/internal/api/handler/novelsummary"
 	prompthandler "novels_ai_gen/internal/api/handler/prompt"
 	relationshiphandler "novels_ai_gen/internal/api/handler/relationship"
 	systemhandler "novels_ai_gen/internal/api/handler/system"
@@ -26,6 +27,7 @@ import (
 	biznovel "novels_ai_gen/internal/biz/novel"
 	biznovelagent "novels_ai_gen/internal/biz/novelagent"
 	agenttools "novels_ai_gen/internal/biz/novelagent/tools"
+	biznovelsummary "novels_ai_gen/internal/biz/novelsummary"
 	bizprompt "novels_ai_gen/internal/biz/prompt"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	bizsystem "novels_ai_gen/internal/biz/system"
@@ -39,6 +41,7 @@ import (
 	dataevent "novels_ai_gen/internal/data/event"
 	datanovel "novels_ai_gen/internal/data/novel"
 	datanovelagent "novels_ai_gen/internal/data/novelagent"
+	datanovelsummary "novels_ai_gen/internal/data/novelsummary"
 	"novels_ai_gen/internal/data/objectstore"
 	dataprompt "novels_ai_gen/internal/data/prompt"
 	datarelationship "novels_ai_gen/internal/data/relationship"
@@ -84,6 +87,10 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		wire.Bind(new(biznovelagent.AgentRuntimeFactory), new(*biznovelagent.EinoAgentRuntimeFactory)),
 		datanovelagent.NewRepository,
 		wire.Bind(new(biznovelagent.MemoryRepository), new(*datanovelagent.Repository)),
+		datanovelsummary.NewRepository,
+		wire.Bind(new(biznovelsummary.Repository), new(*datanovelsummary.Repository)),
+		wire.Bind(new(agenttools.NovelSummaryStore), new(*datanovelsummary.Repository)),
+		biznovelsummary.NewService,
 		biznovelagent.NewService,
 		dataprompt.NewRepository,
 		wire.Bind(new(bizprompt.Repository), new(*dataprompt.Repository)),
@@ -100,6 +107,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		eventhandler.NewHandler,
 		aiproviderhandler.NewHandler,
 		novelagenthandler.NewHandler,
+		novelsummaryhandler.NewHandler,
 		prompthandler.NewHandler,
 		uploadhandler.NewHandler,
 		confighandler.NewHandler,

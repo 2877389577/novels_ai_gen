@@ -20,6 +20,8 @@ type Chapter struct {
 	Title string `json:"title" gorm:"column:title;type:varchar(255);not null;comment:章节名，不能为空" example:"初入长夜"`
 	// Content 表示章节正文，可以为空。
 	Content string `json:"content" gorm:"column:content;type:text;comment:章节正文，可以为空" example:"夜色像墨一样铺开。"`
+	// Summary 表示章节总结，可以为空。
+	Summary string `json:"summary" gorm:"column:summary;type:text;comment:章节总结，可以为空" example:"主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。"`
 	// WordCount 表示正文中非空白 Unicode 字符数量。
 	WordCount int `json:"word_count" gorm:"column:word_count;not null;default:0;comment:正文中非空白Unicode字符数量" example:"8"`
 	// CreatedAt 表示创建时间。
@@ -59,6 +61,34 @@ type ListRequest struct {
 	PageSize int `form:"page_size" example:"20"`
 }
 
+// QueryChaptersCondition 表示章节数据查询条件。
+type QueryChaptersCondition struct {
+	// NovelID 表示所属小说 ID。
+	NovelID uint64
+	// ChapterID 表示章节主键 ID，非 0 时按主键查询单章。
+	ChapterID uint64
+	// ChapterNumber 表示章节号，非 0 时按章节号查询单章。
+	ChapterNumber int
+	// StartChapterNumber 表示章节号范围起点，非 0 时与 EndChapterNumber 一起用于范围查询。
+	StartChapterNumber int
+	// EndChapterNumber 表示章节号范围终点，非 0 时与 StartChapterNumber 一起用于范围查询。
+	EndChapterNumber int
+	// Fields 表示需要从数据库读取的字段列表，空列表表示读取全部字段。
+	Fields []string
+}
+
+// UpdateChapterSummaryCondition 表示章节总结更新条件。
+type UpdateChapterSummaryCondition struct {
+	// NovelID 表示所属小说 ID。
+	NovelID uint64
+	// ChapterID 表示章节主键 ID，非 0 时按主键定位章节。
+	ChapterID uint64
+	// ChapterNumber 表示章节号，非 0 时按章节号定位章节。
+	ChapterNumber int
+	// Summary 表示需要写入的章节总结，允许为空字符串以清空总结。
+	Summary string
+}
+
 // ChapterResponse 表示章节详情响应数据。
 type ChapterResponse struct {
 	// ID 表示章节主键 ID。
@@ -71,6 +101,8 @@ type ChapterResponse struct {
 	Title string `json:"title" example:"初入长夜"`
 	// Content 表示章节正文。
 	Content string `json:"content" example:"夜色像墨一样铺开。"`
+	// Summary 表示章节总结。
+	Summary string `json:"summary" example:"主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。"`
 	// WordCount 表示正文中非空白 Unicode 字符数量。
 	WordCount int `json:"word_count" example:"8"`
 	// CreatedAt 表示创建时间。

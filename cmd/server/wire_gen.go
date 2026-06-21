@@ -16,6 +16,7 @@ import (
 	"novels_ai_gen/internal/api/handler/log"
 	novel3 "novels_ai_gen/internal/api/handler/novel"
 	novelagent3 "novels_ai_gen/internal/api/handler/novelagent"
+	novelsummary3 "novels_ai_gen/internal/api/handler/novelsummary"
 	prompt3 "novels_ai_gen/internal/api/handler/prompt"
 	relationship3 "novels_ai_gen/internal/api/handler/relationship"
 	system2 "novels_ai_gen/internal/api/handler/system"
@@ -28,6 +29,7 @@ import (
 	event2 "novels_ai_gen/internal/biz/event"
 	novel2 "novels_ai_gen/internal/biz/novel"
 	"novels_ai_gen/internal/biz/novelagent"
+	novelsummary2 "novels_ai_gen/internal/biz/novelsummary"
 	prompt2 "novels_ai_gen/internal/biz/prompt"
 	relationship2 "novels_ai_gen/internal/biz/relationship"
 	"novels_ai_gen/internal/biz/system"
@@ -41,6 +43,7 @@ import (
 	"novels_ai_gen/internal/data/event"
 	"novels_ai_gen/internal/data/novel"
 	novelagent2 "novels_ai_gen/internal/data/novelagent"
+	"novels_ai_gen/internal/data/novelsummary"
 	"novels_ai_gen/internal/data/objectstore"
 	"novels_ai_gen/internal/data/prompt"
 	"novels_ai_gen/internal/data/relationship"
@@ -100,10 +103,13 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	modelClient := aiprovider2.NewModelClient()
 	aiproviderService := aiprovider2.NewService(aiproviderRepository, cipher, modelClient)
 	aiproviderHandler := aiprovider3.NewHandler(aiproviderService)
-	einoAgentRuntimeFactory := novelagent.NewEinoAgentRuntimeFactory(chapterRepository)
+	novelsummaryRepository := novelsummary.NewRepository(gormDB)
+	einoAgentRuntimeFactory := novelagent.NewEinoAgentRuntimeFactory(chapterRepository, novelsummaryRepository)
 	novelagentRepository := novelagent2.NewRepository(gormDB)
 	novelagentService := novelagent.NewService(aiproviderRepository, cipher, configManager, einoAgentRuntimeFactory, novelagentRepository)
 	novelagentHandler := novelagent3.NewHandler(novelagentService)
+	novelsummaryService := novelsummary2.NewService(novelsummaryRepository)
+	novelsummaryHandler := novelsummary3.NewHandler(novelsummaryService)
 	promptRepository := prompt.NewRepository(gormDB)
 	promptService := prompt2.NewService(promptRepository, configManager)
 	promptHandler := prompt3.NewHandler(promptService)
@@ -120,7 +126,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	logHandler := log.NewHandler(configManager)
 	systemService := system.NewService()
 	systemHandler := system2.NewHandler(systemService)
-	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, eventHandler, aiproviderHandler, novelagentHandler, promptHandler, uploadHandler, configHandler, logHandler, systemHandler, service)
+	engine := router.NewRouter(handler, novelHandler, chapterHandler, characterHandler, relationshipHandler, eventHandler, aiproviderHandler, novelagentHandler, novelsummaryHandler, promptHandler, uploadHandler, configHandler, logHandler, systemHandler, service)
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {

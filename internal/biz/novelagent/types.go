@@ -16,8 +16,8 @@ type ChatRequest struct {
 	Model string `json:"model" example:"gpt-5"`
 	// Message 表示用户输入的写作需求或问题。
 	Message string `json:"message" binding:"required" example:"帮我润色这一段，让语气更紧张"`
-	// NovelID 表示当前请求关联的小说 ID，普通对话可为空。
-	NovelID uint64 `json:"novel_id,omitempty" example:"1"`
+	// NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
+	NovelID uint64 `json:"novel_id" example:"1"`
 	// ChapterID 表示当前请求关联的章节 ID，普通对话可为空。
 	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
 }
