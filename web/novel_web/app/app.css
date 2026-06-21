@@ -8146,10 +8146,21 @@ html[data-theme="dark"] .chapter-editor-paper {
   font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
-.agent-settings-parameters {
-  min-height: 180px;
+.agent-settings-json-field {
+  gap: 8px;
+}
+
+.agent-settings-json-viewer-wrap {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 72%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-paper) 92%, white);
+}
+
+.agent-settings-json-viewer {
+  width: 100%;
   font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
-  tab-size: 2;
 }
 
 .agent-settings-child-heading {

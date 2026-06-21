@@ -464,6 +464,8 @@ export interface AgentDefinition {
   name: string;
   // enabled 表示子 Agent 是否启用，未返回时按启用处理。
   enabled?: boolean | null;
+  // share_chat_history 表示子 Agent 是否共享父 Agent 的完整聊天历史，未返回时按关闭处理。
+  share_chat_history?: boolean | null;
   // provider_id 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求提供商。
   provider_id: number;
   // model 表示该 Agent 自定义使用的模型标识，空值表示继承或使用提供商默认模型。
