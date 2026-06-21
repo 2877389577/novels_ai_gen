@@ -319,6 +319,8 @@ func isImplementedAgentTool(name string) bool {
 		agenttools.ToolNameUpdateChapterSummary,
 		agenttools.ToolNameQueryNovelSummary,
 		agenttools.ToolNameUpdateNovelSummary,
+		agenttools.ToolNameQueryNovelOutline,
+		agenttools.ToolNameUpdateNovelOutline,
 		agenttools.ToolNameListCharacters,
 		agenttools.ToolNameSearchCharactersByName,
 		agenttools.ToolNameSaveCharacter:

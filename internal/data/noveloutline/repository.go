@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	biznovel "novels_ai_gen/internal/biz/novel"
 	biznoveloutline "novels_ai_gen/internal/biz/noveloutline"
@@ -82,6 +83,39 @@ func (r *Repository) UpdateContent(ctx context.Context, novelID uint64, content 
 		return nil, fmt.Errorf("更新小说大纲记录失败: %w", err)
 	}
 	return r.GetByNovelID(ctx, novelID)
+}
+
+// UpsertContent 创建或覆盖小说大纲正文并返回保存后的记录。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID；参数 content 表示需要写入的大纲正文。
+func (r *Repository) UpsertContent(ctx context.Context, novelID uint64, content string) (*biznoveloutline.NovelOutline, error) {
+	var saved biznoveloutline.NovelOutline
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := ensureNovelExists(tx, novelID); err != nil {
+			return err
+		}
+
+		now := tx.NowFunc()
+		item := biznoveloutline.NovelOutline{
+			NovelID: novelID,
+			Content: content,
+		}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "novel_id"}},
+			DoUpdates: clause.Assignments(map[string]any{
+				"content":    content,
+				"updated_at": now,
+			}),
+		}).Create(&item).Error; err != nil {
+			return fmt.Errorf("保存小说大纲记录失败: %w", err)
+		}
+		if err := tx.Where("novel_id = ?", novelID).First(&saved).Error; err != nil {
+			return fmt.Errorf("刷新小说大纲记录失败: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return &saved, nil
 }
 
 // DeleteByNovelID 根据小说 ID 删除小说大纲。
