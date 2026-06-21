@@ -318,7 +318,10 @@ func isImplementedAgentTool(name string) bool {
 		agenttools.ToolNameQueryChapters,
 		agenttools.ToolNameUpdateChapterSummary,
 		agenttools.ToolNameQueryNovelSummary,
-		agenttools.ToolNameUpdateNovelSummary:
+		agenttools.ToolNameUpdateNovelSummary,
+		agenttools.ToolNameListCharacters,
+		agenttools.ToolNameSearchCharactersByName,
+		agenttools.ToolNameSaveCharacter:
 		return true
 	default:
 		return false

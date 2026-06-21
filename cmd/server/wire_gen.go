@@ -104,7 +104,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	aiproviderService := aiprovider2.NewService(aiproviderRepository, cipher, modelClient)
 	aiproviderHandler := aiprovider3.NewHandler(aiproviderService)
 	novelsummaryRepository := novelsummary.NewRepository(gormDB)
-	einoAgentRuntimeFactory := novelagent.NewEinoAgentRuntimeFactory(chapterRepository, novelsummaryRepository)
+	einoAgentRuntimeFactory := novelagent.NewEinoAgentRuntimeFactory(chapterRepository, novelsummaryRepository, characterRepository)
 	novelagentRepository := novelagent2.NewRepository(gormDB)
 	novelagentService := novelagent.NewService(aiproviderRepository, cipher, configManager, einoAgentRuntimeFactory, novelagentRepository)
 	novelagentHandler := novelagent3.NewHandler(novelagentService)
