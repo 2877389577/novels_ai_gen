@@ -13,6 +13,7 @@ import {
   AIChatDialogue,
   Button,
   FloatButton,
+  Modal,
   Select,
   Toast,
 } from "@douyinfe/semi-ui-19";
@@ -39,8 +40,8 @@ import type {
 
 import {
   UnauthorizedError,
-  clearNovelAgentConversationMessages,
   createChapter,
+  deleteNovelAgentConversation,
   fetchChapterDetail,
   fetchAIProviderModelsByProviderID,
   fetchNovelAgentConversationMessages,
@@ -84,6 +85,7 @@ const chapterAiAssistantMessages: ChapterAiMessage[] = [];
 const chapterAiAssistantRoleConfig: RoleConfig = {
   assistant: {
     name: "写作助手",
+    avatar: "/images/AI头像.jpg",
     color: "var(--semi-color-primary)",
   },
   system: {
@@ -91,6 +93,7 @@ const chapterAiAssistantRoleConfig: RoleConfig = {
   },
   user: {
     name: "你",
+    avatar: "/images/用户头像.jpg",
   },
 };
 
@@ -1130,7 +1133,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const [modelLoading, setModelLoading] = useState(false);
   const [conversationLoading, setConversationLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyClearing, setHistoryClearing] = useState(false);
+  const [conversationDeleting, setConversationDeleting] = useState(false);
   const [assistantSending, setAssistantSending] = useState(false);
   const [promptRecommendationLoading, setPromptRecommendationLoading] =
     useState(false);
@@ -1692,36 +1695,57 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     setChats(chapterAiAssistantMessages);
   }
 
-  // handleClearAssistantHistory 清空当前 AI 会话的历史消息。
-  async function handleClearAssistantHistory() {
+  // handleDeleteAssistantConversation 删除当前 AI 会话及其历史消息。
+  function handleDeleteAssistantConversation() {
     if (assistantSending) {
-      Toast.info("AI 正在回复，稍后再清空历史");
+      Toast.info("AI 正在回复，稍后再删除会话");
       return;
     }
-    if (historyClearing) {
+    if (conversationDeleting) {
       return;
     }
-
     if (selectedConversationID === null) {
-      setChats(chapterAiAssistantMessages);
-      Toast.success("新会话草稿已清空");
+      Toast.info("当前没有可删除的 AI 会话");
       return;
     }
 
-    setHistoryClearing(true);
-    try {
-      await clearNovelAgentConversationMessages(props.novelId, selectedConversationID);
-      setChats(chapterAiAssistantMessages);
-      Toast.success("AI 历史消息已清空");
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        onUnauthorized();
-        return;
-      }
-      Toast.error(getErrorMessage(error, "AI 历史消息清空失败，请稍后再试"));
-    } finally {
-      setHistoryClearing(false);
-    }
+    const conversationID = selectedConversationID;
+    const conversationTitle =
+      conversations.find(function findConversation(conversation) {
+        return conversation.id === conversationID;
+      })?.title?.trim() || "当前会话";
+
+    Modal.confirm({
+      title: "删除会话",
+      content: `确定删除「${conversationTitle}」吗？该会话和聊天记录将无法恢复。`,
+      okText: "删除",
+      cancelText: "取消",
+      okType: "danger",
+      onOk: async function confirmDeleteConversation() {
+        setConversationDeleting(true);
+        try {
+          await deleteNovelAgentConversation(props.novelId, conversationID);
+          const nextConversations = conversations.filter(function keepConversation(
+            conversation,
+          ) {
+            return conversation.id !== conversationID;
+          });
+          setConversations(nextConversations);
+          setSelectedConversationID(nextConversations[0]?.id ?? null);
+          setChats(chapterAiAssistantMessages);
+          setHistoryLoading(nextConversations.length > 0);
+          Toast.success("AI 会话已删除");
+        } catch (error) {
+          if (error instanceof UnauthorizedError) {
+            onUnauthorized();
+            return;
+          }
+          Toast.error(getErrorMessage(error, "AI 会话删除失败，请稍后再试"));
+        } finally {
+          setConversationDeleting(false);
+        }
+      },
+    });
   }
 
   // submitAssistantMessage 将用户输入发送给后端小说写作 Agent。
@@ -2363,16 +2387,17 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           </div>
           <div className="chapter-ai-assistant-actions">
             <button
-              aria-label="清空 AI 历史消息"
+              aria-label="删除当前 AI 会话"
               className="chapter-ai-assistant-clear"
               disabled={
                 conversationLoading ||
                 historyLoading ||
-                historyClearing ||
-                assistantSending
+                conversationDeleting ||
+                assistantSending ||
+                selectedConversationID === null
               }
-              onClick={handleClearAssistantHistory}
-              title="清空历史"
+              onClick={handleDeleteAssistantConversation}
+              title="删除会话"
               type="button"
             >
               <IconDelete aria-hidden="true" />

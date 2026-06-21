@@ -169,10 +169,10 @@ type ConversationListResponse struct {
 	Items []ConversationResponse `json:"items"`
 }
 
-// ClearMessagesResponse 表示清空 Agent 历史消息后的响应。
-type ClearMessagesResponse struct {
-	// Cleared 表示本次清空的消息数量。
-	Cleared int64 `json:"cleared" example:"2"`
+// DeleteConversationResponse 表示删除 Agent 会话后的响应。
+type DeleteConversationResponse struct {
+	// Deleted 表示 Agent 会话是否已经删除。
+	Deleted bool `json:"deleted" example:"true"`
 }
 
 // StreamEvent 表示小说写作 Agent NDJSON 流事件。

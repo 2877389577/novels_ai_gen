@@ -55,12 +55,10 @@ type MemoryRepository interface {
 	// AppendMessagesAndUpdateSummary 以事务追加 Agent 记忆消息并可选更新会话摘要。
 	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 messages 表示需要写入的消息列表；参数 summary 表示需要写回的摘要更新，nil 表示不更新摘要。
 	AppendMessagesAndUpdateSummary(ctx context.Context, conversationID uint64, messages []MessageRecord, summary *ConversationSummaryUpdate) error
-	// ClearMessagesByConversationID 清空指定 Agent 会话的记忆消息。
-	// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID；参数 conversationID 表示 Agent 会话主键 ID。
-	ClearMessagesByConversationID(ctx context.Context, novelID uint64, conversationID uint64) (int64, error)
-	// ClearMessagesByNovelID 清空指定小说下所有 Agent 会话的记忆消息。
+	// DeleteConversationByID 删除指定小说下的 Agent 会话及其记忆消息。
 	// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
-	ClearMessagesByNovelID(ctx context.Context, novelID uint64) (int64, error)
+	// 参数 conversationID 表示 Agent 会话主键 ID。
+	DeleteConversationByID(ctx context.Context, novelID uint64, conversationID uint64) error
 }
 
 // Cipher 表示小说写作 Agent 解密 AI 提供商 API Key 的依赖。
@@ -293,44 +291,26 @@ func (s *Service) ListMessages(ctx context.Context, novelID uint64) (MessageList
 	return MessageListResponse{Items: messageResponses(messages)}, nil
 }
 
-// ClearConversationMessages 清空指定 Agent 会话的历史消息和概要。
+// DeleteConversation 删除指定 Agent 会话及其历史消息。
 // 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID；参数 conversationID 表示 Agent 会话主键 ID。
-func (s *Service) ClearConversationMessages(ctx context.Context, novelID uint64, conversationID uint64) (ClearMessagesResponse, error) {
+func (s *Service) DeleteConversation(ctx context.Context, novelID uint64, conversationID uint64) (DeleteConversationResponse, error) {
 	if novelID == 0 {
-		return ClearMessagesResponse{}, ErrChapterContextInvalid
+		return DeleteConversationResponse{}, ErrChapterContextInvalid
 	}
 	if conversationID == 0 {
-		return ClearMessagesResponse{}, ErrConversationNotFound
+		return DeleteConversationResponse{}, ErrConversationNotFound
 	}
 	if s.memoryRepo == nil {
-		return ClearMessagesResponse{}, fmt.Errorf("%w: Agent 记忆仓储未初始化", ErrAgentMemoryFailed)
+		return DeleteConversationResponse{}, fmt.Errorf("%w: Agent 记忆仓储未初始化", ErrAgentMemoryFailed)
 	}
 
-	cleared, err := s.memoryRepo.ClearMessagesByConversationID(ctx, novelID, conversationID)
-	if err != nil {
+	if err := s.memoryRepo.DeleteConversationByID(ctx, novelID, conversationID); err != nil {
 		if errors.Is(err, ErrConversationNotFound) {
-			return ClearMessagesResponse{}, err
+			return DeleteConversationResponse{}, err
 		}
-		return ClearMessagesResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+		return DeleteConversationResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
-	return ClearMessagesResponse{Cleared: cleared}, nil
-}
-
-// ClearMessages 清空指定小说下所有 Agent 会话的历史消息。
-// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
-func (s *Service) ClearMessages(ctx context.Context, novelID uint64) (ClearMessagesResponse, error) {
-	if novelID == 0 {
-		return ClearMessagesResponse{}, ErrChapterContextInvalid
-	}
-	if s.memoryRepo == nil {
-		return ClearMessagesResponse{}, fmt.Errorf("%w: Agent 记忆仓储未初始化", ErrAgentMemoryFailed)
-	}
-
-	cleared, err := s.memoryRepo.ClearMessagesByNovelID(ctx, novelID)
-	if err != nil {
-		return ClearMessagesResponse{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
-	}
-	return ClearMessagesResponse{Cleared: cleared}, nil
+	return DeleteConversationResponse{Deleted: true}, nil
 }
 
 // RecommendPromptType 判断当前用户输入是否需要查询提示词库推荐。

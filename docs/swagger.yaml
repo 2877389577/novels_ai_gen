@@ -1529,6 +1529,15 @@ definitions:
         description: Message 表示错误或状态说明。
         example: ok
         type: string
+      replies:
+        description: Replies 表示 done 事件中返回的分段助手回复列表。
+        items:
+          $ref: '#/definitions/internal_api_handler_novelagent.StreamReply'
+        type: array
+      reply_index:
+        description: ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。
+        example: 1
+        type: integer
       request_id:
         description: RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
@@ -1544,6 +1553,21 @@ definitions:
       type:
         description: Type 表示事件类型，支持 meta、delta、done、error。
         example: delta
+        type: string
+    type: object
+  internal_api_handler_novelagent.StreamReply:
+    properties:
+      content:
+        description: Content 表示该回复段的完整文本内容。
+        example: 我先读取当前章节内容。
+        type: string
+      reply_index:
+        description: ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。
+        example: 1
+        type: integer
+      task:
+        description: Task 表示产生该回复段的任务来源。
+        example: polish
         type: string
     type: object
   internal_api_handler_relationship.SaveRequest:
@@ -1761,32 +1785,6 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  novelagent.ClearMessagesData:
-    properties:
-      cleared:
-        description: Cleared 表示本次清空的消息数量。
-        example: 2
-        type: integer
-    type: object
-  novelagent.ClearMessagesSuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/novelagent.ClearMessagesData'
-        description: Data 表示清空结果。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
   novelagent.ConversationData:
     properties:
       created_at:
@@ -1828,6 +1826,32 @@ definitions:
         allOf:
         - $ref: '#/definitions/novelagent.ConversationListData'
         description: Data 表示 Agent 会话列表。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  novelagent.DeleteConversationData:
+    properties:
+      deleted:
+        description: Deleted 表示 Agent 会话是否已经删除。
+        example: true
+        type: boolean
+    type: object
+  novelagent.DeleteConversationSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/novelagent.DeleteConversationData'
+        description: Data 表示删除结果。
       message:
         description: Message 表示响应提示信息。
         example: ok
@@ -4589,11 +4613,11 @@ paths:
       summary: 查询小说 Agent 会话列表
       tags:
       - ai-agents
-  /novels/{novel_id}/agent-conversations/{conversation_id}/messages:
+  /novels/{novel_id}/agent-conversations/{conversation_id}:
     delete:
       consumes:
       - application/json
-      description: 清空指定小说下某个 Agent 会话已保存的历史消息，并同步清空该会话概要。
+      description: 删除指定小说下某个 Agent 会话，并同步删除该会话已保存的历史消息和概要。
       parameters:
       - description: 小说 ID
         in: path
@@ -4609,9 +4633,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: 清空成功
+          description: 删除成功
           schema:
-            $ref: '#/definitions/novelagent.ClearMessagesSuccessResponse'
+            $ref: '#/definitions/novelagent.DeleteConversationSuccessResponse'
         "400":
           description: 请求参数错误
           schema:
@@ -4630,9 +4654,10 @@ paths:
             $ref: '#/definitions/response.ErrorBody'
       security:
       - Bearer: []
-      summary: 清空指定 Agent 会话历史消息
+      summary: 删除指定 Agent 会话
       tags:
       - ai-agents
+  /novels/{novel_id}/agent-conversations/{conversation_id}/messages:
     get:
       consumes:
       - application/json
@@ -4677,40 +4702,6 @@ paths:
       tags:
       - ai-agents
   /novels/{novel_id}/agent-messages:
-    delete:
-      consumes:
-      - application/json
-      description: 兼容旧接口：清空指定小说下所有 Agent 会话已保存的历史消息和概要。
-      parameters:
-      - description: 小说 ID
-        in: path
-        name: novel_id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 清空成功
-          schema:
-            $ref: '#/definitions/novelagent.ClearMessagesSuccessResponse'
-        "400":
-          description: 请求参数错误
-          schema:
-            $ref: '#/definitions/response.ErrorBody'
-        "401":
-          description: 未登录或登录已过期
-          schema:
-            $ref: '#/definitions/response.ErrorBody'
-        "500":
-          description: 服务器内部错误
-          schema:
-            $ref: '#/definitions/response.ErrorBody'
-      security:
-      - Bearer: []
-      summary: 清空小说 Agent 历史消息
-      tags:
-      - ai-agents
     get:
       consumes:
       - application/json

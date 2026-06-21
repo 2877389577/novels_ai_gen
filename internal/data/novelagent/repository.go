@@ -220,10 +220,9 @@ func (r *Repository) AppendMessagesAndUpdateSummary(ctx context.Context, convers
 	return nil
 }
 
-// ClearMessagesByConversationID 清空指定 Agent 会话的记忆消息和摘要。
+// DeleteConversationByID 删除指定小说下的 Agent 会话及其记忆消息。
 // 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID；参数 conversationID 表示 Agent 会话主键 ID。
-func (r *Repository) ClearMessagesByConversationID(ctx context.Context, novelID uint64, conversationID uint64) (int64, error) {
-	var cleared int64
+func (r *Repository) DeleteConversationByID(ctx context.Context, novelID uint64, conversationID uint64) error {
 	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var conversation biznovelagent.Conversation
 		if err := tx.Where("id = ? AND novel_id = ?", conversationID, novelID).First(&conversation).Error; err != nil {
@@ -234,49 +233,18 @@ func (r *Repository) ClearMessagesByConversationID(ctx context.Context, novelID 
 		}
 		result := tx.Where("conversation_id = ?", conversationID).Delete(&biznovelagent.MessageRecord{})
 		if result.Error != nil {
-			return fmt.Errorf("清空 Agent 记忆消息失败: %w", result.Error)
+			return fmt.Errorf("删除 Agent 记忆消息失败: %w", result.Error)
 		}
-		cleared = result.RowsAffected
-		if err := tx.Model(&biznovelagent.Conversation{}).
-			Where("id = ?", conversationID).
-			Updates(map[string]any{
-				"summary":            "",
-				"summary_message_id": nil,
-				"summary_updated_at": nil,
-				"updated_at":         tx.NowFunc(),
-			}).Error; err != nil {
-			return fmt.Errorf("清空 Agent 会话摘要失败: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return 0, err
-	}
-	return cleared, nil
-}
-
-// ClearMessagesByNovelID 清空指定小说下所有 Agent 会话的记忆消息和摘要。
-// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
-func (r *Repository) ClearMessagesByNovelID(ctx context.Context, novelID uint64) (int64, error) {
-	var cleared int64
-	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		result := tx.Where("novel_id = ?", novelID).Delete(&biznovelagent.MessageRecord{})
+		result = tx.Where("id = ? AND novel_id = ?", conversationID, novelID).Delete(&biznovelagent.Conversation{})
 		if result.Error != nil {
-			return fmt.Errorf("清空 Agent 记忆消息失败: %w", result.Error)
+			return fmt.Errorf("删除 Agent 会话失败: %w", result.Error)
 		}
-		cleared = result.RowsAffected
-		if err := tx.Model(&biznovelagent.Conversation{}).
-			Where("novel_id = ?", novelID).
-			Updates(map[string]any{
-				"summary":            "",
-				"summary_message_id": nil,
-				"summary_updated_at": nil,
-				"updated_at":         tx.NowFunc(),
-			}).Error; err != nil {
-			return fmt.Errorf("清空 Agent 会话摘要失败: %w", err)
+		if result.RowsAffected == 0 {
+			return biznovelagent.ErrConversationNotFound
 		}
 		return nil
 	}); err != nil {
-		return 0, err
+		return err
 	}
-	return cleared, nil
+	return nil
 }

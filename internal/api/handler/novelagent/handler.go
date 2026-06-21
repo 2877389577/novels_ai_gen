@@ -160,22 +160,22 @@ type MessageListSuccessResponse struct {
 	Data MessageListData `json:"data"`
 }
 
-// ClearMessagesData 表示 Swagger 文档中的清空 Agent 历史响应数据。
-type ClearMessagesData struct {
-	// Cleared 表示本次清空的消息数量。
-	Cleared int64 `json:"cleared" example:"2"`
+// DeleteConversationData 表示 Swagger 文档中的删除 Agent 会话响应数据。
+type DeleteConversationData struct {
+	// Deleted 表示 Agent 会话是否已经删除。
+	Deleted bool `json:"deleted" example:"true"`
 }
 
-// ClearMessagesSuccessResponse 表示清空 Agent 历史接口 Swagger 成功响应结构。
-type ClearMessagesSuccessResponse struct {
+// DeleteConversationSuccessResponse 表示删除 Agent 会话接口 Swagger 成功响应结构。
+type DeleteConversationSuccessResponse struct {
 	// Code 表示业务响应码，成功固定为 0。
 	Code int `json:"code" example:"0"`
 	// Message 表示响应提示信息。
 	Message string `json:"message" example:"ok"`
 	// RequestID 表示本次请求的追踪标识。
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
-	// Data 表示清空结果。
-	Data ClearMessagesData `json:"data"`
+	// Data 表示删除结果。
+	Data DeleteConversationData `json:"data"`
 }
 
 // PromptRecommendationSuccessResponse 表示提示词库推荐判定接口 Swagger 成功响应结构。
@@ -256,30 +256,30 @@ func (h *Handler) ListConversationMessages(c *gin.Context) {
 	response.OK(c, data)
 }
 
-// ClearConversationMessages 清空指定 Agent 会话的历史消息。
+// DeleteConversation 删除指定 Agent 会话及其历史消息。
 // 参数 c 表示 Gin 请求上下文。
 //
-// @Summary 清空指定 Agent 会话历史消息
-// @Description 清空指定小说下某个 Agent 会话已保存的历史消息，并同步清空该会话概要。
+// @Summary 删除指定 Agent 会话
+// @Description 删除指定小说下某个 Agent 会话，并同步删除该会话已保存的历史消息和概要。
 // @Tags ai-agents
 // @Accept json
 // @Produce json
 // @Security Bearer
 // @Param novel_id path int true "小说 ID"
 // @Param conversation_id path int true "Agent 会话 ID"
-// @Success 200 {object} ClearMessagesSuccessResponse "清空成功"
+// @Success 200 {object} DeleteConversationSuccessResponse "删除成功"
 // @Failure 400 {object} response.ErrorBody "请求参数错误"
 // @Failure 401 {object} response.ErrorBody "未登录或登录已过期"
 // @Failure 404 {object} response.ErrorBody "Agent 会话不存在"
 // @Failure 500 {object} response.ErrorBody "服务器内部错误"
-// @Router /novels/{novel_id}/agent-conversations/{conversation_id}/messages [delete]
-func (h *Handler) ClearConversationMessages(c *gin.Context) {
+// @Router /novels/{novel_id}/agent-conversations/{conversation_id} [delete]
+func (h *Handler) DeleteConversation(c *gin.Context) {
 	novelID, conversationID, ok := parseNovelConversationID(c)
 	if !ok {
 		return
 	}
 
-	data, err := h.service.ClearConversationMessages(c.Request.Context(), novelID, conversationID)
+	data, err := h.service.DeleteConversation(c.Request.Context(), novelID, conversationID)
 	if err != nil {
 		writeAgentError(c, err)
 		return
@@ -309,35 +309,6 @@ func (h *Handler) ListMessages(c *gin.Context) {
 	}
 
 	data, err := h.service.ListMessages(c.Request.Context(), novelID)
-	if err != nil {
-		writeAgentError(c, err)
-		return
-	}
-	response.OK(c, data)
-}
-
-// ClearMessages 清空指定小说的 Agent 历史消息。
-// 参数 c 表示 Gin 请求上下文。
-//
-// @Summary 清空小说 Agent 历史消息
-// @Description 兼容旧接口：清空指定小说下所有 Agent 会话已保存的历史消息和概要。
-// @Tags ai-agents
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param novel_id path int true "小说 ID"
-// @Success 200 {object} ClearMessagesSuccessResponse "清空成功"
-// @Failure 400 {object} response.ErrorBody "请求参数错误"
-// @Failure 401 {object} response.ErrorBody "未登录或登录已过期"
-// @Failure 500 {object} response.ErrorBody "服务器内部错误"
-// @Router /novels/{novel_id}/agent-messages [delete]
-func (h *Handler) ClearMessages(c *gin.Context) {
-	novelID, ok := parseNovelID(c)
-	if !ok {
-		return
-	}
-
-	data, err := h.service.ClearMessages(c.Request.Context(), novelID)
 	if err != nil {
 		writeAgentError(c, err)
 		return

@@ -3041,6 +3041,74 @@
                 }
             }
         },
+        "/novels/{novel_id}/agent-conversations/{conversation_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "删除指定小说下某个 Agent 会话，并同步删除该会话已保存的历史消息和概要。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "删除指定 Agent 会话",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Agent 会话 ID",
+                        "name": "conversation_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelagent.DeleteConversationSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Agent 会话不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/novels/{novel_id}/agent-conversations/{conversation_id}/messages": {
             "get": {
                 "security": [
@@ -3107,72 +3175,6 @@
                         }
                     }
                 }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "清空指定小说下某个 Agent 会话已保存的历史消息，并同步清空该会话概要。",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ai-agents"
-                ],
-                "summary": "清空指定 Agent 会话历史消息",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "小说 ID",
-                        "name": "novel_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Agent 会话 ID",
-                        "name": "conversation_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "清空成功",
-                        "schema": {
-                            "$ref": "#/definitions/novelagent.ClearMessagesSuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "未登录或登录已过期",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    },
-                    "404": {
-                        "description": "Agent 会话不存在",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    }
-                }
             }
         },
         "/novels/{novel_id}/agent-messages": {
@@ -3207,59 +3209,6 @@
                         "description": "查询成功",
                         "schema": {
                             "$ref": "#/definitions/novelagent.MessageListSuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "未登录或登录已过期",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "兼容旧接口：清空指定小说下所有 Agent 会话已保存的历史消息和概要。",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ai-agents"
-                ],
-                "summary": "清空小说 Agent 历史消息",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "小说 ID",
-                        "name": "novel_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "清空成功",
-                        "schema": {
-                            "$ref": "#/definitions/novelagent.ClearMessagesSuccessResponse"
                         }
                     },
                     "400": {
@@ -6489,6 +6438,18 @@
                     "type": "string",
                     "example": "ok"
                 },
+                "replies": {
+                    "description": "Replies 表示 done 事件中返回的分段助手回复列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api_handler_novelagent.StreamReply"
+                    }
+                },
+                "reply_index": {
+                    "description": "ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。",
+                    "type": "integer",
+                    "example": 1
+                },
                 "request_id": {
                     "description": "RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。",
                     "type": "string",
@@ -6508,6 +6469,26 @@
                     "description": "Type 表示事件类型，支持 meta、delta、done、error。",
                     "type": "string",
                     "example": "delta"
+                }
+            }
+        },
+        "internal_api_handler_novelagent.StreamReply": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示该回复段的完整文本内容。",
+                    "type": "string",
+                    "example": "我先读取当前章节内容。"
+                },
+                "reply_index": {
+                    "description": "ReplyIndex 表示同一次请求中的可见助手回复段序号，从 1 开始。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "task": {
+                    "description": "Task 表示产生该回复段的任务来源。",
+                    "type": "string",
+                    "example": "polish"
                 }
             }
         },
@@ -6815,44 +6796,6 @@
                 }
             }
         },
-        "novelagent.ClearMessagesData": {
-            "type": "object",
-            "properties": {
-                "cleared": {
-                    "description": "Cleared 表示本次清空的消息数量。",
-                    "type": "integer",
-                    "example": 2
-                }
-            }
-        },
-        "novelagent.ClearMessagesSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示清空结果。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/novelagent.ClearMessagesData"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
         "novelagent.ConversationData": {
             "type": "object",
             "properties": {
@@ -6908,6 +6851,44 @@
                     "allOf": [
                         {
                             "$ref": "#/definitions/novelagent.ConversationListData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novelagent.DeleteConversationData": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "description": "Deleted 表示 Agent 会话是否已经删除。",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "novelagent.DeleteConversationSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示删除结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novelagent.DeleteConversationData"
                         }
                     ]
                 },
