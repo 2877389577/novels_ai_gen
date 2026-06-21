@@ -68,6 +68,50 @@ func (r *Repository) ListByNovelID(ctx context.Context, novelID uint64, offset i
 	return items, total, nil
 }
 
+// ListByNovelIDAsc 查询指定小说下按角色 ID 升序排列的角色卡分页列表。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 offset 表示查询偏移量；参数 limit 表示查询数量。
+func (r *Repository) ListByNovelIDAsc(ctx context.Context, novelID uint64, offset int, limit int) ([]bizcharacter.Character, int64, error) {
+	db := r.db.WithContext(ctx)
+	if err := ensureNovelExists(db, novelID); err != nil {
+		return nil, 0, err
+	}
+
+	var total int64
+	if err := db.Model(&bizcharacter.Character{}).Where("novel_id = ?", novelID).Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("统计角色卡记录失败: %w", err)
+	}
+
+	var items []bizcharacter.Character
+	if err := db.
+		Where("novel_id = ?", novelID).
+		Order("id ASC").
+		Offset(offset).
+		Limit(limit).
+		Find(&items).Error; err != nil {
+		return nil, 0, fmt.Errorf("查询角色卡记录失败: %w", err)
+	}
+
+	return items, total, nil
+}
+
+// SearchByName 根据小说 ID 和角色名精确查询角色卡列表。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 name 表示角色姓名。
+func (r *Repository) SearchByName(ctx context.Context, novelID uint64, name string) ([]bizcharacter.Character, error) {
+	db := r.db.WithContext(ctx)
+	if err := ensureNovelExists(db, novelID); err != nil {
+		return nil, err
+	}
+
+	var items []bizcharacter.Character
+	if err := db.
+		Where("novel_id = ? AND name = ?", novelID, name).
+		Order("id ASC").
+		Find(&items).Error; err != nil {
+		return nil, fmt.Errorf("查询角色卡记录失败: %w", err)
+	}
+	return items, nil
+}
+
 // GetByID 根据小说 ID 和角色卡 ID 查询角色卡。
 // 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 characterID 表示角色卡主键 ID。
 func (r *Repository) GetByID(ctx context.Context, novelID uint64, characterID uint64) (*bizcharacter.Character, error) {
@@ -116,6 +160,57 @@ func (r *Repository) Update(ctx context.Context, item *bizcharacter.Character) e
 		return fmt.Errorf("刷新角色卡记录失败: %w", err)
 	}
 	return nil
+}
+
+// SaveCharacter 新增或更新角色卡核心设定字段。
+// 参数 ctx 表示请求上下文；参数 item 表示需要新增或更新的角色卡模型。
+func (r *Repository) SaveCharacter(ctx context.Context, item *bizcharacter.Character) error {
+	if item == nil {
+		return fmt.Errorf("角色卡记录不能为空")
+	}
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := ensureNovelExists(tx, item.NovelID); err != nil {
+			return err
+		}
+
+		if item.ID == 0 {
+			if err := tx.Create(item).Error; err != nil {
+				return fmt.Errorf("写入角色卡记录失败: %w", err)
+			}
+			return nil
+		}
+
+		var existing bizcharacter.Character
+		if err := tx.Where("novel_id = ? AND id = ?", item.NovelID, item.ID).First(&existing).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return bizcharacter.ErrNotFound
+			}
+			return fmt.Errorf("查询角色卡记录失败: %w", err)
+		}
+
+		if err := tx.Model(&bizcharacter.Character{}).
+			Where("id = ? AND novel_id = ?", item.ID, item.NovelID).
+			Updates(map[string]any{
+				"name":        item.Name,
+				"gender":      item.Gender,
+				"tags":        item.Tags,
+				"background":  item.Background,
+				"personality": item.Personality,
+				"ability":     item.Ability,
+				"goal":        item.Goal,
+			}).Error; err != nil {
+			return fmt.Errorf("保存角色卡记录失败: %w", err)
+		}
+
+		if err := tx.Where("novel_id = ? AND id = ?", item.NovelID, item.ID).First(item).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return bizcharacter.ErrNotFound
+			}
+			return fmt.Errorf("刷新角色卡记录失败: %w", err)
+		}
+		return nil
+	})
 }
 
 // Delete 根据小说 ID 和角色卡 ID 删除角色卡。

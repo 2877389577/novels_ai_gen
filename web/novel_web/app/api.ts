@@ -107,6 +107,10 @@ export interface NovelAgentStreamDoneEvent {
   task?: string;
   // content 表示完整生成文本。
   content?: string;
+  // conversation_id 表示本轮回复保存到的 Agent 会话 ID。
+  conversation_id?: number;
+  // conversation_title 表示本轮回复保存到的 Agent 会话标题。
+  conversation_title?: string;
   // message 表示完成说明。
   message?: string;
 }
@@ -135,6 +139,8 @@ export type NovelAgentMessageRole = "user" | "assistant";
 export interface NovelAgentMessageItem {
   // id 表示 Agent 消息主键 ID。
   id: number;
+  // conversation_id 表示消息所属 Agent 会话 ID。
+  conversation_id: number;
   // novel_id 表示消息所属小说 ID。
   novel_id: number;
   // chapter_id 表示本轮消息关联的章节 ID，普通小说级对话可为空。
@@ -155,6 +161,26 @@ export interface NovelAgentMessageListData {
   items: NovelAgentMessageItem[];
 }
 
+// NovelAgentConversationItem 表示小说下的单个 Agent 会话。
+export interface NovelAgentConversationItem {
+  // id 表示 Agent 会话主键 ID。
+  id: number;
+  // novel_id 表示会话所属小说 ID。
+  novel_id: number;
+  // title 表示 Agent 会话标题。
+  title: string;
+  // created_at 表示创建时间。
+  created_at: string;
+  // updated_at 表示更新时间。
+  updated_at: string;
+}
+
+// NovelAgentConversationListData 表示小说 Agent 会话列表响应数据。
+export interface NovelAgentConversationListData {
+  // items 表示当前小说下的 Agent 会话列表，按更新时间倒序排列。
+  items: NovelAgentConversationItem[];
+}
+
 // NovelAgentClearMessagesData 表示清空 Agent 历史消息后的响应数据。
 export interface NovelAgentClearMessagesData {
   // cleared 表示本次清空的消息数量。
@@ -171,6 +197,8 @@ export interface NovelAgentChatParams {
   message: string;
   // novelId 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
   novelId: number;
+  // conversationId 表示本轮请求所属 Agent 会话 ID，未传表示开启新会话。
+  conversationId?: number;
   // chapterId 表示当前请求关联的章节 ID，普通对话可为空。
   chapterId?: number;
   // chapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。
@@ -764,6 +792,32 @@ export interface NovelSummarySaveParams {
 // NovelSummaryDeleteData 表示删除小说总结接口返回的数据。
 export interface NovelSummaryDeleteData {
   // deleted 表示后端是否已经删除小说总结。
+  deleted: boolean;
+}
+
+// NovelOutlineItem 表示小说大纲详情数据。
+export interface NovelOutlineItem {
+  // id 表示小说大纲主键 ID。
+  id: number;
+  // novel_id 表示大纲所属小说 ID。
+  novel_id: number;
+  // content 表示小说大纲正文。
+  content: string;
+  // created_at 表示创建时间。
+  created_at: string;
+  // updated_at 表示更新时间。
+  updated_at: string;
+}
+
+// NovelOutlineSaveParams 表示创建或更新小说大纲时提交的数据。
+export interface NovelOutlineSaveParams {
+  // content 表示需要保存的小说大纲正文，允许为空字符串。
+  content: string;
+}
+
+// NovelOutlineDeleteData 表示删除小说大纲接口返回的数据。
+export interface NovelOutlineDeleteData {
+  // deleted 表示后端是否已经删除小说大纲。
   deleted: boolean;
 }
 
@@ -1725,6 +1779,7 @@ export async function streamNovelAgentChat(
       model: params.model,
       message: params.message,
       novel_id: params.novelId,
+      conversation_id: params.conversationId,
       chapter_id: params.chapterId,
       chapter_number: params.chapterNumber,
     }),
@@ -2091,6 +2146,99 @@ export async function deletePrompt(id: number): Promise<PromptDeleteData> {
   }
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "提示词删除失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// fetchNovelAgentConversations 查询指定小说下的 Agent 会话列表。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNovelAgentConversations(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<NovelAgentConversationListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/agent-conversations`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelAgentConversationListData>(response);
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 会话列表加载失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// fetchNovelAgentConversationMessages 查询指定 Agent 会话最近的历史消息。
+// 参数 novelId 表示小说主键 ID；参数 conversationId 表示 Agent 会话主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNovelAgentConversationMessages(
+  novelId: number,
+  conversationId: number,
+  signal?: AbortSignal,
+): Promise<NovelAgentMessageListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/agent-conversations/${conversationId}/messages`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+  const payload = await parseApiResponse<NovelAgentMessageListData>(response);
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 历史消息加载失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// clearNovelAgentConversationMessages 清空指定 Agent 会话的历史消息。
+// 参数 novelId 表示小说主键 ID；参数 conversationId 表示 Agent 会话主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function clearNovelAgentConversationMessages(
+  novelId: number,
+  conversationId: number,
+  signal?: AbortSignal,
+): Promise<NovelAgentClearMessagesData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/agent-conversations/${conversationId}/messages`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+  const payload = await parseApiResponse<NovelAgentClearMessagesData>(response);
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 历史消息清空失败，请稍后再试");
   }
   return payload.data;
 }
@@ -2550,6 +2698,133 @@ export async function deleteNovelSummary(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "小说总结删除失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchNovelOutline 查询指定小说的大纲。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNovelOutline(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<NovelOutlineItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/outline`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelOutlineItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说大纲加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// createNovelOutline 为指定小说创建大纲。
+// 参数 novelId 表示小说主键 ID；参数 params 表示需要创建的小说大纲正文。
+export async function createNovelOutline(
+  novelId: number,
+  params: NovelOutlineSaveParams,
+): Promise<NovelOutlineItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/outline`, {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelOutlineItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说大纲保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateNovelOutline 更新指定小说的大纲。
+// 参数 novelId 表示小说主键 ID；参数 params 表示需要覆盖保存的小说大纲正文。
+export async function updateNovelOutline(
+  novelId: number,
+  params: NovelOutlineSaveParams,
+): Promise<NovelOutlineItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/outline`, {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelOutlineItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说大纲保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteNovelOutline 删除指定小说的大纲。
+// 参数 novelId 表示小说主键 ID。
+export async function deleteNovelOutline(
+  novelId: number,
+): Promise<NovelOutlineDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/outline`, {
+    method: "DELETE",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+  });
+  const payload = await parseApiResponse<NovelOutlineDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说大纲删除失败，请稍后再试");
   }
 
   return payload.data;

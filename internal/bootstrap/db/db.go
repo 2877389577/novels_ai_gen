@@ -24,6 +24,7 @@ import (
 	bizevent "novels_ai_gen/internal/biz/event"
 	biznovel "novels_ai_gen/internal/biz/novel"
 	biznovelagent "novels_ai_gen/internal/biz/novelagent"
+	biznoveloutline "novels_ai_gen/internal/biz/noveloutline"
 	biznovelsummary "novels_ai_gen/internal/biz/novelsummary"
 	bizprompt "novels_ai_gen/internal/biz/prompt"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
@@ -37,6 +38,10 @@ const (
 	databaseTypeMySQL    databaseType = "mysql"
 	databaseTypePostgres databaseType = "postgres"
 	gormSlowThreshold                 = 200 * time.Millisecond
+	// agentConversationNovelIDIndex 表示 Agent 会话表小说 ID 普通索引名称。
+	agentConversationNovelIDIndex = "idx_agent_conversations_novel_id"
+	// agentConversationNovelIDGuardIndex 表示迁移旧唯一索引时临时保护外键所需的小说 ID 索引名称。
+	agentConversationNovelIDGuardIndex = "idx_agent_conversations_novel_id_fk_guard"
 )
 
 var (
@@ -60,6 +65,7 @@ var migrationModels = []any{
 	&biznovelagent.Conversation{},
 	&biznovelagent.MessageRecord{},
 	&biznovelsummary.NovelSummary{},
+	&biznoveloutline.NovelOutline{},
 	&bizprompt.Prompt{},
 }
 
@@ -138,6 +144,7 @@ func migrate(conn *gorm.DB) error {
 	startedAt := time.Now()
 	slog.Info("数据库自动迁移开始", "model_count", len(migrationModels))
 
+	agentConversationTitleExisted := conn.Migrator().HasColumn(&biznovelagent.Conversation{}, "title")
 	missingModels := missingMigrationModelNames(conn)
 	triggered := len(missingModels) > 0
 	slog.Info(
@@ -147,6 +154,14 @@ func migrate(conn *gorm.DB) error {
 		"missing_models", missingModels,
 	)
 
+	if err := prepareAgentConversationSchemaBeforeAutoMigrate(conn); err != nil {
+		slog.Error(
+			"Agent 会话表自动迁移前兼容处理失败",
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"error", err,
+		)
+		return err
+	}
 	if err := conn.AutoMigrate(migrationModels...); err != nil {
 		slog.Error(
 			"数据库自动迁移失败",
@@ -157,6 +172,14 @@ func migrate(conn *gorm.DB) error {
 			"error", err,
 		)
 		return fmt.Errorf("自动迁移数据库表失败: %w", err)
+	}
+	if err := syncAgentConversationSchema(conn, agentConversationTitleExisted); err != nil {
+		slog.Error(
+			"Agent 会话表结构兼容迁移失败",
+			"duration_ms", time.Since(startedAt).Milliseconds(),
+			"error", err,
+		)
+		return err
 	}
 	if err := dropObsoleteAIProviderColumns(conn); err != nil {
 		slog.Error(
@@ -183,6 +206,139 @@ func migrate(conn *gorm.DB) error {
 		"duration_ms", time.Since(startedAt).Milliseconds(),
 	)
 	return nil
+}
+
+// prepareAgentConversationSchemaBeforeAutoMigrate 在 GORM 自动迁移前处理旧版 Agent 会话索引依赖。
+// 参数 conn 表示已经成功连接并通过 Ping 校验的 GORM 数据库连接。
+func prepareAgentConversationSchemaBeforeAutoMigrate(conn *gorm.DB) error {
+	return ensureAgentConversationNovelIDGuardIndex(conn)
+}
+
+// syncAgentConversationSchema 处理 Agent 会话表从小说唯一会话到多会话的兼容迁移。
+// 参数 conn 表示已经完成自动迁移的 GORM 数据库连接；参数 titleColumnExisted 表示自动迁移前会话表是否已经存在 title 列。
+func syncAgentConversationSchema(conn *gorm.DB, titleColumnExisted bool) error {
+	migrator := conn.Migrator()
+	if !migrator.HasTable(&biznovelagent.Conversation{}) {
+		return nil
+	}
+	if !titleColumnExisted && migrator.HasColumn(&biznovelagent.Conversation{}, "title") {
+		if err := conn.Model(&biznovelagent.Conversation{}).
+			Where("title = '' OR title IS NULL OR title = ?", "新会话").
+			Update("title", "历史会话").Error; err != nil {
+			return fmt.Errorf("补齐历史 Agent 会话标题失败: %w", err)
+		}
+	}
+	if err := syncAgentConversationNovelIDIndex(conn); err != nil {
+		return err
+	}
+	if err := dropAgentConversationNovelIDGuardIndex(conn); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ensureAgentConversationNovelIDGuardIndex 创建 MySQL 迁移旧唯一索引时保护外键所需的临时普通索引。
+// 参数 conn 表示 GORM 数据库连接。
+func ensureAgentConversationNovelIDGuardIndex(conn *gorm.DB) error {
+	if conn.Dialector.Name() != string(databaseTypeMySQL) {
+		return nil
+	}
+	migrator := conn.Migrator()
+	if !migrator.HasTable(&biznovelagent.Conversation{}) ||
+		!migrator.HasColumn(&biznovelagent.Conversation{}, "novel_id") ||
+		!migrator.HasIndex(&biznovelagent.Conversation{}, agentConversationNovelIDIndex) {
+		return nil
+	}
+
+	unique, err := agentConversationIndexIsUnique(conn, biznovelagent.Conversation{}.TableName(), agentConversationNovelIDIndex)
+	if err != nil {
+		return err
+	}
+	if !unique || migrator.HasIndex(&biznovelagent.Conversation{}, agentConversationNovelIDGuardIndex) {
+		return nil
+	}
+
+	if err := conn.Exec("CREATE INDEX idx_agent_conversations_novel_id_fk_guard ON agent_conversations (novel_id)").Error; err != nil {
+		return fmt.Errorf("创建 Agent 会话小说 ID 临时保护索引失败: %w", err)
+	}
+	return nil
+}
+
+// syncAgentConversationNovelIDIndex 将 Agent 会话小说 ID 索引从旧唯一索引迁移为普通索引。
+// 参数 conn 表示已经完成自动迁移的 GORM 数据库连接。
+func syncAgentConversationNovelIDIndex(conn *gorm.DB) error {
+	migrator := conn.Migrator()
+	if !migrator.HasIndex(&biznovelagent.Conversation{}, agentConversationNovelIDIndex) {
+		if err := migrator.CreateIndex(&biznovelagent.Conversation{}, agentConversationNovelIDIndex); err != nil {
+			return fmt.Errorf("创建 Agent 会话小说普通索引失败: %w", err)
+		}
+		return nil
+	}
+
+	unique, err := agentConversationIndexIsUnique(conn, biznovelagent.Conversation{}.TableName(), agentConversationNovelIDIndex)
+	if err != nil {
+		return err
+	}
+	if !unique {
+		return nil
+	}
+
+	if err := ensureAgentConversationNovelIDGuardIndex(conn); err != nil {
+		return err
+	}
+	if err := migrator.DropIndex(&biznovelagent.Conversation{}, agentConversationNovelIDIndex); err != nil {
+		return fmt.Errorf("删除 Agent 会话小说唯一索引失败: %w", err)
+	}
+	if err := migrator.CreateIndex(&biznovelagent.Conversation{}, agentConversationNovelIDIndex); err != nil {
+		return fmt.Errorf("创建 Agent 会话小说普通索引失败: %w", err)
+	}
+	return nil
+}
+
+// dropAgentConversationNovelIDGuardIndex 删除 Agent 会话小说 ID 临时保护索引。
+// 参数 conn 表示已经完成目标索引迁移的 GORM 数据库连接。
+func dropAgentConversationNovelIDGuardIndex(conn *gorm.DB) error {
+	if conn.Dialector.Name() != string(databaseTypeMySQL) {
+		return nil
+	}
+	migrator := conn.Migrator()
+	if !migrator.HasTable(&biznovelagent.Conversation{}) ||
+		!migrator.HasIndex(&biznovelagent.Conversation{}, agentConversationNovelIDGuardIndex) {
+		return nil
+	}
+	if err := migrator.DropIndex(&biznovelagent.Conversation{}, agentConversationNovelIDGuardIndex); err != nil {
+		return fmt.Errorf("删除 Agent 会话小说 ID 临时保护索引失败: %w", err)
+	}
+	return nil
+}
+
+// agentConversationIndexIsUnique 判断 Agent 会话表指定索引是否为唯一索引。
+// 参数 conn 表示 GORM 数据库连接；参数 tableName 表示数据库表名；参数 indexName 表示索引名称。
+func agentConversationIndexIsUnique(conn *gorm.DB, tableName string, indexName string) (bool, error) {
+	switch conn.Dialector.Name() {
+	case string(databaseTypeMySQL):
+		var count int64
+		if err := conn.Raw(
+			"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? AND non_unique = 0",
+			tableName,
+			indexName,
+		).Scan(&count).Error; err != nil {
+			return false, fmt.Errorf("查询 MySQL Agent 会话索引唯一性失败: %w", err)
+		}
+		return count > 0, nil
+	case string(databaseTypePostgres):
+		var count int64
+		if err := conn.Raw(
+			"SELECT COUNT(*) FROM pg_indexes WHERE schemaname = CURRENT_SCHEMA() AND tablename = ? AND indexname = ? AND indexdef LIKE 'CREATE UNIQUE INDEX%'",
+			tableName,
+			indexName,
+		).Scan(&count).Error; err != nil {
+			return false, fmt.Errorf("查询 PostgreSQL Agent 会话索引唯一性失败: %w", err)
+		}
+		return count > 0, nil
+	default:
+		return true, nil
+	}
 }
 
 // syncOpenAIProviderAPIType 将 OpenAI 协议提供商统一迁移为 completions 接口类型。

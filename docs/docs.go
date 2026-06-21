@@ -2477,6 +2477,262 @@ const docTemplate = `{
                 }
             }
         },
+        "/novels/{id}/outline": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "查询指定小说当前保存的大纲。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "novel-outlines"
+                ],
+                "summary": "查询小说大纲",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/noveloutline.OutlineSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说或小说大纲不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "更新指定小说当前大纲正文。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "novel-outlines"
+                ],
+                "summary": "更新小说大纲",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "小说大纲正文",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/noveloutline.OutlineRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/noveloutline.OutlineSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说或小说大纲不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "为指定小说创建当前唯一的大纲；如果已存在则返回冲突。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "novel-outlines"
+                ],
+                "summary": "创建小说大纲",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "小说大纲正文",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/noveloutline.OutlineRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/noveloutline.OutlineSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "小说大纲已存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "删除指定小说当前保存的大纲。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "novel-outlines"
+                ],
+                "summary": "删除小说大纲",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/noveloutline.DeleteSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说或小说大纲不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/novels/{id}/summary": {
             "get": {
                 "security": [
@@ -2733,6 +2989,195 @@ const docTemplate = `{
                 }
             }
         },
+        "/novels/{novel_id}/agent-conversations": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "查询指定小说下的 Agent 会话列表，按更新时间倒序返回。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "查询小说 Agent 会话列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelagent.ConversationListSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/novels/{novel_id}/agent-conversations/{conversation_id}/messages": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "查询指定小说下某个 Agent 会话最近 20 条历史消息，按时间正序返回。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "查询指定 Agent 会话历史消息",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Agent 会话 ID",
+                        "name": "conversation_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelagent.MessageListSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Agent 会话不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "清空指定小说下某个 Agent 会话已保存的历史消息，并同步清空该会话概要。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ai-agents"
+                ],
+                "summary": "清空指定 Agent 会话历史消息",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "novel_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Agent 会话 ID",
+                        "name": "conversation_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "清空成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelagent.ClearMessagesSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Agent 会话不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/novels/{novel_id}/agent-messages": {
             "get": {
                 "security": [
@@ -2740,7 +3185,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "查询指定小说最近 20 条 Agent 历史消息，按时间正序返回。",
+                "description": "兼容旧接口：查询指定小说最近更新会话的最近 20 条 Agent 历史消息，按时间正序返回。",
                 "consumes": [
                     "application/json"
                 ],
@@ -2793,7 +3238,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "清空指定小说已保存的 Agent 历史消息。",
+                "description": "兼容旧接口：清空指定小说下所有 Agent 会话已保存的历史消息和概要。",
                 "consumes": [
                     "application/json"
                 ],
@@ -5977,6 +6422,11 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 3
                 },
+                "conversation_id": {
+                    "description": "ConversationID 表示本轮请求所属 Agent 会话 ID，空值表示开启新会话。",
+                    "type": "integer",
+                    "example": 1
+                },
                 "message": {
                     "description": "Message 表示用户输入的写作需求或问题。",
                     "type": "string",
@@ -6026,6 +6476,16 @@ const docTemplate = `{
                     "description": "Content 表示增量文本或完整文本内容。",
                     "type": "string",
                     "example": "雨夜里，门外的脚步声一点点逼近。"
+                },
+                "conversation_id": {
+                    "description": "ConversationID 表示本轮回复保存到的 Agent 会话 ID，仅 done 事件返回。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "conversation_title": {
+                    "description": "ConversationTitle 表示本轮回复保存到的 Agent 会话标题，仅 done 事件返回。",
+                    "type": "string",
+                    "example": "讨论第三章节奏"
                 },
                 "message": {
                     "description": "Message 表示错误或状态说明。",
@@ -6396,6 +6856,76 @@ const docTemplate = `{
                 }
             }
         },
+        "novelagent.ConversationData": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-19T22:00:00+08:00"
+                },
+                "id": {
+                    "description": "ID 表示 Agent 会话主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "novel_id": {
+                    "description": "NovelID 表示会话所属小说 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "title": {
+                    "description": "Title 表示 Agent 会话标题。",
+                    "type": "string",
+                    "example": "讨论第三章节奏"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示更新时间。",
+                    "type": "string",
+                    "example": "2026-06-19T22:00:00+08:00"
+                }
+            }
+        },
+        "novelagent.ConversationListData": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items 表示当前小说下的 Agent 会话列表，按更新时间倒序排列。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/novelagent.ConversationData"
+                    }
+                }
+            }
+        },
+        "novelagent.ConversationListSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示 Agent 会话列表。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novelagent.ConversationListData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
         "novelagent.MessageData": {
             "type": "object",
             "properties": {
@@ -6408,6 +6938,11 @@ const docTemplate = `{
                     "description": "Content 表示消息正文。",
                     "type": "string",
                     "example": "帮我润色这一章"
+                },
+                "conversation_id": {
+                    "description": "ConversationID 表示消息所属 Agent 会话 ID。",
+                    "type": "integer",
+                    "example": 1
                 },
                 "created_at": {
                     "description": "CreatedAt 表示创建时间。",
@@ -6509,6 +7044,112 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/novelagent.PromptRecommendationData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "noveloutline.DeleteData": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "description": "Deleted 表示是否已经删除小说大纲。",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "noveloutline.DeleteSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示删除结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/noveloutline.DeleteData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "noveloutline.OutlineData": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示小说大纲正文。",
+                    "type": "string",
+                    "example": "第一卷：主角离开边城，踏入王都。"
+                },
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-21T12:00:00+08:00"
+                },
+                "id": {
+                    "description": "ID 表示小说大纲主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "novel_id": {
+                    "description": "NovelID 表示大纲所属小说 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示更新时间。",
+                    "type": "string",
+                    "example": "2026-06-21T12:00:00+08:00"
+                }
+            }
+        },
+        "noveloutline.OutlineRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示需要保存的小说大纲正文，允许为空字符串。",
+                    "type": "string",
+                    "example": "第一卷：主角离开边城，踏入王都。"
+                }
+            }
+        },
+        "noveloutline.OutlineSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示小说大纲详情。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/noveloutline.OutlineData"
                         }
                     ]
                 },

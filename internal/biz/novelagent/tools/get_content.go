@@ -23,6 +23,12 @@ const (
 	ToolNameQueryNovelSummary = "query_novel_summary"
 	// ToolNameUpdateNovelSummary 表示写入或覆盖小说滚动总结的 Agent 工具名称。
 	ToolNameUpdateNovelSummary = "update_novel_summary"
+	// ToolNameListCharacters 表示分页读取角色核心设定列表的 Agent 工具名称。
+	ToolNameListCharacters = "list_characters"
+	// ToolNameSearchCharactersByName 表示按角色名搜索角色核心设定的 Agent 工具名称。
+	ToolNameSearchCharactersByName = "search_characters_by_name"
+	// ToolNameSaveCharacter 表示新增或更新角色核心设定的 Agent 工具名称。
+	ToolNameSaveCharacter = "save_character"
 )
 
 var (

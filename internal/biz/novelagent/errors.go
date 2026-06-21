@@ -27,4 +27,6 @@ var (
 	ErrModelStreamFailed = errors.New("novel agent model stream failed")
 	// ErrAgentMemoryFailed 表示 Agent 记忆读取或写入失败。
 	ErrAgentMemoryFailed = errors.New("novel agent memory failed")
+	// ErrConversationNotFound 表示 Agent 会话不存在或不属于当前小说。
+	ErrConversationNotFound = errors.New("novel agent conversation not found")
 )

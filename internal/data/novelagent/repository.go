@@ -2,8 +2,8 @@ package novelagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
 
 	biznovelagent "novels_ai_gen/internal/biz/novelagent"
 
@@ -22,11 +22,30 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// FindConversationByNovelID 根据小说 ID 查询 Agent 会话。
+// ListConversationsByNovelID 查询指定小说下的 Agent 会话列表。
 // 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
-func (r *Repository) FindConversationByNovelID(ctx context.Context, novelID uint64) (*biznovelagent.Conversation, bool, error) {
+func (r *Repository) ListConversationsByNovelID(ctx context.Context, novelID uint64) ([]biznovelagent.Conversation, error) {
+	var items []biznovelagent.Conversation
+	if err := r.db.WithContext(ctx).
+		Where("novel_id = ?", novelID).
+		Order("updated_at DESC").
+		Order("id DESC").
+		Find(&items).Error; err != nil {
+		return nil, fmt.Errorf("查询 Agent 会话列表失败: %w", err)
+	}
+	return items, nil
+}
+
+// FindLatestConversationByNovelID 查询指定小说最近更新的 Agent 会话。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
+func (r *Repository) FindLatestConversationByNovelID(ctx context.Context, novelID uint64) (*biznovelagent.Conversation, bool, error) {
 	var item biznovelagent.Conversation
-	result := r.db.WithContext(ctx).Where("novel_id = ?", novelID).Limit(1).Find(&item)
+	result := r.db.WithContext(ctx).
+		Where("novel_id = ?", novelID).
+		Order("updated_at DESC").
+		Order("id DESC").
+		Limit(1).
+		Find(&item)
 	if result.Error != nil {
 		return nil, false, fmt.Errorf("查询 Agent 会话失败: %w", result.Error)
 	}
@@ -36,20 +55,28 @@ func (r *Repository) FindConversationByNovelID(ctx context.Context, novelID uint
 	return &item, true, nil
 }
 
-// GetOrCreateConversation 获取或创建指定小说的 Agent 会话。
-// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
-func (r *Repository) GetOrCreateConversation(ctx context.Context, novelID uint64) (*biznovelagent.Conversation, error) {
-	if conversation, ok, err := r.FindConversationByNovelID(ctx, novelID); err != nil || ok {
-		return conversation, err
+// FindConversationByID 根据小说 ID 和会话 ID 查询 Agent 会话。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID；参数 conversationID 表示 Agent 会话主键 ID。
+func (r *Repository) FindConversationByID(ctx context.Context, novelID uint64, conversationID uint64) (*biznovelagent.Conversation, bool, error) {
+	var item biznovelagent.Conversation
+	result := r.db.WithContext(ctx).
+		Where("id = ? AND novel_id = ?", conversationID, novelID).
+		Limit(1).
+		Find(&item)
+	if result.Error != nil {
+		return nil, false, fmt.Errorf("查询 Agent 会话失败: %w", result.Error)
 	}
+	if result.RowsAffected == 0 {
+		return nil, false, nil
+	}
+	return &item, true, nil
+}
 
-	conversation := &biznovelagent.Conversation{NovelID: novelID}
+// CreateConversation 创建指定小说下的 Agent 会话。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID；参数 title 表示会话标题。
+func (r *Repository) CreateConversation(ctx context.Context, novelID uint64, title string) (*biznovelagent.Conversation, error) {
+	conversation := &biznovelagent.Conversation{NovelID: novelID, Title: title}
 	if err := r.db.WithContext(ctx).Create(conversation).Error; err != nil {
-		if isUniqueConstraintError(err) {
-			if conversation, ok, findErr := r.FindConversationByNovelID(ctx, novelID); findErr != nil || ok {
-				return conversation, findErr
-			}
-		}
 		return nil, fmt.Errorf("创建 Agent 会话失败: %w", err)
 	}
 	return conversation, nil
@@ -116,25 +143,28 @@ func (r *Repository) ListMessagesAfterID(ctx context.Context, conversationID uin
 	return items, nil
 }
 
-// AppendMessagesAndUpdateSummary 以事务追加 Agent 记忆消息并可选更新会话摘要。
+// AppendMessagesAndUpdateSummary 以事务追加 Agent 记忆消息、更新会话摘要并刷新会话更新时间。
 // 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 messages 表示需要写入的消息列表；参数 summary 表示需要写回的摘要更新，nil 表示不更新摘要。
 func (r *Repository) AppendMessagesAndUpdateSummary(ctx context.Context, conversationID uint64, messages []biznovelagent.MessageRecord, summary *biznovelagent.ConversationSummaryUpdate) error {
 	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := tx.NowFunc()
 		if len(messages) > 0 {
 			if err := tx.Create(&messages).Error; err != nil {
 				return fmt.Errorf("写入 Agent 记忆消息失败: %w", err)
 			}
 		}
+		updates := map[string]any{
+			"updated_at": now,
+		}
 		if summary != nil {
-			if err := tx.Model(&biznovelagent.Conversation{}).
-				Where("id = ?", conversationID).
-				Updates(map[string]any{
-					"summary":            summary.Summary,
-					"summary_message_id": summary.SummaryMessageID,
-					"summary_updated_at": summary.SummaryUpdatedAt,
-				}).Error; err != nil {
-				return fmt.Errorf("更新 Agent 会话摘要失败: %w", err)
-			}
+			updates["summary"] = summary.Summary
+			updates["summary_message_id"] = summary.SummaryMessageID
+			updates["summary_updated_at"] = summary.SummaryUpdatedAt
+		}
+		if err := tx.Model(&biznovelagent.Conversation{}).
+			Where("id = ?", conversationID).
+			Updates(updates).Error; err != nil {
+			return fmt.Errorf("更新 Agent 会话状态失败: %w", err)
 		}
 		return nil
 	}); err != nil {
@@ -143,44 +173,63 @@ func (r *Repository) AppendMessagesAndUpdateSummary(ctx context.Context, convers
 	return nil
 }
 
-// ClearMessagesByNovelID 清空指定小说的 Agent 记忆消息。
-// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
-func (r *Repository) ClearMessagesByNovelID(ctx context.Context, novelID uint64) (int64, error) {
-	conversation, ok, err := r.FindConversationByNovelID(ctx, novelID)
-	if err != nil || !ok {
+// ClearMessagesByConversationID 清空指定 Agent 会话的记忆消息和摘要。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID；参数 conversationID 表示 Agent 会话主键 ID。
+func (r *Repository) ClearMessagesByConversationID(ctx context.Context, novelID uint64, conversationID uint64) (int64, error) {
+	var cleared int64
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var conversation biznovelagent.Conversation
+		if err := tx.Where("id = ? AND novel_id = ?", conversationID, novelID).First(&conversation).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return biznovelagent.ErrConversationNotFound
+			}
+			return fmt.Errorf("查询 Agent 会话失败: %w", err)
+		}
+		result := tx.Where("conversation_id = ?", conversationID).Delete(&biznovelagent.MessageRecord{})
+		if result.Error != nil {
+			return fmt.Errorf("清空 Agent 记忆消息失败: %w", result.Error)
+		}
+		cleared = result.RowsAffected
+		if err := tx.Model(&biznovelagent.Conversation{}).
+			Where("id = ?", conversationID).
+			Updates(map[string]any{
+				"summary":            "",
+				"summary_message_id": nil,
+				"summary_updated_at": nil,
+				"updated_at":         tx.NowFunc(),
+			}).Error; err != nil {
+			return fmt.Errorf("清空 Agent 会话摘要失败: %w", err)
+		}
+		return nil
+	}); err != nil {
 		return 0, err
 	}
-
-	result := r.db.WithContext(ctx).
-		Where("conversation_id = ?", conversation.ID).
-		Delete(&biznovelagent.MessageRecord{})
-	if result.Error != nil {
-		return 0, fmt.Errorf("清空 Agent 记忆消息失败: %w", result.Error)
-	}
-	if err := r.db.WithContext(ctx).
-		Model(&biznovelagent.Conversation{}).
-		Where("id = ?", conversation.ID).
-		Updates(map[string]any{
-			"summary":            "",
-			"summary_message_id": nil,
-			"summary_updated_at": nil,
-		}).Error; err != nil {
-		return 0, fmt.Errorf("清空 Agent 会话摘要失败: %w", err)
-	}
-	return result.RowsAffected, nil
+	return cleared, nil
 }
 
-// isUniqueConstraintError 判断数据库错误是否为唯一约束冲突。
-// 参数 err 表示数据库返回的错误。
-func isUniqueConstraintError(err error) bool {
-	if err == nil {
-		return false
+// ClearMessagesByNovelID 清空指定小说下所有 Agent 会话的记忆消息和摘要。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
+func (r *Repository) ClearMessagesByNovelID(ctx context.Context, novelID uint64) (int64, error) {
+	var cleared int64
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("novel_id = ?", novelID).Delete(&biznovelagent.MessageRecord{})
+		if result.Error != nil {
+			return fmt.Errorf("清空 Agent 记忆消息失败: %w", result.Error)
+		}
+		cleared = result.RowsAffected
+		if err := tx.Model(&biznovelagent.Conversation{}).
+			Where("novel_id = ?", novelID).
+			Updates(map[string]any{
+				"summary":            "",
+				"summary_message_id": nil,
+				"summary_updated_at": nil,
+				"updated_at":         tx.NowFunc(),
+			}).Error; err != nil {
+			return fmt.Errorf("清空 Agent 会话摘要失败: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return 0, err
 	}
-
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "duplicate") ||
-		strings.Contains(message, "duplicated key") ||
-		strings.Contains(message, "unique constraint") ||
-		strings.Contains(message, "1062") ||
-		strings.Contains(message, "23505")
+	return cleared, nil
 }

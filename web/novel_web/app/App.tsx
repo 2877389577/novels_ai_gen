@@ -88,7 +88,11 @@ const chapterEditRoutePattern =
 export function App() {
   const [route, setRoute] = useState<AppRoute>(getInitialAppRoute);
   const [theme, setTheme] = useState<AppTheme>(() => readStoredAppTheme());
+  const [chapterEditorAiPanelOpen, setChapterEditorAiPanelOpen] =
+    useState(false);
   const previousRouteRef = useRef<AppRoute | null>(null);
+  const appFooterVisible =
+    route.view !== "chapterEditor" || !chapterEditorAiPanelOpen;
 
   // syncAppTheme 将当前主题同步到页面根节点和浏览器本地存储。
   useLayoutEffect(
@@ -125,6 +129,16 @@ export function App() {
       window.history.scrollRestoration = previousScrollRestoration;
     };
   }, []);
+
+  // resetChapterEditorAiPanelState 在离开章节编辑页后重置 AI 侧栏全局布局状态。
+  useEffect(
+    function resetChapterEditorAiPanelState() {
+      if (route.view !== "chapterEditor") {
+        setChapterEditorAiPanelOpen(false);
+      }
+    },
+    [route.view],
+  );
 
   // installRouteGuard 安装浏览器路由守卫，拦截未登录用户访问受保护路径。
   useEffect(
@@ -319,6 +333,15 @@ export function App() {
     [],
   );
 
+  // handleChapterEditorAiPanelOpenChange 同步章节编辑页 AI 侧栏开关状态。
+  // 参数 open 表示章节编辑页 AI 侧栏是否正在打开。
+  const handleChapterEditorAiPanelOpenChange = useCallback(
+    function handleChapterEditorAiPanelOpenChange(open: boolean) {
+      setChapterEditorAiPanelOpen(open);
+    },
+    [],
+  );
+
   return (
     <div className="app-root" data-theme={theme} data-view={route.view}>
       {renderRoute(route, {
@@ -327,6 +350,7 @@ export function App() {
         onBackToNovelDetail: handleBackToNovelDetail,
         onChapterCreate: handleChapterCreate,
         onChapterEdit: handleChapterEdit,
+        onChapterEditorAiPanelOpenChange: handleChapterEditorAiPanelOpenChange,
         onChapterPersisted: handleChapterPersisted,
         onLoginSuccess: handleLoginSuccess,
         onNovelDeleted: handleNovelDeleted,
@@ -338,7 +362,7 @@ export function App() {
         onToggleTheme: handleToggleTheme,
         onUnauthorized: handleUnauthorized,
       })}
-      <AppFooter />
+      {appFooterVisible ? <AppFooter /> : null}
     </div>
   );
 }
@@ -355,6 +379,8 @@ interface RouteHandlers {
   onChapterCreate: (novelId: number) => void;
   // onChapterEdit 表示进入章节编辑页时执行的回调。
   onChapterEdit: (novelId: number, chapterId: number) => void;
+  // onChapterEditorAiPanelOpenChange 表示章节编辑页 AI 侧栏开关状态变化时执行的回调。
+  onChapterEditorAiPanelOpenChange: (open: boolean) => void;
   // onChapterPersisted 表示新增章节首次保存成功后执行的路由替换回调。
   onChapterPersisted: (novelId: number, chapterId: number) => void;
   // onLoginSuccess 表示登录成功后执行的回调。
@@ -430,6 +456,7 @@ function renderRoute(route: AppRoute, handlers: RouteHandlers) {
           novelId={route.novelId}
           chapterId={route.chapterId}
           onBackToNovelDetail={handlers.onBackToNovelDetail}
+          onAiPanelOpenChange={handlers.onChapterEditorAiPanelOpenChange}
           onChapterPersisted={handlers.onChapterPersisted}
           onUnauthorized={handlers.onUnauthorized}
         />

@@ -103,15 +103,139 @@ ai:
     # Agent 普通工具注册表；Agent 配置中的 tools 字段只能引用这里定义的 name。
     tools:
       - name: get_content
-        description: 读取当前请求关联章节的标题、正文、总结、字数和更新时间。当需要当前章节全文时调用。
+        description: |-
+          读取当前请求关联章节的标题、正文、总结、字数和更新时间。当需要当前章节全文时调用。
+
+          **返回的JSON字段详解：**
+          chapter_number: 当前章节号，例如第 10 章就是 10。
+          title: 当前章节标题。
+          content: 当前章节正文全文。
+          summary: 当前章节总结，可能为空字符串。
+          word_count: 当前章节正文的非空白字符数。
+          updated_at: 当前章节最近更新时间。
       - name: query_chapters
-        description: 按小说 ID 查询章节数据，可按章节 ID、章节号或章节号范围查询，并可通过 fields 只返回正文、总结等指定字段。
+        description: |-
+          按小说 ID 查询章节数据，可按章节 ID、章节号或章节号范围查询，并可通过 fields 只返回正文、总结等指定字段。
+          像created_at、updated_at等字段，非必要不获取。
+
+          **fields列表字段解释：**
+          "id": 主键ID,
+          "novel_id": 小说ID,
+          "chapter_number": 章节号，代表是第几章,
+          "title": 章节标题,
+          "content": 章节正文,
+          "summary": 当前章节的剧情概要,
+          "word_count": 章节字数,
+          "created_at": 章节创建时间,
+          "updated_at": 修改时间,
+
+          **返回的JSON字段详解：**
+          novel_id: 本次查询实际使用的小说 ID。
+          count: 本次查询命中的章节数量。
+          fields: 本次实际返回的字段名列表。
+          chapters: 查询到的章节数组。
+
+          chapters[] 内字段说明：
+          id: 章节主键 ID。
+          novel_id: 章节所属小说 ID。
+          chapter_number: 章节号。
+          title: 章节标题。
+          content: 章节正文全文。
+          summary: 章节总结，可能为空字符串。
+          word_count: 章节正文的非空白字符数。
+          created_at: 章节创建时间。
+          updated_at: 章节最近更新时间。
       - name: update_chapter_summary
-        description: 根据小说 ID 和章节 ID 或章节号更新章节总结；只能修改 summary 字段。
+        description: |-
+          根据小说 ID 和章节 ID 或章节号更新章节总结；只能修改 summary 字段。
+
+          **返回的JSON字段详解：**
+          id: 被更新的章节主键 ID。
+          novel_id: 章节所属小说 ID。
+          chapter_number: 被更新的章节号。
+          title: 被更新的章节标题。
+          summary: 更新后的章节总结，可能为空字符串，空字符串表示已清空总结。
+          updated_at: 章节更新后的最近更新时间。
       - name: query_novel_summary
-        description: 查询指定小说的滚动剧情总结，并返回当前总结覆盖的起始章节号和结束章节号；未传 novel_id 时使用当前 Agent 请求关联的小说 ID。
+        description: |-
+          查询指定小说的滚动剧情总结，并返回当前总结覆盖的起始章节号和结束章节号；未传 novel_id 时使用当前 Agent 请求关联的小说 ID。
+
+          **返回的JSON字段详解：**
+          novel_id: 本次查询实际使用的小说 ID。
+          exists: 是否已经存在小说滚动总结。true 表示存在，false 表示还没有创建。
+          summary: 小说滚动总结详情。仅当 exists=true 时返回。
+
+          summary 内字段说明：
+          id: 小说总结记录主键 ID。
+          novel_id: 总结所属小说 ID。
+          content: 小说滚动剧情总结正文，可能为空字符串。
+          start_chapter_number: 当前总结覆盖的起始章节号。0 表示未知或未记录。
+          end_chapter_number: 当前总结覆盖的结束章节号。0 表示未知或未记录。
+          created_at: 小说总结记录创建时间。
+          updated_at: 小说总结最近更新时间。
+
+          范围规则：start_chapter_number=0 且 end_chapter_number=0 表示当前总结没有记录覆盖章节范围。正常范围应理解为“总结内容覆盖第 start_chapter_number 章到第 end_chapter_number 章”。
       - name: update_novel_summary
-        description: 根据小说 ID 写入或覆盖小说滚动剧情总结，可同时写入总结覆盖的起始章节号和结束章节号；只能修改总结内容和章节范围字段。
+        description: |-
+          根据小说 ID 写入或覆盖小说滚动剧情总结，可同时写入总结覆盖的起始章节号和结束章节号；只能修改总结内容和章节范围字段。
+
+          **返回的JSON字段详解：**
+          id: 小说总结记录主键 ID。
+          novel_id: 总结所属小说 ID。
+          content: 更新后的小说滚动剧情总结正文，可能为空字符串。
+          start_chapter_number: 更新后的总结覆盖起始章节号。0 表示未知或未记录。
+          end_chapter_number: 更新后的总结覆盖结束章节号。0 表示未知或未记录。
+          created_at: 小说总结记录创建时间。
+          updated_at: 小说总结最近更新时间。
+
+          范围规则：start_chapter_number=0 且 end_chapter_number=0 表示当前总结没有记录覆盖章节范围。正常范围应理解为“总结内容覆盖第 start_chapter_number 章到第 end_chapter_number 章”。
+      - name: list_characters
+        description: |-
+          分页读取指定小说的角色核心设定，每页固定 5 个，按角色 ID 升序返回，并返回当前页、每页数量、总数和总页数。
+
+          **返回的JSON字段详解：**
+          novel_id: 本次查询实际使用的小说 ID。
+          page: 当前页码。
+          page_size: 每页固定返回数量，当前固定为 5。
+          total: 指定小说下的角色总数。
+          total_pages: 指定小说下的角色总页数。
+          characters: 当前页角色列表。
+
+          characters[] 内字段说明：
+          id: 角色卡主键 ID。
+          novel_id: 角色所属小说 ID。
+          name: 角色姓名。
+          gender: 角色性别，可能为空字符串。
+          tags: 角色标签，可能为空字符串，多个标签通常用英文逗号分隔。
+          background: 角色背景，可能为空字符串。
+          personality: 角色性格，可能为空字符串。
+          ability: 角色能力，可能为空字符串。
+          goal: 角色目的，可能为空字符串。
+      - name: search_characters_by_name
+        description: |-
+          按小说 ID 和角色名精确搜索角色核心设定；允许存在重名角色，命中时返回角色列表。
+
+          **返回的JSON字段详解：**
+          novel_id: 本次查询实际使用的小说 ID。
+          count: 本次搜索命中的角色数量。
+          characters: 命中的角色列表；字段含义与 list_characters 的 characters[] 相同。
+      - name: save_character
+        description: |-
+          新增或更新指定小说下的角色核心设定；id 为 0 或不传时新增，id 大于 0 时更新，只写入姓名、性别、标签、背景、性格、能力和目的字段。
+
+          **返回的JSON字段详解：**
+          character: 新增或更新后的角色核心设定。
+
+          character 内字段说明：
+          id: 角色卡主键 ID。
+          novel_id: 角色所属小说 ID。
+          name: 角色姓名。
+          gender: 角色性别，可能为空字符串。
+          tags: 角色标签，可能为空字符串，多个标签通常用英文逗号分隔。
+          background: 角色背景，可能为空字符串。
+          personality: 角色性格，可能为空字符串。
+          ability: 角色能力，可能为空字符串。
+          goal: 角色目的，可能为空字符串。
     # 小说级 Agent 记忆配置。
     memory:
       # 每次请求注入模型上下文的最近对话轮数；一轮为用户消息 + AI 回复。
