@@ -15,6 +15,14 @@ import (
 const (
 	// ToolNameGetContent 表示读取当前请求关联章节正文的 Agent 工具名称。
 	ToolNameGetContent = "get_content"
+	// ToolNameQueryChapters 表示按条件查询章节数据的 Agent 工具名称。
+	ToolNameQueryChapters = "query_chapters"
+	// ToolNameUpdateChapterSummary 表示更新章节总结的 Agent 工具名称。
+	ToolNameUpdateChapterSummary = "update_chapter_summary"
+	// ToolNameQueryNovelSummary 表示查询小说滚动总结的 Agent 工具名称。
+	ToolNameQueryNovelSummary = "query_novel_summary"
+	// ToolNameUpdateNovelSummary 表示写入或覆盖小说滚动总结的 Agent 工具名称。
+	ToolNameUpdateNovelSummary = "update_novel_summary"
 )
 
 var (
@@ -22,11 +30,17 @@ var (
 	ErrChapterContextRequired = errors.New("get_content chapter context required")
 )
 
-// ChapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
+// ChapterReader 表示章节类 Agent 工具读写章节数据所需的数据依赖。
 type ChapterReader interface {
 	// GetByID 根据小说 ID 和章节 ID 查询章节。
 	// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 chapterID 表示章节主键 ID。
 	GetByID(ctx context.Context, novelID uint64, chapterID uint64) (*bizchapter.Chapter, error)
+	// QueryChapters 根据条件查询章节数据。
+	// 参数 ctx 表示请求上下文；参数 condition 表示章节查询条件。
+	QueryChapters(ctx context.Context, condition bizchapter.QueryChaptersCondition) ([]bizchapter.Chapter, error)
+	// UpdateChapterSummary 只更新章节总结字段并返回更新后的章节。
+	// 参数 ctx 表示请求上下文；参数 condition 表示章节总结更新条件。
+	UpdateChapterSummary(ctx context.Context, condition bizchapter.UpdateChapterSummaryCondition) (*bizchapter.Chapter, error)
 }
 
 // GetContentInput 表示 get_content 工具的输入参数。
@@ -40,6 +54,8 @@ type GetContentOutput struct {
 	Title string `json:"title"`
 	// Content 表示章节正文。
 	Content string `json:"content"`
+	// Summary 表示章节总结。
+	Summary string `json:"summary"`
 	// WordCount 表示章节正文的非空白字符数量。
 	WordCount int `json:"word_count"`
 	// UpdatedAt 表示章节最近更新时间。
@@ -80,6 +96,7 @@ func getContent(ctx context.Context, reader ChapterReader, novelID uint64, chapt
 		ChapterNumber: chapter.ChapterNumber,
 		Title:         chapter.Title,
 		Content:       chapter.Content,
+		Summary:       chapter.Summary,
 		WordCount:     chapter.WordCount,
 		UpdatedAt:     chapter.UpdatedAt,
 	}, nil

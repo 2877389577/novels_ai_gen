@@ -24,6 +24,7 @@ import (
 	bizevent "novels_ai_gen/internal/biz/event"
 	biznovel "novels_ai_gen/internal/biz/novel"
 	biznovelagent "novels_ai_gen/internal/biz/novelagent"
+	biznovelsummary "novels_ai_gen/internal/biz/novelsummary"
 	bizprompt "novels_ai_gen/internal/biz/prompt"
 	bizrelationship "novels_ai_gen/internal/biz/relationship"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
@@ -58,6 +59,7 @@ var migrationModels = []any{
 	&bizevent.Relation{},
 	&biznovelagent.Conversation{},
 	&biznovelagent.MessageRecord{},
+	&biznovelsummary.NovelSummary{},
 	&bizprompt.Prompt{},
 }
 

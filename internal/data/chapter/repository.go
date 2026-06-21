@@ -12,6 +12,19 @@ import (
 	"gorm.io/gorm"
 )
 
+// allowedChapterSelectFields 表示章节工具允许按需读取的数据库字段白名单。
+var allowedChapterSelectFields = map[string]struct{}{
+	"id":             {},
+	"novel_id":       {},
+	"chapter_number": {},
+	"title":          {},
+	"content":        {},
+	"summary":        {},
+	"word_count":     {},
+	"created_at":     {},
+	"updated_at":     {},
+}
+
 // Repository 表示基于 GORM 的章节数据仓储。
 type Repository struct {
 	// db 表示 GORM 数据库连接。
@@ -124,6 +137,86 @@ func (r *Repository) GetByID(ctx context.Context, novelID uint64, chapterID uint
 	return &item, nil
 }
 
+// QueryChapters 根据条件查询章节数据。
+// 参数 ctx 表示请求上下文；参数 condition 表示章节查询条件。
+func (r *Repository) QueryChapters(ctx context.Context, condition bizchapter.QueryChaptersCondition) ([]bizchapter.Chapter, error) {
+	db := r.db.WithContext(ctx)
+	if condition.NovelID == 0 {
+		return nil, bizchapter.ErrNovelNotFound
+	}
+	if err := ensureNovelExists(db, condition.NovelID); err != nil {
+		return nil, err
+	}
+
+	fields, err := normalizeChapterSelectFields(condition.Fields)
+	if err != nil {
+		return nil, err
+	}
+
+	query := db.Model(&bizchapter.Chapter{}).Where("novel_id = ?", condition.NovelID)
+	if len(fields) > 0 {
+		query = query.Select(fields)
+	}
+
+	switch {
+	case condition.ChapterID > 0:
+		query = query.Where("id = ?", condition.ChapterID)
+	case condition.ChapterNumber > 0:
+		query = query.Where("chapter_number = ?", condition.ChapterNumber)
+	case condition.StartChapterNumber > 0 && condition.EndChapterNumber > 0:
+		if condition.StartChapterNumber > condition.EndChapterNumber {
+			return nil, fmt.Errorf("章节号范围无效")
+		}
+		query = query.Where("chapter_number BETWEEN ? AND ?", condition.StartChapterNumber, condition.EndChapterNumber)
+	default:
+		return nil, fmt.Errorf("章节查询条件不能为空")
+	}
+
+	var items []bizchapter.Chapter
+	if err := query.Order("chapter_number ASC").Find(&items).Error; err != nil {
+		return nil, fmt.Errorf("查询章节记录失败: %w", err)
+	}
+	return items, nil
+}
+
+// UpdateChapterSummary 只更新章节总结字段并返回更新后的章节。
+// 参数 ctx 表示请求上下文；参数 condition 表示章节总结更新条件。
+func (r *Repository) UpdateChapterSummary(ctx context.Context, condition bizchapter.UpdateChapterSummaryCondition) (*bizchapter.Chapter, error) {
+	db := r.db.WithContext(ctx)
+	if condition.NovelID == 0 {
+		return nil, bizchapter.ErrNovelNotFound
+	}
+	if err := ensureNovelExists(db, condition.NovelID); err != nil {
+		return nil, err
+	}
+	if (condition.ChapterID == 0 && condition.ChapterNumber <= 0) || (condition.ChapterID > 0 && condition.ChapterNumber > 0) {
+		return nil, fmt.Errorf("章节总结更新条件无效")
+	}
+
+	query := db.Model(&bizchapter.Chapter{}).Where("novel_id = ?", condition.NovelID)
+	if condition.ChapterID > 0 {
+		query = query.Where("id = ?", condition.ChapterID)
+	} else {
+		query = query.Where("chapter_number = ?", condition.ChapterNumber)
+	}
+
+	var existing bizchapter.Chapter
+	if err := query.First(&existing).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, bizchapter.ErrNotFound
+		}
+		return nil, fmt.Errorf("查询章节记录失败: %w", err)
+	}
+
+	if err := db.Model(&bizchapter.Chapter{}).
+		Where("id = ? AND novel_id = ?", existing.ID, existing.NovelID).
+		Update("summary", condition.Summary).Error; err != nil {
+		return nil, fmt.Errorf("更新章节总结失败: %w", err)
+	}
+
+	return r.getChapterBySummaryCondition(ctx, condition)
+}
+
 // Update 更新章节记录。
 // 参数 ctx 表示请求上下文；参数 item 表示需要保存的章节模型。
 func (r *Repository) Update(ctx context.Context, item *bizchapter.Chapter) error {
@@ -167,6 +260,51 @@ func (r *Repository) Delete(ctx context.Context, novelID uint64, chapterID uint6
 		return bizchapter.ErrNotFound
 	}
 	return nil
+}
+
+// getChapterBySummaryCondition 根据章节总结更新条件重新读取章节。
+// 参数 ctx 表示请求上下文；参数 condition 表示章节总结更新条件。
+func (r *Repository) getChapterBySummaryCondition(ctx context.Context, condition bizchapter.UpdateChapterSummaryCondition) (*bizchapter.Chapter, error) {
+	var item bizchapter.Chapter
+	query := r.db.WithContext(ctx).Where("novel_id = ?", condition.NovelID)
+	if condition.ChapterID > 0 {
+		query = query.Where("id = ?", condition.ChapterID)
+	} else {
+		query = query.Where("chapter_number = ?", condition.ChapterNumber)
+	}
+	if err := query.First(&item).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, bizchapter.ErrNotFound
+		}
+		return nil, fmt.Errorf("刷新章节总结失败: %w", err)
+	}
+	return &item, nil
+}
+
+// normalizeChapterSelectFields 标准化章节查询字段并校验字段白名单。
+// 参数 fields 表示调用方请求读取的字段列表。
+func normalizeChapterSelectFields(fields []string) ([]string, error) {
+	if len(fields) == 0 {
+		return nil, nil
+	}
+
+	normalized := make([]string, 0, len(fields))
+	seen := make(map[string]struct{}, len(fields))
+	for _, rawField := range fields {
+		field := strings.TrimSpace(rawField)
+		if field == "" {
+			return nil, fmt.Errorf("章节查询字段不能为空")
+		}
+		if _, ok := allowedChapterSelectFields[field]; !ok {
+			return nil, fmt.Errorf("章节查询字段 %s 不支持", field)
+		}
+		if _, ok := seen[field]; ok {
+			continue
+		}
+		seen[field] = struct{}{}
+		normalized = append(normalized, field)
+	}
+	return normalized, nil
 }
 
 // ensureNovelExists 确认章节所属小说存在。

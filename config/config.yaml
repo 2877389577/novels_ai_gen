@@ -103,7 +103,15 @@ ai:
     # Agent 普通工具注册表；Agent 配置中的 tools 字段只能引用这里定义的 name。
     tools:
       - name: get_content
-        description: 读取当前请求关联章节的标题、正文、字数和更新时间。当需要章节全文时调用。
+        description: 读取当前请求关联章节的标题、正文、总结、字数和更新时间。当需要当前章节全文时调用。
+      - name: query_chapters
+        description: 按小说 ID 查询章节数据，可按章节 ID、章节号或章节号范围查询，并可通过 fields 只返回正文、总结等指定字段。
+      - name: update_chapter_summary
+        description: 根据小说 ID 和章节 ID 或章节号更新章节总结；只能修改 summary 字段。
+      - name: query_novel_summary
+        description: 查询指定小说的滚动剧情总结，并返回当前总结覆盖的起始章节号和结束章节号；未传 novel_id 时使用当前 Agent 请求关联的小说 ID。
+      - name: update_novel_summary
+        description: 根据小说 ID 写入或覆盖小说滚动剧情总结，可同时写入总结覆盖的起始章节号和结束章节号；只能修改总结内容和章节范围字段。
     # 小说级 Agent 记忆配置。
     memory:
       # 每次请求注入模型上下文的最近对话轮数；一轮为用户消息 + AI 回复。

@@ -2474,6 +2474,262 @@
                 }
             }
         },
+        "/novels/{id}/summary": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "查询指定小说当前保存的滚动剧情总结。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "novel-summaries"
+                ],
+                "summary": "查询小说滚动总结",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelsummary.SummarySuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说或小说总结不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "更新指定小说当前滚动剧情总结的内容和覆盖章节范围。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "novel-summaries"
+                ],
+                "summary": "更新小说滚动总结",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "小说滚动总结内容和覆盖章节范围",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/novelsummary.SummaryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelsummary.SummarySuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说或小说总结不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "为指定小说创建当前唯一的滚动剧情总结，可同时记录总结覆盖的起止章节号；如果已存在则返回冲突。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "novel-summaries"
+                ],
+                "summary": "创建小说滚动总结",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "小说滚动总结内容和覆盖章节范围",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/novelsummary.SummaryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelsummary.SummarySuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "小说总结已存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "删除指定小说当前保存的滚动剧情总结。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "novel-summaries"
+                ],
+                "summary": "删除小说滚动总结",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "小说 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/novelsummary.DeleteSuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "小说或小说总结不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/novels/{novel_id}/agent-messages": {
             "get": {
                 "security": [
@@ -5704,6 +5960,9 @@
         },
         "internal_api_handler_novelagent.ChatRequest": {
             "type": "object",
+            "required": [
+                "novel_id"
+            ],
             "properties": {
                 "chapter_id": {
                     "description": "ChapterID 表示当前请求关联的章节 ID，普通对话可为空。",
@@ -5721,7 +5980,7 @@
                     "example": "gpt-5"
                 },
                 "novel_id": {
-                    "description": "NovelID 表示当前请求关联的小说 ID，普通对话可为空。",
+                    "description": "NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。",
                     "type": "integer",
                     "example": 1
                 },
@@ -6242,6 +6501,132 @@
                     "allOf": [
                         {
                             "$ref": "#/definitions/novelagent.PromptRecommendationData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novelsummary.DeleteData": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "description": "Deleted 表示是否已经删除小说滚动总结。",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "novelsummary.DeleteSuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示删除结果。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novelsummary.DeleteData"
+                        }
+                    ]
+                },
+                "message": {
+                    "description": "Message 表示响应提示信息。",
+                    "type": "string",
+                    "example": "ok"
+                },
+                "request_id": {
+                    "description": "RequestID 表示本次请求的追踪标识。",
+                    "type": "string",
+                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "novelsummary.SummaryData": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示小说滚动剧情总结内容。",
+                    "type": "string",
+                    "example": "主角在废土城市发现旧时代遗迹，团队关系逐渐成形。"
+                },
+                "created_at": {
+                    "description": "CreatedAt 表示创建时间。",
+                    "type": "string",
+                    "example": "2026-06-21T12:00:00+08:00"
+                },
+                "end_chapter_number": {
+                    "description": "EndChapterNumber 表示当前总结覆盖的结束章节号，0 表示未知或未记录。",
+                    "type": "integer",
+                    "example": 100
+                },
+                "id": {
+                    "description": "ID 表示小说总结主键 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "novel_id": {
+                    "description": "NovelID 表示总结所属小说 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "start_chapter_number": {
+                    "description": "StartChapterNumber 表示当前总结覆盖的起始章节号，0 表示未知或未记录。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 表示更新时间。",
+                    "type": "string",
+                    "example": "2026-06-21T12:00:00+08:00"
+                }
+            }
+        },
+        "novelsummary.SummaryRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 表示需要保存的小说滚动剧情总结内容，允许为空字符串。",
+                    "type": "string",
+                    "example": "主角在废土城市发现旧时代遗迹，团队关系逐渐成形。"
+                },
+                "end_chapter_number": {
+                    "description": "EndChapterNumber 表示当前总结覆盖的结束章节号，0 表示未知或未记录。",
+                    "type": "integer",
+                    "example": 100
+                },
+                "start_chapter_number": {
+                    "description": "StartChapterNumber 表示当前总结覆盖的起始章节号，0 表示未知或未记录。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "novelsummary.SummarySuccessResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code 表示业务响应码，成功固定为 0。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "data": {
+                    "description": "Data 表示小说滚动总结详情。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/novelsummary.SummaryData"
                         }
                     ]
                 },

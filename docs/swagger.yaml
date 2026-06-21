@@ -1478,13 +1478,15 @@ definitions:
         example: gpt-5
         type: string
       novel_id:
-        description: NovelID 表示当前请求关联的小说 ID，普通对话可为空。
+        description: NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
         example: 1
         type: integer
       provider_id:
         description: ProviderID 表示本次对话使用的 AI 提供商 ID。
         example: 1
         type: integer
+    required:
+    - novel_id
     type: object
   internal_api_handler_novelagent.PromptRecommendationRequest:
     properties:
@@ -1852,6 +1854,97 @@ definitions:
         allOf:
         - $ref: '#/definitions/novelagent.PromptRecommendationData'
         description: Data 表示提示词库推荐判定结果。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  novelsummary.DeleteData:
+    properties:
+      deleted:
+        description: Deleted 表示是否已经删除小说滚动总结。
+        example: true
+        type: boolean
+    type: object
+  novelsummary.DeleteSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/novelsummary.DeleteData'
+        description: Data 表示删除结果。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  novelsummary.SummaryData:
+    properties:
+      content:
+        description: Content 表示小说滚动剧情总结内容。
+        example: 主角在废土城市发现旧时代遗迹，团队关系逐渐成形。
+        type: string
+      created_at:
+        description: CreatedAt 表示创建时间。
+        example: "2026-06-21T12:00:00+08:00"
+        type: string
+      end_chapter_number:
+        description: EndChapterNumber 表示当前总结覆盖的结束章节号，0 表示未知或未记录。
+        example: 100
+        type: integer
+      id:
+        description: ID 表示小说总结主键 ID。
+        example: 1
+        type: integer
+      novel_id:
+        description: NovelID 表示总结所属小说 ID。
+        example: 1
+        type: integer
+      start_chapter_number:
+        description: StartChapterNumber 表示当前总结覆盖的起始章节号，0 表示未知或未记录。
+        example: 1
+        type: integer
+      updated_at:
+        description: UpdatedAt 表示更新时间。
+        example: "2026-06-21T12:00:00+08:00"
+        type: string
+    type: object
+  novelsummary.SummaryRequest:
+    properties:
+      content:
+        description: Content 表示需要保存的小说滚动剧情总结内容，允许为空字符串。
+        example: 主角在废土城市发现旧时代遗迹，团队关系逐渐成形。
+        type: string
+      end_chapter_number:
+        description: EndChapterNumber 表示当前总结覆盖的结束章节号，0 表示未知或未记录。
+        example: 100
+        type: integer
+      start_chapter_number:
+        description: StartChapterNumber 表示当前总结覆盖的起始章节号，0 表示未知或未记录。
+        example: 1
+        type: integer
+    type: object
+  novelsummary.SummarySuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/novelsummary.SummaryData'
+        description: Data 表示小说滚动总结详情。
       message:
         description: Message 表示响应提示信息。
         example: ok
@@ -3986,6 +4079,171 @@ paths:
       summary: 更新事件
       tags:
       - events
+  /novels/{id}/summary:
+    delete:
+      description: 删除指定小说当前保存的滚动剧情总结。
+      parameters:
+      - description: 小说 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/novelsummary.DeleteSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 小说或小说总结不存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 删除小说滚动总结
+      tags:
+      - novel-summaries
+    get:
+      description: 查询指定小说当前保存的滚动剧情总结。
+      parameters:
+      - description: 小说 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            $ref: '#/definitions/novelsummary.SummarySuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 小说或小说总结不存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 查询小说滚动总结
+      tags:
+      - novel-summaries
+    post:
+      consumes:
+      - application/json
+      description: 为指定小说创建当前唯一的滚动剧情总结，可同时记录总结覆盖的起止章节号；如果已存在则返回冲突。
+      parameters:
+      - description: 小说 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 小说滚动总结内容和覆盖章节范围
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/novelsummary.SummaryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/novelsummary.SummarySuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 小说不存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "409":
+          description: 小说总结已存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 创建小说滚动总结
+      tags:
+      - novel-summaries
+    put:
+      consumes:
+      - application/json
+      description: 更新指定小说当前滚动剧情总结的内容和覆盖章节范围。
+      parameters:
+      - description: 小说 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 小说滚动总结内容和覆盖章节范围
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/novelsummary.SummaryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/novelsummary.SummarySuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 小说或小说总结不存在
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 更新小说滚动总结
+      tags:
+      - novel-summaries
   /novels/{novel_id}/agent-messages:
     delete:
       consumes:

@@ -131,7 +131,7 @@ type AgentDefinition struct {
 	Instruction string `mapstructure:"instruction" json:"instruction" yaml:"instruction"`
 	// MaxIterations 表示 Eino ADK Agent 最大生成循环次数，小于等于 0 时使用业务默认值。
 	MaxIterations int `mapstructure:"max_iterations" json:"max_iterations" yaml:"max_iterations,omitempty"`
-	// Tools 表示 Agent 可使用的普通工具名称列表，当前仅支持 get_content。
+	// Tools 表示 Agent 可使用的普通工具名称列表，当前支持章节读取、章节查询和章节总结更新工具。
 	Tools []string `mapstructure:"tools" json:"tools" yaml:"tools,omitempty"`
 	// Parameters 表示子 Agent 作为工具被调用时的入参定义，键为参数名。
 	Parameters map[string]AgentParameterDefinition `mapstructure:"parameters" json:"parameters" yaml:"parameters,omitempty"`

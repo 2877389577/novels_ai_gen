@@ -18,6 +18,7 @@ import (
 	loghandler "novels_ai_gen/internal/api/handler/log"
 	novelhandler "novels_ai_gen/internal/api/handler/novel"
 	novelagenthandler "novels_ai_gen/internal/api/handler/novelagent"
+	novelsummaryhandler "novels_ai_gen/internal/api/handler/novelsummary"
 	prompthandler "novels_ai_gen/internal/api/handler/prompt"
 	relationshiphandler "novels_ai_gen/internal/api/handler/relationship"
 	systemhandler "novels_ai_gen/internal/api/handler/system"
@@ -30,8 +31,8 @@ import (
 const indexHTML = "index.html"
 
 // NewRouter 创建 Gin 路由引擎并注册系统接口。
-// 参数 authHandler 表示登录鉴权 HTTP 处理器；参数 novelHandler 表示小说 HTTP 处理器；参数 chapterHandler 表示章节 HTTP 处理器；参数 characterHandler 表示角色卡 HTTP 处理器；参数 relationshipHandler 表示角色关系图 HTTP 处理器；参数 eventHandler 表示小说事件 HTTP 处理器；参数 aiProviderHandler 表示 AI 提供商 HTTP 处理器；参数 novelAgentHandler 表示小说写作 Agent HTTP 处理器；参数 promptHandler 表示 AI 提示词 HTTP 处理器；参数 uploadHandler 表示图片上传 HTTP 处理器；参数 configHandler 表示配置文件管理 HTTP 处理器；参数 logHandler 表示文件日志预览 HTTP 处理器；参数 systemHandler 表示系统维护 HTTP 处理器；参数 authService 表示登录鉴权业务服务。
-func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Handler, chapterHandler *chapterhandler.Handler, characterHandler *characterhandler.Handler, relationshipHandler *relationshiphandler.Handler, eventHandler *eventhandler.Handler, aiProviderHandler *aiproviderhandler.Handler, novelAgentHandler *novelagenthandler.Handler, promptHandler *prompthandler.Handler, uploadHandler *uploadhandler.Handler, configHandler *confighandler.Handler, logHandler *loghandler.Handler, systemHandler *systemhandler.Handler, authService *bizauth.Service) *gin.Engine {
+// 参数 authHandler 表示登录鉴权 HTTP 处理器；参数 novelHandler 表示小说 HTTP 处理器；参数 chapterHandler 表示章节 HTTP 处理器；参数 characterHandler 表示角色卡 HTTP 处理器；参数 relationshipHandler 表示角色关系图 HTTP 处理器；参数 eventHandler 表示小说事件 HTTP 处理器；参数 aiProviderHandler 表示 AI 提供商 HTTP 处理器；参数 novelAgentHandler 表示小说写作 Agent HTTP 处理器；参数 novelSummaryHandler 表示小说滚动总结 HTTP 处理器；参数 promptHandler 表示 AI 提示词 HTTP 处理器；参数 uploadHandler 表示图片上传 HTTP 处理器；参数 configHandler 表示配置文件管理 HTTP 处理器；参数 logHandler 表示文件日志预览 HTTP 处理器；参数 systemHandler 表示系统维护 HTTP 处理器；参数 authService 表示登录鉴权业务服务。
+func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Handler, chapterHandler *chapterhandler.Handler, characterHandler *characterhandler.Handler, relationshipHandler *relationshiphandler.Handler, eventHandler *eventhandler.Handler, aiProviderHandler *aiproviderhandler.Handler, novelAgentHandler *novelagenthandler.Handler, novelSummaryHandler *novelsummaryhandler.Handler, promptHandler *prompthandler.Handler, uploadHandler *uploadhandler.Handler, configHandler *confighandler.Handler, logHandler *loghandler.Handler, systemHandler *systemhandler.Handler, authService *bizauth.Service) *gin.Engine {
 	engine := gin.New()
 	engine.Use(middleware.RequestID(), middleware.RequestLogger(), gin.Recovery())
 
@@ -47,6 +48,10 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.GET("/novels/:id", novelHandler.Get)
 	protected.PUT("/novels/:id", novelHandler.Update)
 	protected.DELETE("/novels/:id", novelHandler.Delete)
+	protected.POST("/novels/:id/summary", novelSummaryHandler.Create)
+	protected.GET("/novels/:id/summary", novelSummaryHandler.Get)
+	protected.PUT("/novels/:id/summary", novelSummaryHandler.Update)
+	protected.DELETE("/novels/:id/summary", novelSummaryHandler.Delete)
 	protected.GET("/novels/:id/agent-messages", novelAgentHandler.ListMessages)
 	protected.DELETE("/novels/:id/agent-messages", novelAgentHandler.ClearMessages)
 	protected.GET("/novels/:id/next-chapter-number", chapterHandler.NextChapterNumber)

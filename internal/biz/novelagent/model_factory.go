@@ -45,12 +45,14 @@ const promptRecommendationSystemPrompt = "你是小说提示词库推荐判定�
 type EinoAgentRuntimeFactory struct {
 	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
 	chapterReader agenttools.ChapterReader
+	// novelSummaryStore 表示小说滚动总结工具读写总结所需的数据依赖。
+	novelSummaryStore agenttools.NovelSummaryStore
 }
 
 // NewEinoAgentRuntimeFactory 创建基于 Eino ADK 的多层 Agent 运行时工厂。
-// 参数 chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
-func NewEinoAgentRuntimeFactory(chapterReader agenttools.ChapterReader) *EinoAgentRuntimeFactory {
-	return &EinoAgentRuntimeFactory{chapterReader: chapterReader}
+// 参数 chapterReader 表示 get_content 工具读取章节正文所需的数据依赖；参数 novelSummaryStore 表示小说滚动总结工具读写总结所需的数据依赖。
+func NewEinoAgentRuntimeFactory(chapterReader agenttools.ChapterReader, novelSummaryStore agenttools.NovelSummaryStore) *EinoAgentRuntimeFactory {
+	return &EinoAgentRuntimeFactory{chapterReader: chapterReader, novelSummaryStore: novelSummaryStore}
 }
 
 // NewRuntime 按 AI 提供商协议创建 Eino 多层 Agent 运行时。
@@ -84,11 +86,12 @@ func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeMod
 			return nil, err
 		}
 		return chatAgentRuntime{
-			model:           defaultModel,
-			supervisorModel: supervisorModel,
-			childModels:     childModels,
-			modelConfigs:    registry,
-			chapterReader:   f.chapterReader,
+			model:             defaultModel,
+			supervisorModel:   supervisorModel,
+			childModels:       childModels,
+			modelConfigs:      registry,
+			chapterReader:     f.chapterReader,
+			novelSummaryStore: f.novelSummaryStore,
 		}, nil
 	case modelPathAgentic:
 		defaultModel, err := f.newAgenticModel(ctx, cfg.Default, cfg.Retry)
@@ -107,11 +110,12 @@ func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeMod
 			return nil, err
 		}
 		return agenticAgentRuntime{
-			model:           defaultModel,
-			supervisorModel: supervisorModel,
-			childModels:     childModels,
-			modelConfigs:    registry,
-			chapterReader:   f.chapterReader,
+			model:             defaultModel,
+			supervisorModel:   supervisorModel,
+			childModels:       childModels,
+			modelConfigs:      registry,
+			chapterReader:     f.chapterReader,
+			novelSummaryStore: f.novelSummaryStore,
 		}, nil
 	default:
 		return nil, fmt.Errorf("不支持的 Agent 模型路径: %s", defaultPath)
@@ -401,6 +405,8 @@ type chatAgentRuntime struct {
 	modelConfigs agentModelConfigRegistry
 	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
 	chapterReader agenttools.ChapterReader
+	// novelSummaryStore 表示小说滚动总结工具读写总结所需的数据依赖。
+	novelSummaryStore agenttools.NovelSummaryStore
 }
 
 // Stream 流式执行基于 schema.Message 的小说写作 Agent。
@@ -411,7 +417,7 @@ func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, 
 		return AgentResult{Task: taskDirect}, err
 	}
 
-	agent, err := newChatSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader)
+	agent, err := newChatSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader, r.novelSummaryStore)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
@@ -474,6 +480,8 @@ type agenticAgentRuntime struct {
 	modelConfigs agentModelConfigRegistry
 	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
 	chapterReader agenttools.ChapterReader
+	// novelSummaryStore 表示小说滚动总结工具读写总结所需的数据依赖。
+	novelSummaryStore agenttools.NovelSummaryStore
 }
 
 // Stream 流式执行基于 schema.AgenticMessage 的小说写作 Agent。
@@ -484,7 +492,7 @@ func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfi
 		return AgentResult{Task: taskDirect}, err
 	}
 
-	agent, err := newAgenticSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader)
+	agent, err := newAgenticSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader, r.novelSummaryStore)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
 	}
@@ -755,13 +763,13 @@ func normalizeSummaryContent(content string) (string, error) {
 }
 
 // newChatSupervisorAgent 创建基于 schema.Message 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
-// 参数 ctx 表示请求上下文；参数 defaultModel 表示入口 ChatModel；参数 supervisorModel 表示顶层 Agent 使用的 ChatModel；参数 childModels 表示子 Agent 自定义 ChatModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖。
-func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChatModel, supervisorModel einomodel.BaseChatModel, childModels map[string]einomodel.BaseChatModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader) (*adk.TypedChatModelAgent[*schema.Message], error) {
+// 参数 ctx 表示请求上下文；参数 defaultModel 表示入口 ChatModel；参数 supervisorModel 表示顶层 Agent 使用的 ChatModel；参数 childModels 表示子 Agent 自定义 ChatModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖；参数 novelSummaryStore 表示小说滚动总结读写依赖。
+func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChatModel, supervisorModel einomodel.BaseChatModel, childModels map[string]einomodel.BaseChatModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader, novelSummaryStore agenttools.NovelSummaryStore) (*adk.TypedChatModelAgent[*schema.Message], error) {
 	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
 		return nil, err
 	}
 
-	supervisorTools, err := configuredAgentTools(req, cfg.supervisor, cfg.tools, chapterReader)
+	supervisorTools, err := configuredAgentTools(req, cfg.supervisor, cfg.tools, chapterReader, novelSummaryStore)
 	if err != nil {
 		return nil, err
 	}
@@ -770,7 +778,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 	tools = append(tools, supervisorTools...)
 	returnDirectly := make(map[string]bool, len(cfg.children))
 	for _, child := range cfg.children {
-		childTools, err := configuredAgentTools(req, child, cfg.tools, chapterReader)
+		childTools, err := configuredAgentTools(req, child, cfg.tools, chapterReader, novelSummaryStore)
 		if err != nil {
 			return nil, err
 		}
@@ -817,13 +825,13 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 }
 
 // newAgenticSupervisorAgent 创建基于 schema.AgenticMessage 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
-// 参数 ctx 表示请求上下文；参数 defaultModel 表示入口 AgenticModel；参数 supervisorModel 表示顶层 Agent 使用的 AgenticModel；参数 childModels 表示子 Agent 自定义 AgenticModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖。
-func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.AgenticModel, supervisorModel einomodel.AgenticModel, childModels map[string]einomodel.AgenticModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
+// 参数 ctx 表示请求上下文；参数 defaultModel 表示入口 AgenticModel；参数 supervisorModel 表示顶层 Agent 使用的 AgenticModel；参数 childModels 表示子 Agent 自定义 AgenticModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖；参数 novelSummaryStore 表示小说滚动总结读写依赖。
+func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.AgenticModel, supervisorModel einomodel.AgenticModel, childModels map[string]einomodel.AgenticModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader, novelSummaryStore agenttools.NovelSummaryStore) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
 	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
 		return nil, err
 	}
 
-	supervisorTools, err := configuredAgentTools(req, cfg.supervisor, cfg.tools, chapterReader)
+	supervisorTools, err := configuredAgentTools(req, cfg.supervisor, cfg.tools, chapterReader, novelSummaryStore)
 	if err != nil {
 		return nil, err
 	}
@@ -832,7 +840,7 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 	tools = append(tools, supervisorTools...)
 	returnDirectly := make(map[string]bool, len(cfg.children))
 	for _, child := range cfg.children {
-		childTools, err := configuredAgentTools(req, child, cfg.tools, chapterReader)
+		childTools, err := configuredAgentTools(req, child, cfg.tools, chapterReader, novelSummaryStore)
 		if err != nil {
 			return nil, err
 		}
@@ -928,8 +936,8 @@ func fixedRetryBackoff(backoff time.Duration) func(context.Context, int) time.Du
 }
 
 // configuredAgentTools 根据 Agent 配置创建本次请求可用的普通工具。
-// 参数 req 表示流式聊天请求；参数 agent 表示 Agent 运行时配置；参数 registry 表示普通工具注册表；参数 chapterReader 表示章节读取依赖。
-func configuredAgentTools(req ChatRequest, agent runtimeAgentDefinition, registry map[string]runtimeAgentTool, chapterReader agenttools.ChapterReader) ([]tool.BaseTool, error) {
+// 参数 req 表示流式聊天请求；参数 agent 表示 Agent 运行时配置；参数 registry 表示普通工具注册表；参数 chapterReader 表示章节读取依赖；参数 novelSummaryStore 表示小说滚动总结读写依赖。
+func configuredAgentTools(req ChatRequest, agent runtimeAgentDefinition, registry map[string]runtimeAgentTool, chapterReader agenttools.ChapterReader, novelSummaryStore agenttools.NovelSummaryStore) ([]tool.BaseTool, error) {
 	if len(agent.toolNames) == 0 {
 		return nil, nil
 	}
@@ -947,6 +955,30 @@ func configuredAgentTools(req ChatRequest, agent runtimeAgentDefinition, registr
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
 			tools = append(tools, getContentTool)
+		case agenttools.ToolNameQueryChapters:
+			queryChaptersTool, err := agenttools.NewQueryChaptersTool(chapterReader, req.NovelID, toolConfig.description)
+			if err != nil {
+				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
+			}
+			tools = append(tools, queryChaptersTool)
+		case agenttools.ToolNameUpdateChapterSummary:
+			updateSummaryTool, err := agenttools.NewUpdateChapterSummaryTool(chapterReader, req.NovelID, toolConfig.description)
+			if err != nil {
+				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
+			}
+			tools = append(tools, updateSummaryTool)
+		case agenttools.ToolNameQueryNovelSummary:
+			queryNovelSummaryTool, err := agenttools.NewQueryNovelSummaryTool(novelSummaryStore, req.NovelID, toolConfig.description)
+			if err != nil {
+				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
+			}
+			tools = append(tools, queryNovelSummaryTool)
+		case agenttools.ToolNameUpdateNovelSummary:
+			updateNovelSummaryTool, err := agenttools.NewUpdateNovelSummaryTool(novelSummaryStore, req.NovelID, toolConfig.description)
+			if err != nil {
+				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
+			}
+			tools = append(tools, updateNovelSummaryTool)
 		default:
 			return nil, fmt.Errorf("%w: 未知 Agent tool %s", ErrAgentConfigInvalid, name)
 		}
