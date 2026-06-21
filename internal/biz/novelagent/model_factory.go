@@ -556,9 +556,6 @@ func chatRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Message
 			messages = append(messages, schema.AssistantMessage(item.Content, nil))
 		}
 	}
-	if prompt := requestContextPrompt(req); prompt != "" {
-		messages = append(messages, schema.SystemMessage(prompt))
-	}
 	messages = append(messages, schema.UserMessage(req.Message))
 	return messages
 }
@@ -582,9 +579,6 @@ func agenticRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Agen
 			messages = append(messages, assistantAgenticMessage(item.Content))
 		}
 	}
-	if prompt := requestContextPrompt(req); prompt != "" {
-		messages = append(messages, schema.SystemAgenticMessage(prompt))
-	}
 	messages = append(messages, schema.UserAgenticMessage(req.Message))
 	return messages
 }
@@ -603,10 +597,22 @@ func assistantAgenticMessage(content string) *schema.AgenticMessage {
 // requestContextPrompt 生成仅用于本轮模型输入的请求上下文提示，不写入记忆。
 // 参数 req 表示本轮聊天请求。
 func requestContextPrompt(req ChatRequest) string {
-	if req.NovelID == 0 || req.ChapterID == 0 {
-		return ""
+	chapterIDText := fmt.Sprintf("%d", req.ChapterID)
+	if req.ChapterID == 0 {
+		chapterIDText = "0（未关联具体章节）"
 	}
-	return "本轮请求已关联当前小说的当前章节。若用户请求需要读取当前章节正文，请调用可用的 get_content 工具，或调用具备该能力的章节处理子 Agent；不要要求用户粘贴全文，当前章节的真实章节号以工具读取到的章节数据为准。"
+	return fmt.Sprintf("本轮请求上下文：\nnovel_id: %d\nchapter_id: %s\n说明：调用需要小说或章节上下文的工具时，可以使用以上 ID；当前章节的真实章节号以工具查询到的数据为准。", req.NovelID, chapterIDText)
+}
+
+// instructionWithRequestContext 将本轮请求上下文追加到 Agent 系统提示词末尾。
+// 参数 instruction 表示配置文件中的原始 Agent 系统提示词；参数 req 表示本轮聊天请求。
+func instructionWithRequestContext(instruction string, req ChatRequest) string {
+	instruction = strings.TrimSpace(instruction)
+	contextPrompt := requestContextPrompt(req)
+	if instruction == "" {
+		return contextPrompt
+	}
+	return instruction + "\n\n" + contextPrompt
 }
 
 // memorySummaryPrompt 生成注入模型上下文的长期记忆摘要提示。
@@ -789,7 +795,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
 			Name:             child.name,
 			Description:      child.description,
-			Instruction:      child.instruction,
+			Instruction:      instructionWithRequestContext(child.instruction, req),
 			Model:            childModel,
 			ToolsConfig:      childToolsConfig(childTools),
 			MaxIterations:    child.maxIterations,
@@ -809,7 +815,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 	return adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
 		Name:        cfg.supervisor.name,
 		Description: cfg.supervisor.description,
-		Instruction: cfg.supervisor.instruction,
+		Instruction: instructionWithRequestContext(cfg.supervisor.instruction, req),
 		Model:       supervisorModel,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
@@ -851,7 +857,7 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
 			Name:             child.name,
 			Description:      child.description,
-			Instruction:      child.instruction,
+			Instruction:      instructionWithRequestContext(child.instruction, req),
 			Model:            childModel,
 			ToolsConfig:      childToolsConfig(childTools),
 			MaxIterations:    child.maxIterations,
@@ -871,7 +877,7 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 	return adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
 		Name:        cfg.supervisor.name,
 		Description: cfg.supervisor.description,
-		Instruction: cfg.supervisor.instruction,
+		Instruction: instructionWithRequestContext(cfg.supervisor.instruction, req),
 		Model:       supervisorModel,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
