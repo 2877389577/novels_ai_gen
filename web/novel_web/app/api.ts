@@ -767,6 +767,32 @@ export interface NovelSummaryDeleteData {
   deleted: boolean;
 }
 
+// NovelOutlineItem 表示小说大纲详情数据。
+export interface NovelOutlineItem {
+  // id 表示小说大纲主键 ID。
+  id: number;
+  // novel_id 表示大纲所属小说 ID。
+  novel_id: number;
+  // content 表示小说大纲正文。
+  content: string;
+  // created_at 表示创建时间。
+  created_at: string;
+  // updated_at 表示更新时间。
+  updated_at: string;
+}
+
+// NovelOutlineSaveParams 表示创建或更新小说大纲时提交的数据。
+export interface NovelOutlineSaveParams {
+  // content 表示需要保存的小说大纲正文，允许为空字符串。
+  content: string;
+}
+
+// NovelOutlineDeleteData 表示删除小说大纲接口返回的数据。
+export interface NovelOutlineDeleteData {
+  // deleted 表示后端是否已经删除小说大纲。
+  deleted: boolean;
+}
+
 // ChapterSummaryItem 表示章节列表中的章节摘要数据，不包含正文。
 export interface ChapterSummaryItem {
   // id 表示章节主键 ID。
@@ -2550,6 +2576,133 @@ export async function deleteNovelSummary(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "小说总结删除失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchNovelOutline 查询指定小说的大纲。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNovelOutline(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<NovelOutlineItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/outline`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelOutlineItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说大纲加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// createNovelOutline 为指定小说创建大纲。
+// 参数 novelId 表示小说主键 ID；参数 params 表示需要创建的小说大纲正文。
+export async function createNovelOutline(
+  novelId: number,
+  params: NovelOutlineSaveParams,
+): Promise<NovelOutlineItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/outline`, {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelOutlineItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说大纲保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateNovelOutline 更新指定小说的大纲。
+// 参数 novelId 表示小说主键 ID；参数 params 表示需要覆盖保存的小说大纲正文。
+export async function updateNovelOutline(
+  novelId: number,
+  params: NovelOutlineSaveParams,
+): Promise<NovelOutlineItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/outline`, {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<NovelOutlineItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说大纲保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteNovelOutline 删除指定小说的大纲。
+// 参数 novelId 表示小说主键 ID。
+export async function deleteNovelOutline(
+  novelId: number,
+): Promise<NovelOutlineDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/outline`, {
+    method: "DELETE",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+  });
+  const payload = await parseApiResponse<NovelOutlineDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "小说大纲删除失败，请稍后再试");
   }
 
   return payload.data;
