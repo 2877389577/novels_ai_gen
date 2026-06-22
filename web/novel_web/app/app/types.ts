@@ -73,8 +73,8 @@ export interface RouteHandlers {
   onChapterEdit: (novelId: number, chapterId: number) => void;
   // onChapterSummaryOpen 表示进入章节概要页时执行的回调。
   onChapterSummaryOpen: (novelId: number, chapterId: number) => void;
-  // onChapterEditorAiPanelOpenChange 表示章节编辑页 AI 侧栏开关状态变化时执行的回调。
-  onChapterEditorAiPanelOpenChange: (open: boolean) => void;
+  // onAgentPanelOpenChange 表示页面级 AI 侧栏开关状态变化时执行的回调。
+  onAgentPanelOpenChange: (open: boolean) => void;
   // onChapterPersisted 表示新增章节首次保存成功后执行的路由替换回调。
   onChapterPersisted: (novelId: number, chapterId: number) => void;
   // onLoginSuccess 表示登录成功后执行的回调。

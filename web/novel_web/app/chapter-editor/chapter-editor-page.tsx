@@ -7,7 +7,7 @@ import { chapterAutoSaveIntervalMs, chapterEditorScrollbarHiddenClass, emptyChap
 import { ChapterAiAssistantPanel } from "./chapter-ai-panel";
 import { ChapterEditorContext } from "./editor-context";
 import { ChapterEditorError, ChapterEditorSkeleton } from "./editor-frame";
-import type { ChapterAiPrefillMessage, ChapterAiSavedChapterContext, ChapterEditorPageProps, ChapterEditorState, ChapterFormValues, ChapterSaveOptions, ChapterSaveSnapshot, ChapterSelectionAIAction } from "./types";
+import type { ChapterAiPrefillMessage, ChapterAiRequestContext, ChapterEditorPageProps, ChapterEditorState, ChapterFormValues, ChapterSaveOptions, ChapterSaveSnapshot, ChapterSelectionAIAction } from "./types";
 import { countNonWhitespaceCharacters, ensureContentEditorHasParagraph, formatChapterNumber, getChapterSelectionAIAction, getContentEditorTailNode, getErrorMessage, insertPlainTextAtSelection, isChapterNumberConflictError, moveCaretToEnd, normalizeChapterContentText, normalizeChapterCreateValues, normalizeChapterFormValues, readContentEditorText, renderContentEditorText, splitEditorTextLines, chapterToFormValues } from "./content-editor-utils";
 
 // ChapterEditorPage 渲染章节创建和编辑共用页面。
@@ -278,7 +278,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   // ensureChapterSavedForAgent 在发送 AI 请求前确保当前章节已经保存到后端。
   const ensureChapterSavedForAgent = useCallback(
     async function ensureChapterSavedForAgent(): Promise<
-      ChapterAiSavedChapterContext | null
+      ChapterAiRequestContext | null
     > {
       if (stateRef.current !== "ready") {
         Toast.info("章节仍在加载，请稍后再试");
@@ -882,7 +882,8 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         {aiPanelOpen ? (
           <ChapterAiAssistantPanel
             novelId={props.novelId}
-            ensureChapterSavedForAgent={ensureChapterSavedForAgent}
+            prepareRequestContext={ensureChapterSavedForAgent}
+            prepareRequestErrorMessage="章节保存失败，请稍后再试"
             prefillMessage={aiPrefillMessage}
             onClose={handleAiAssistantClose}
             onUnauthorized={props.onUnauthorized}

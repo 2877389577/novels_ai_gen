@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IconAIEditLevel1 } from "@douyinfe/semi-icons";
 
 import { UnauthorizedError, refreshImagePreview, type NovelItem } from "../api";
 import {
@@ -22,6 +23,8 @@ interface NovelDetailHeroProps {
   onDelete: () => void;
   // onEdit 表示点击编辑作品按钮时执行的回调。
   onEdit: () => void;
+  // onOpenAI 表示点击 AI 助手按钮时执行的回调。
+  onOpenAI: () => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
@@ -71,6 +74,14 @@ export function NovelDetailHero(props: NovelDetailHeroProps) {
           >
             <span aria-hidden="true">✎</span>
             <span>编辑作品</span>
+          </button>
+          <button
+            type="button"
+            className="detail-ai-button"
+            onClick={props.onOpenAI}
+          >
+            <IconAIEditLevel1 aria-hidden="true" />
+            <span>AI 助手</span>
           </button>
           <button
             type="button"

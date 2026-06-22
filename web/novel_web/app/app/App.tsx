@@ -39,11 +39,11 @@ import type { AppRoute } from "./types";
 export function App() {
   const [route, setRoute] = useState<AppRoute>(getInitialAppRoute);
   const [theme, setTheme] = useState<AppTheme>(() => readStoredAppTheme());
-  const [chapterEditorAiPanelOpen, setChapterEditorAiPanelOpen] =
-    useState(false);
+  const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   const previousRouteRef = useRef<AppRoute | null>(null);
   const appFooterVisible =
-    route.view !== "chapterEditor" || !chapterEditorAiPanelOpen;
+    (route.view !== "chapterEditor" && route.view !== "novelDetail") ||
+    !agentPanelOpen;
 
   // syncAppTheme 将当前主题同步到页面根节点和浏览器本地存储。
   useLayoutEffect(
@@ -81,11 +81,11 @@ export function App() {
     };
   }, []);
 
-  // resetChapterEditorAiPanelState 在离开章节编辑页后重置 AI 侧栏全局布局状态。
+  // resetAgentPanelState 在离开支持 AI 侧栏的页面后重置全局布局状态。
   useEffect(
-    function resetChapterEditorAiPanelState() {
-      if (route.view !== "chapterEditor") {
-        setChapterEditorAiPanelOpen(false);
+    function resetAgentPanelState() {
+      if (route.view !== "chapterEditor" && route.view !== "novelDetail") {
+        setAgentPanelOpen(false);
       }
     },
     [route.view],
@@ -298,11 +298,11 @@ export function App() {
     [],
   );
 
-  // handleChapterEditorAiPanelOpenChange 同步章节编辑页 AI 侧栏开关状态。
-  // 参数 open 表示章节编辑页 AI 侧栏是否正在打开。
-  const handleChapterEditorAiPanelOpenChange = useCallback(
-    function handleChapterEditorAiPanelOpenChange(open: boolean) {
-      setChapterEditorAiPanelOpen(open);
+  // handleAgentPanelOpenChange 同步页面级 AI 侧栏开关状态。
+  // 参数 open 表示页面级 AI 侧栏是否正在打开。
+  const handleAgentPanelOpenChange = useCallback(
+    function handleAgentPanelOpenChange(open: boolean) {
+      setAgentPanelOpen(open);
     },
     [],
   );
@@ -313,9 +313,9 @@ export function App() {
         currentTheme: theme,
         onBackToBookshelf: handleBackToBookshelf,
         onBackToNovelDetail: handleBackToNovelDetail,
+        onAgentPanelOpenChange: handleAgentPanelOpenChange,
         onChapterCreate: handleChapterCreate,
         onChapterEdit: handleChapterEdit,
-        onChapterEditorAiPanelOpenChange: handleChapterEditorAiPanelOpenChange,
         onChapterPersisted: handleChapterPersisted,
         onChapterSummaryOpen: handleChapterSummaryOpen,
         onLoginSuccess: handleLoginSuccess,

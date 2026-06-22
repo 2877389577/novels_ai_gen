@@ -18,6 +18,8 @@ export interface NovelDetailPageProps {
   onChapterEdit: (novelId: number, chapterId: number) => void;
   // onChapterSummaryOpen 表示进入章节概要页时执行的回调。
   onChapterSummaryOpen: (novelId: number, chapterId: number) => void;
+  // onAiPanelOpenChange 表示 AI 侧栏打开状态变化时通知应用层的回调。
+  onAiPanelOpenChange: (open: boolean) => void;
   // onDeleted 表示小说删除成功后执行的回调。
   onDeleted: () => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
