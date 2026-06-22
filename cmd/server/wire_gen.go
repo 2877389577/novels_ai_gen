@@ -26,6 +26,7 @@ import (
 	aiprovider2 "novels_ai_gen/internal/biz/aiprovider"
 	"novels_ai_gen/internal/biz/auth"
 	chapter2 "novels_ai_gen/internal/biz/chapter"
+	"novels_ai_gen/internal/biz/chaptersummaryagent"
 	character2 "novels_ai_gen/internal/biz/character"
 	event2 "novels_ai_gen/internal/biz/event"
 	novel2 "novels_ai_gen/internal/biz/novel"
@@ -84,8 +85,6 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	novelService := novel2.NewService(repository)
 	novelHandler := novel3.NewHandler(novelService)
 	chapterRepository := chapter.NewRepository(gormDB)
-	chapterService := chapter2.NewService(chapterRepository)
-	chapterHandler := chapter3.NewHandler(chapterService)
 	characterRepository := character.NewRepository(gormDB)
 	characterService := character2.NewService(characterRepository)
 	characterHandler := character3.NewHandler(characterService)
@@ -109,6 +108,9 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	novelsummaryRepository := novelsummary.NewRepository(gormDB)
 	noveloutlineRepository := noveloutline.NewRepository(gormDB)
 	einoAgentRuntimeFactory := novelagent.NewEinoAgentRuntimeFactory(chapterRepository, novelsummaryRepository, noveloutlineRepository, characterRepository, relationshipRepository)
+	service2 := chaptersummaryagent.NewService(configManager, aiproviderRepository, cipher, einoAgentRuntimeFactory, chapterRepository, slogLogger)
+	chapterService := chapter2.NewServiceWithChapterSummaryScheduler(chapterRepository, service2)
+	chapterHandler := chapter3.NewHandler(chapterService)
 	novelagentRepository := novelagent2.NewRepository(gormDB)
 	novelagentService := novelagent.NewService(aiproviderRepository, cipher, configManager, einoAgentRuntimeFactory, novelagentRepository)
 	novelagentHandler := novelagent3.NewHandler(novelagentService)
@@ -121,6 +123,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	promptHandler := prompt3.NewHandler(promptService)
 	client, err := objectstore.NewClient(appConfig)
 	if err != nil {
+		service2.Close()
 		cleanup3()
 		cleanup2()
 		cleanup()
@@ -136,6 +139,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 	httpServer := server.NewHTTPServer(appConfig, engine)
 	app := server.NewApp(slogLogger, httpServer)
 	return app, func() {
+		service2.Close()
 		cleanup3()
 		cleanup2()
 		cleanup()

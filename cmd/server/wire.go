@@ -23,6 +23,7 @@ import (
 	bizaiprovider "novels_ai_gen/internal/biz/aiprovider"
 	bizauth "novels_ai_gen/internal/biz/auth"
 	bizchapter "novels_ai_gen/internal/biz/chapter"
+	bizchaptersummaryagent "novels_ai_gen/internal/biz/chaptersummaryagent"
 	bizcharacter "novels_ai_gen/internal/biz/character"
 	bizevent "novels_ai_gen/internal/biz/event"
 	biznovel "novels_ai_gen/internal/biz/novel"
@@ -68,7 +69,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		datachapter.NewRepository,
 		wire.Bind(new(bizchapter.Repository), new(*datachapter.Repository)),
 		wire.Bind(new(agenttools.ChapterReader), new(*datachapter.Repository)),
-		bizchapter.NewService,
+		wire.Bind(new(bizchaptersummaryagent.ChapterStore), new(*datachapter.Repository)),
 		datacharacter.NewRepository,
 		wire.Bind(new(bizcharacter.Repository), new(*datacharacter.Repository)),
 		wire.Bind(new(agenttools.CharacterStore), new(*datacharacter.Repository)),
@@ -90,6 +91,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		wire.Bind(new(biznovelagent.PromptProvider), new(*config.ConfigManager)),
 		biznovelagent.NewEinoAgentRuntimeFactory,
 		wire.Bind(new(biznovelagent.AgentRuntimeFactory), new(*biznovelagent.EinoAgentRuntimeFactory)),
+		wire.Bind(new(biznovelagent.ModelTextGenerator), new(*biznovelagent.EinoAgentRuntimeFactory)),
 		datanovelagent.NewRepository,
 		wire.Bind(new(biznovelagent.MemoryRepository), new(*datanovelagent.Repository)),
 		datanovelsummary.NewRepository,
@@ -100,6 +102,12 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		wire.Bind(new(biznoveloutline.Repository), new(*datanoveloutline.Repository)),
 		wire.Bind(new(agenttools.NovelOutlineStore), new(*datanoveloutline.Repository)),
 		biznoveloutline.NewService,
+		wire.Bind(new(bizchaptersummaryagent.ConfigProvider), new(*config.ConfigManager)),
+		wire.Bind(new(bizchaptersummaryagent.ProviderRepository), new(*dataaiprovider.Repository)),
+		wire.Bind(new(bizchaptersummaryagent.Cipher), new(*bizaiprovider.Cipher)),
+		bizchaptersummaryagent.NewService,
+		wire.Bind(new(bizchapter.ChapterSummaryScheduler), new(*bizchaptersummaryagent.Service)),
+		bizchapter.NewServiceWithChapterSummaryScheduler,
 		biznovelagent.NewService,
 		dataprompt.NewRepository,
 		wire.Bind(new(bizprompt.Repository), new(*dataprompt.Repository)),

@@ -24,6 +24,8 @@ type CreateRequest struct {
 	Title string `json:"title" binding:"required" example:"初入长夜"`
 	// Content 表示章节正文，可以为空。
 	Content string `json:"content" example:"夜色像墨一样铺开。"`
+	// GenerateSummary 表示本次创建成功后是否触发后台章节概要生成，通常只由手动保存传入。
+	GenerateSummary bool `json:"generate_summary" example:"true"`
 }
 
 // UpdateRequest 表示 Swagger 文档中的更新章节请求参数。
@@ -32,6 +34,14 @@ type UpdateRequest struct {
 	Title string `json:"title" binding:"required" example:"初入长夜"`
 	// Content 表示章节正文，可以为空。
 	Content string `json:"content" example:"夜色像墨一样铺开。"`
+	// GenerateSummary 表示本次更新成功后是否触发后台章节概要生成，自动保存应保持 false。
+	GenerateSummary bool `json:"generate_summary" example:"true"`
+}
+
+// SummarySaveRequest 表示 Swagger 文档中的保存章节概要请求参数。
+type SummarySaveRequest struct {
+	// Summary 表示需要保存的章节概要，允许为空字符串并保留原始空格和换行。
+	Summary string `json:"summary" example:"主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。"`
 }
 
 // ChapterData 表示 Swagger 文档中的章节详情响应数据。
@@ -46,10 +56,28 @@ type ChapterData struct {
 	Title string `json:"title" example:"初入长夜"`
 	// Content 表示章节正文。
 	Content string `json:"content" example:"夜色像墨一样铺开。"`
+	// Summary 表示章节概要。
+	Summary string `json:"summary" example:"主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。"`
 	// WordCount 表示正文中非空白 Unicode 字符数量。
 	WordCount int `json:"word_count" example:"8"`
 	// CreatedAt 表示创建时间。
 	CreatedAt string `json:"created_at" example:"2026-06-14T22:00:00+08:00"`
+	// UpdatedAt 表示更新时间。
+	UpdatedAt string `json:"updated_at" example:"2026-06-14T22:00:00+08:00"`
+}
+
+// ChapterSummaryDetailData 表示 Swagger 文档中的章节概要详情响应数据。
+type ChapterSummaryDetailData struct {
+	// ID 表示章节主键 ID。
+	ID uint64 `json:"id" example:"1"`
+	// NovelID 表示所属小说 ID。
+	NovelID uint64 `json:"novel_id" example:"1"`
+	// ChapterNumber 表示章节号，即“第 x 章”中的 x。
+	ChapterNumber int `json:"chapter_number" example:"1"`
+	// Title 表示章节名。
+	Title string `json:"title" example:"初入长夜"`
+	// Summary 表示章节概要，允许为空字符串。
+	Summary string `json:"summary" example:"主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。"`
 	// UpdatedAt 表示更新时间。
 	UpdatedAt string `json:"updated_at" example:"2026-06-14T22:00:00+08:00"`
 }
@@ -120,6 +148,18 @@ type SuccessResponse struct {
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示章节响应数据。
 	Data ChapterData `json:"data"`
+}
+
+// SummarySuccessResponse 表示章节概要接口 Swagger 成功响应结构。
+type SummarySuccessResponse struct {
+	// Code 表示业务响应码，成功固定为 0。
+	Code int `json:"code" example:"0"`
+	// Message 表示响应提示信息。
+	Message string `json:"message" example:"ok"`
+	// RequestID 表示本次请求的追踪标识。
+	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
+	// Data 表示章节概要响应数据。
+	Data ChapterSummaryDetailData `json:"data"`
 }
 
 // ListSuccessResponse 表示章节列表接口 Swagger 成功响应结构。
@@ -352,6 +392,108 @@ func (h *Handler) Get(c *gin.Context) {
 	}
 
 	response.OK(c, data)
+}
+
+// GetSummary 处理章节概要查询请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 查询小说章节概要
+// @Description 根据小说 ID 和章节 ID 查询章节概要；章节存在但概要为空时返回空字符串。
+// @Tags chapters
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param novel_id path int true "小说 ID"
+// @Param chapter_id path int true "章节 ID"
+// @Success 200 {object} SummarySuccessResponse "查询成功"
+// @Failure 400 {object} ErrorBody "请求参数错误"
+// @Failure 401 {object} ErrorBody "未登录或登录已过期"
+// @Failure 404 {object} ErrorBody "章节不存在"
+// @Failure 500 {object} ErrorBody "服务器内部错误"
+// @Router /novels/{novel_id}/chapters/{chapter_id}/summary [get]
+func (h *Handler) GetSummary(c *gin.Context) {
+	novelID, chapterID, ok := parseChapterPath(c)
+	if !ok {
+		return
+	}
+
+	data, err := h.service.GetSummary(c.Request.Context(), novelID, chapterID)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+
+	response.OK(c, data)
+}
+
+// SaveSummary 处理章节概要保存请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 保存小说章节概要
+// @Description 根据小说 ID 和章节 ID 创建或更新章节概要，只修改 summary 字段。
+// @Tags chapters
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param novel_id path int true "小说 ID"
+// @Param chapter_id path int true "章节 ID"
+// @Param request body SummarySaveRequest true "保存章节概要请求"
+// @Success 200 {object} SummarySuccessResponse "保存成功"
+// @Failure 400 {object} ErrorBody "请求参数错误"
+// @Failure 401 {object} ErrorBody "未登录或登录已过期"
+// @Failure 404 {object} ErrorBody "章节不存在"
+// @Failure 500 {object} ErrorBody "服务器内部错误"
+// @Router /novels/{novel_id}/chapters/{chapter_id}/summary [put]
+func (h *Handler) SaveSummary(c *gin.Context) {
+	novelID, chapterID, ok := parseChapterPath(c)
+	if !ok {
+		return
+	}
+
+	var req bizchapter.SummarySaveRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "请求参数错误")
+		return
+	}
+
+	data, err := h.service.SaveSummary(c.Request.Context(), novelID, chapterID, req)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+
+	response.OK(c, data)
+}
+
+// DeleteSummary 处理章节概要删除请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 删除小说章节概要
+// @Description 根据小说 ID 和章节 ID 清空章节概要，只修改 summary 字段。
+// @Tags chapters
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param novel_id path int true "小说 ID"
+// @Param chapter_id path int true "章节 ID"
+// @Success 200 {object} DeleteSuccessResponse "删除成功"
+// @Failure 400 {object} ErrorBody "请求参数错误"
+// @Failure 401 {object} ErrorBody "未登录或登录已过期"
+// @Failure 404 {object} ErrorBody "章节不存在"
+// @Failure 500 {object} ErrorBody "服务器内部错误"
+// @Router /novels/{novel_id}/chapters/{chapter_id}/summary [delete]
+func (h *Handler) DeleteSummary(c *gin.Context) {
+	novelID, chapterID, ok := parseChapterPath(c)
+	if !ok {
+		return
+	}
+
+	if err := h.service.DeleteSummary(c.Request.Context(), novelID, chapterID); err != nil {
+		writeServiceError(c, err)
+		return
+	}
+
+	response.OK(c, DeleteData{Deleted: true})
 }
 
 // Update 处理更新章节请求。

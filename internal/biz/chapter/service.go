@@ -48,12 +48,20 @@ type Repository interface {
 type Service struct {
 	// repo 表示章节数据仓储。
 	repo Repository
+	// summaryScheduler 表示章节保存后触发的后台概要生成调度器。
+	summaryScheduler ChapterSummaryScheduler
 }
 
 // NewService 创建章节业务服务。
 // 参数 repo 表示章节数据仓储。
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+// NewServiceWithChapterSummaryScheduler 创建带后台概要生成能力的章节业务服务。
+// 参数 repo 表示章节数据仓储；参数 summaryScheduler 表示章节保存后触发的后台概要生成调度器。
+func NewServiceWithChapterSummaryScheduler(repo Repository, summaryScheduler ChapterSummaryScheduler) *Service {
+	return &Service{repo: repo, summaryScheduler: summaryScheduler}
 }
 
 // Create 创建章节。
@@ -82,6 +90,9 @@ func (s *Service) Create(ctx context.Context, novelID uint64, req CreateRequest)
 		return ChapterResponse{}, fmt.Errorf("创建章节失败: %w", err)
 	}
 
+	if req.GenerateSummary {
+		s.enqueueChapterSummary(*item)
+	}
 	return toResponse(*item), nil
 }
 
@@ -161,6 +172,23 @@ func (s *Service) GetByID(ctx context.Context, novelID uint64, chapterID uint64)
 	return toResponse(*item), nil
 }
 
+// GetSummary 查询章节概要详情。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 chapterID 表示章节主键 ID。
+func (s *Service) GetSummary(ctx context.Context, novelID uint64, chapterID uint64) (ChapterSummaryDetailResponse, error) {
+	if novelID == 0 {
+		return ChapterSummaryDetailResponse{}, ErrNovelNotFound
+	}
+	if chapterID == 0 {
+		return ChapterSummaryDetailResponse{}, ErrNotFound
+	}
+
+	item, err := s.repo.GetByID(ctx, novelID, chapterID)
+	if err != nil {
+		return ChapterSummaryDetailResponse{}, fmt.Errorf("查询章节概要失败: %w", err)
+	}
+	return toSummaryDetailResponse(*item), nil
+}
+
 // Update 更新章节。
 // 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 chapterID 表示章节主键 ID；参数 req 表示更新章节请求参数。
 func (s *Service) Update(ctx context.Context, novelID uint64, chapterID uint64, req UpdateRequest) (ChapterResponse, error) {
@@ -189,7 +217,51 @@ func (s *Service) Update(ctx context.Context, novelID uint64, chapterID uint64, 
 		return ChapterResponse{}, fmt.Errorf("更新章节失败: %w", err)
 	}
 
+	if req.GenerateSummary {
+		s.enqueueChapterSummary(*item)
+	}
 	return toResponse(*item), nil
+}
+
+// SaveSummary 保存章节概要。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 chapterID 表示章节主键 ID；参数 req 表示保存章节概要请求参数。
+func (s *Service) SaveSummary(ctx context.Context, novelID uint64, chapterID uint64, req SummarySaveRequest) (ChapterSummaryDetailResponse, error) {
+	if novelID == 0 {
+		return ChapterSummaryDetailResponse{}, ErrNovelNotFound
+	}
+	if chapterID == 0 {
+		return ChapterSummaryDetailResponse{}, ErrNotFound
+	}
+
+	item, err := s.repo.UpdateChapterSummary(ctx, UpdateChapterSummaryCondition{
+		NovelID:   novelID,
+		ChapterID: chapterID,
+		Summary:   req.Summary,
+	})
+	if err != nil {
+		return ChapterSummaryDetailResponse{}, fmt.Errorf("保存章节概要失败: %w", err)
+	}
+	return toSummaryDetailResponse(*item), nil
+}
+
+// DeleteSummary 删除章节概要。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 chapterID 表示章节主键 ID。
+func (s *Service) DeleteSummary(ctx context.Context, novelID uint64, chapterID uint64) error {
+	if novelID == 0 {
+		return ErrNovelNotFound
+	}
+	if chapterID == 0 {
+		return ErrNotFound
+	}
+
+	if _, err := s.repo.UpdateChapterSummary(ctx, UpdateChapterSummaryCondition{
+		NovelID:   novelID,
+		ChapterID: chapterID,
+		Summary:   "",
+	}); err != nil {
+		return fmt.Errorf("删除章节概要失败: %w", err)
+	}
+	return nil
 }
 
 // Delete 删除章节。
@@ -220,6 +292,21 @@ func normalizeCreateRequest(req CreateRequest) CreateRequest {
 func normalizeUpdateRequest(req UpdateRequest) UpdateRequest {
 	req.Title = strings.TrimSpace(req.Title)
 	return req
+}
+
+// enqueueChapterSummary 在章节保存成功后投递后台概要生成任务。
+// 参数 item 表示刚保存成功的章节模型快照。
+func (s *Service) enqueueChapterSummary(item Chapter) {
+	if s == nil || s.summaryScheduler == nil {
+		return
+	}
+	s.summaryScheduler.Enqueue(ChapterSummaryGenerationTask{
+		NovelID:       item.NovelID,
+		ChapterID:     item.ID,
+		ChapterNumber: item.ChapterNumber,
+		Title:         item.Title,
+		Content:       item.Content,
+	})
 }
 
 // normalizeListRequest 标准化章节列表查询参数。
@@ -261,6 +348,19 @@ func toResponse(item Chapter) ChapterResponse {
 		Summary:       item.Summary,
 		WordCount:     item.WordCount,
 		CreatedAt:     item.CreatedAt,
+		UpdatedAt:     item.UpdatedAt,
+	}
+}
+
+// toSummaryDetailResponse 将章节模型转换为单章概要响应数据。
+// 参数 item 表示章节数据库模型。
+func toSummaryDetailResponse(item Chapter) ChapterSummaryDetailResponse {
+	return ChapterSummaryDetailResponse{
+		ID:            item.ID,
+		NovelID:       item.NovelID,
+		ChapterNumber: item.ChapterNumber,
+		Title:         item.Title,
+		Summary:       item.Summary,
 		UpdatedAt:     item.UpdatedAt,
 	}
 }

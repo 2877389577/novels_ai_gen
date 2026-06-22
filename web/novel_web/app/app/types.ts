@@ -35,6 +35,14 @@ export type AppRoute =
       novelId: number;
       // chapterId 表示当前需要编辑的章节主键 ID，创建章节时为空。
       chapterId: number | null;
+    }
+  | {
+      // view 表示当前展示章节概要页。
+      view: "chapterSummary";
+      // novelId 表示当前章节所属小说主键 ID。
+      novelId: number;
+      // chapterId 表示当前需要查看或编辑概要的章节主键 ID。
+      chapterId: number;
     };
 
 // SetAppRoute 表示更新当前页面路由状态的方法。
@@ -63,6 +71,8 @@ export interface RouteHandlers {
   onChapterCreate: (novelId: number) => void;
   // onChapterEdit 表示进入章节编辑页时执行的回调。
   onChapterEdit: (novelId: number, chapterId: number) => void;
+  // onChapterSummaryOpen 表示进入章节概要页时执行的回调。
+  onChapterSummaryOpen: (novelId: number, chapterId: number) => void;
   // onChapterEditorAiPanelOpenChange 表示章节编辑页 AI 侧栏开关状态变化时执行的回调。
   onChapterEditorAiPanelOpenChange: (open: boolean) => void;
   // onChapterPersisted 表示新增章节首次保存成功后执行的路由替换回调。

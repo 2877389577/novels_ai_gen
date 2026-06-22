@@ -6,6 +6,7 @@ import type {
 export type SettingsSection =
   | "config"
   | "agents"
+  | "chapter-summary-agent"
   | "agent-tools"
   | "logs"
   | "system"
@@ -40,6 +41,12 @@ export interface AgentSettingsPanelProps {
 
 // AgentToolsSettingsPanelProps 表示智能体工具配置面板需要的外部回调。
 export interface AgentToolsSettingsPanelProps {
+  // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
+  onUnauthorized: () => void;
+}
+
+// ChapterSummaryAgentSettingsPanelProps 表示章节概要 Agent 配置面板需要的外部回调。
+export interface ChapterSummaryAgentSettingsPanelProps {
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
@@ -167,4 +174,28 @@ export interface AgentSettingsFormState {
   supervisor: AgentSupervisorFormState;
   // children 表示全部子 Agent 表单状态。
   children: AgentChildFormState[];
+}
+
+// ChapterSummaryAgentFormState 表示章节概要 Agent 配置页完整表单状态。
+export interface ChapterSummaryAgentFormState {
+  // enabled 表示章节概要 Agent 是否启用。
+  enabled: boolean;
+  // name 表示章节概要 Agent 名称。
+  name: string;
+  // description 表示章节概要 Agent 能力描述。
+  description: string;
+  // instruction 表示章节概要 Agent 系统提示词。
+  instruction: string;
+  // maxIterations 表示章节概要 Agent 最大生成循环次数文本。
+  maxIterations: string;
+  // providerId 表示章节概要 Agent 使用的 AI 提供商 ID 文本。
+  providerId: string;
+  // model 表示章节概要 Agent 使用的模型标识。
+  model: string;
+  // reasoningEffort 表示章节概要 Agent 使用 GPT 类模型时的推理强度。
+  reasoningEffort: string;
+  // retryMaxRetries 表示模型失败最大重试次数配置文本。
+  retryMaxRetries: string;
+  // retryBackoffMS 表示模型失败重试间隔毫秒数配置文本。
+  retryBackoffMS: string;
 }

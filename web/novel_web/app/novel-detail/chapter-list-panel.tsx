@@ -33,6 +33,8 @@ interface ChapterListPanelProps {
   onChapterDeleted: (chapter: ChapterSummaryItem) => void;
   // onChapterEdit 表示进入章节编辑页时执行的回调。
   onChapterEdit: (novelId: number, chapterId: number) => void;
+  // onChapterSummaryOpen 表示进入章节概要页时执行的回调。
+  onChapterSummaryOpen: (novelId: number, chapterId: number) => void;
   // onUnauthorized 表示登录态失效时通知应用层返回登录页的回调。
   onUnauthorized: () => void;
 }
@@ -154,6 +156,16 @@ export function ChapterListPanel(props: ChapterListPanelProps) {
     props.onChapterEdit(props.novelId, chapter.id);
   }
 
+  // handleChapterSummaryOpen 进入指定章节概要页。
+  // 参数 event 表示概要按钮点击事件；参数 chapter 表示当前章节摘要数据。
+  function handleChapterSummaryOpen(
+    event: MouseEvent<HTMLButtonElement>,
+    chapter: ChapterSummaryItem,
+  ) {
+    event.stopPropagation();
+    props.onChapterSummaryOpen(props.novelId, chapter.id);
+  }
+
   // handleChapterKeyDown 处理章节行键盘选择。
   // 参数 event 表示 React 键盘事件；参数 chapter 表示当前章节摘要数据。
   function handleChapterKeyDown(
@@ -268,6 +280,7 @@ export function ChapterListPanel(props: ChapterListPanelProps) {
               onDelete={handleOpenDeleteConfirm}
               onKeyDown={handleChapterKeyDown}
               onSelect={handleChapterSelect}
+              onSummaryOpen={handleChapterSummaryOpen}
             />
           ))}
           {loadingMore ? (
@@ -317,6 +330,11 @@ interface ChapterRowProps {
   ) => void;
   // onSelect 表示选择章节行时执行的回调。
   onSelect: (chapter: ChapterSummaryItem) => void;
+  // onSummaryOpen 表示点击章节概要按钮时执行的回调。
+  onSummaryOpen: (
+    event: MouseEvent<HTMLButtonElement>,
+    chapter: ChapterSummaryItem,
+  ) => void;
 }
 
 // ChapterRow 渲染章节列表中的单行章节。
@@ -339,6 +357,13 @@ function ChapterRow(props: ChapterRowProps) {
       </div>
       <div className="chapter-row-meta">
         <span>{formatChapterWordCount(props.chapter.word_count)}</span>
+        <button
+          type="button"
+          className="chapter-summary-button"
+          onClick={(event) => props.onSummaryOpen(event, props.chapter)}
+        >
+          概要
+        </button>
         <button
           type="button"
           className="chapter-delete-button"

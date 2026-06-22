@@ -8,12 +8,14 @@ import type {
   AIProviderModelItem,
   AIProviderType,
   AIProviderUpsertParams,
+  ChapterSummaryAgentConfig,
 } from "../api";
 import type {
   AgentChildFormState,
   AgentSettingsFormState,
   AIProviderFormState,
   AIProviderFormMode,
+  ChapterSummaryAgentFormState,
 } from "./types";
 import {
   aiProviderAPITypeOptions,
@@ -47,6 +49,18 @@ const defaultAgentSettingsFormState: AgentSettingsFormState = {
   },
   children: [],
 };
+const defaultChapterSummaryAgentFormState: ChapterSummaryAgentFormState = {
+  enabled: false,
+  name: "generate_chapter_summary",
+  description: "",
+  instruction: "",
+  maxIterations: "1",
+  providerId: "",
+  model: "",
+  reasoningEffort: "",
+  retryMaxRetries: "0",
+  retryBackoffMS: "300",
+};
 let agentChildIDSeed = 0;
 
 export function createDefaultAgentSettingsFormState(): AgentSettingsFormState {
@@ -58,6 +72,11 @@ export function createDefaultAgentSettingsFormState(): AgentSettingsFormState {
     supervisor: { ...defaultAgentSettingsFormState.supervisor },
     children: [],
   };
+}
+
+// createDefaultChapterSummaryAgentFormState 创建章节概要 Agent 默认表单状态。
+export function createDefaultChapterSummaryAgentFormState(): ChapterSummaryAgentFormState {
+  return { ...defaultChapterSummaryAgentFormState };
 }
 
 // createDefaultAgentChildFormState 创建空白子 Agent 表单状态。
@@ -395,6 +414,114 @@ export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     },
     error: "",
   };
+}
+
+// chapterSummaryAgentConfigToFormState 将章节概要 Agent 接口数据转换为前端表单状态。
+// 参数 config 表示后端返回的章节概要 Agent 配置。
+export function chapterSummaryAgentConfigToFormState(
+  config: ChapterSummaryAgentConfig,
+): ChapterSummaryAgentFormState {
+  const agent = config.agent;
+  return {
+    enabled: agent?.enabled === true,
+    name: agent?.name ?? "",
+    description: agent?.description ?? "",
+    instruction: agent?.instruction ?? "",
+    maxIterations: String(agent?.max_iterations ?? 1),
+    providerId:
+      Number(agent?.provider_id ?? 0) > 0
+        ? String(agent?.provider_id ?? "")
+        : "",
+    model: agent?.model ?? "",
+    reasoningEffort: agent?.reasoning_effort ?? "",
+    retryMaxRetries: String(config.retry?.max_retries ?? 0),
+    retryBackoffMS: String(config.retry?.backoff_ms ?? 300),
+  };
+}
+
+// buildChapterSummaryAgentConfigFromForm 将章节概要 Agent 表单转换为后端保存参数。
+// 参数 form 表示当前章节概要 Agent 表单状态。
+export function buildChapterSummaryAgentConfigFromForm(
+  form: ChapterSummaryAgentFormState,
+): { config: ChapterSummaryAgentConfig | null; error: string } {
+  const retryMaxRetries = parseNonNegativeInteger(
+    form.retryMaxRetries,
+    "模型失败最大重试次数",
+  );
+  if (retryMaxRetries.error) {
+    return { config: null, error: retryMaxRetries.error };
+  }
+
+  const retryBackoffMS = parseNonNegativeInteger(
+    form.retryBackoffMS,
+    "模型失败重试间隔毫秒",
+  );
+  if (retryBackoffMS.error) {
+    return { config: null, error: retryBackoffMS.error };
+  }
+
+  const maxIterations = parseNonNegativeInteger(
+    form.maxIterations,
+    "章节概要 Agent 最大迭代次数",
+  );
+  if (maxIterations.error) {
+    return { config: null, error: maxIterations.error };
+  }
+
+  const name = form.name.trim();
+  const description = form.description.trim();
+  const instruction = form.instruction.trim();
+  if (!name) {
+    return { config: null, error: "章节概要 Agent name 不能为空" };
+  }
+  if (!description) {
+    return { config: null, error: "章节概要 Agent description 不能为空" };
+  }
+  if (!instruction) {
+    return { config: null, error: "章节概要 Agent instruction 不能为空" };
+  }
+
+  const disabledProviderId = /^[1-9]\d*$/.test(form.providerId.trim())
+    ? Number.parseInt(form.providerId.trim(), 10)
+    : 0;
+  const model = form.enabled
+    ? parseAgentCustomModel(form.providerId, form.model, "章节概要 Agent")
+    : { providerId: disabledProviderId, model: form.model.trim(), error: "" };
+  if (model.error) {
+    return { config: null, error: model.error };
+  }
+
+  return {
+    config: {
+      retry: {
+        max_retries: retryMaxRetries.value,
+        backoff_ms: retryBackoffMS.value,
+      },
+      agent: {
+        name,
+        enabled: form.enabled,
+        share_chat_history: false,
+        provider_id: model.providerId,
+        model: model.model,
+        reasoning_effort: form.reasoningEffort.trim(),
+        task: "generate_summary",
+        description,
+        instruction: form.instruction,
+        max_iterations: maxIterations.value,
+        tools: [],
+        parameters: {},
+      },
+    },
+    error: "",
+  };
+}
+
+// validateChapterSummaryAgentForm 校验章节概要 Agent 设置表单。
+// 参数 form 表示当前章节概要 Agent 设置表单状态。
+export function validateChapterSummaryAgentForm(
+  form: ChapterSummaryAgentFormState,
+): string {
+  return buildChapterSummaryAgentConfigFromForm(form).error;
 }
 
 // normalizeAgentToolRegistryForSave 标准化并校验普通工具注册表。

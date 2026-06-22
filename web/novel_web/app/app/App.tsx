@@ -22,6 +22,7 @@ import {
   bookshelfRoutePath,
   chapterCreateRoutePath,
   chapterEditRoutePath,
+  chapterSummaryRoutePath,
   getInitialAppRoute,
   inspirationRoutePath,
   loginRoutePath,
@@ -243,6 +244,20 @@ export function App() {
     [],
   );
 
+  // handleChapterSummaryOpen 处理进入章节概要页。
+  // 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID。
+  const handleChapterSummaryOpen = useCallback(
+    function handleChapterSummaryOpen(novelId: number, chapterId: number) {
+      navigateToRoute(
+        setRoute,
+        { view: "chapterSummary", novelId, chapterId },
+        chapterSummaryRoutePath(novelId, chapterId),
+        "push",
+      );
+    },
+    [],
+  );
+
   // handleChapterPersisted 处理新增章节首次保存后替换为编辑页路由。
   // 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID。
   const handleChapterPersisted = useCallback(
@@ -302,6 +317,7 @@ export function App() {
         onChapterEdit: handleChapterEdit,
         onChapterEditorAiPanelOpenChange: handleChapterEditorAiPanelOpenChange,
         onChapterPersisted: handleChapterPersisted,
+        onChapterSummaryOpen: handleChapterSummaryOpen,
         onLoginSuccess: handleLoginSuccess,
         onNovelDeleted: handleNovelDeleted,
         onNovelSelect: handleNovelSelect,

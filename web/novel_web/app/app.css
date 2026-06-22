@@ -3157,6 +3157,295 @@ html[data-theme="dark"] .novel-detail-page {
   width: 64%;
 }
 
+.chapter-summary-page {
+  min-height: calc(100vh - 88px);
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-primary-container) 28%, transparent), transparent 32%),
+    var(--color-surface);
+  padding: 36px clamp(24px, 5vw, 72px) 80px;
+}
+
+.chapter-summary-nav {
+  display: flex;
+  width: min(1120px, 100%);
+  margin: 0 auto 24px;
+}
+
+.chapter-summary-nav button {
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--color-outline) 46%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-paper) 72%, transparent);
+  color: var(--color-on-surface);
+  cursor: pointer;
+  padding: 8px 18px;
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 20px;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.chapter-summary-nav button:hover,
+.chapter-summary-nav button:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.chapter-summary-panel {
+  display: grid;
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  gap: 28px;
+}
+
+.chapter-summary-header {
+  align-items: end;
+}
+
+.chapter-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.chapter-summary-actions button,
+.chapter-summary-error button {
+  min-height: 40px;
+  border: 1px solid var(--color-outline);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--color-on-surface);
+  cursor: pointer;
+  padding: 8px 20px;
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 20px;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.chapter-summary-actions button:hover,
+.chapter-summary-actions button:focus-visible,
+.chapter-summary-error button:hover,
+.chapter-summary-error button:focus-visible {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.chapter-summary-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
+.chapter-summary-actions .chapter-summary-primary-action {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.chapter-summary-actions .chapter-summary-primary-action:hover,
+.chapter-summary-actions .chapter-summary-primary-action:focus-visible {
+  background: color-mix(in srgb, var(--color-primary) 88%, #000);
+  color: var(--color-on-primary);
+}
+
+.chapter-summary-actions .chapter-summary-danger-action {
+  border-color: color-mix(in srgb, var(--color-error) 58%, var(--color-outline));
+  color: var(--color-error);
+}
+
+.chapter-summary-actions .chapter-summary-danger-action:hover,
+.chapter-summary-actions .chapter-summary-danger-action:focus-visible {
+  border-color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  color: var(--color-error);
+}
+
+.chapter-summary-empty,
+.chapter-summary-error,
+.chapter-summary-viewer,
+.chapter-summary-editor,
+.chapter-summary-skeleton {
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 42%, transparent);
+  border-radius: 4px;
+  background: var(--color-paper);
+  box-shadow: 0 14px 32px rgba(89, 65, 62, 0.08);
+}
+
+.chapter-summary-empty {
+  display: grid;
+  min-height: 240px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 42px;
+  text-align: center;
+}
+
+.chapter-summary-empty strong {
+  color: var(--color-on-surface);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 32px;
+}
+
+.chapter-summary-empty p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--color-on-surface-variant);
+  font-size: 15px;
+  line-height: 24px;
+}
+
+.chapter-summary-error {
+  border-color: color-mix(in srgb, var(--color-error) 30%, transparent);
+  background: color-mix(in srgb, var(--color-primary-container) 22%, var(--color-paper));
+  padding: 24px;
+}
+
+.chapter-summary-error p {
+  margin: 0 0 16px;
+  color: var(--color-error);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.chapter-summary-editor {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+}
+
+.chapter-summary-content-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.chapter-summary-content-editor span {
+  color: var(--color-on-surface);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 18px;
+}
+
+.chapter-summary-editor textarea {
+  width: 100%;
+  min-height: 360px;
+  resize: vertical;
+  border: 1px solid color-mix(in srgb, var(--color-outline) 42%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-surface) 78%, var(--color-paper));
+  color: var(--color-on-surface);
+  padding: 16px;
+  font: inherit;
+  font-size: 15px;
+  line-height: 24px;
+  outline: none;
+  white-space: pre-wrap;
+}
+
+.chapter-summary-editor textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+.chapter-summary-editor textarea:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.chapter-summary-viewer {
+  display: grid;
+  gap: 22px;
+  padding: 32px;
+}
+
+.chapter-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-outline);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 18px;
+}
+
+.chapter-summary-meta span {
+  color: var(--color-on-surface-variant);
+}
+
+.chapter-summary-meta strong {
+  color: var(--color-primary);
+  font-weight: 800;
+}
+
+.chapter-summary-content {
+  color: var(--color-on-surface);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 18px;
+  line-height: 32px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.chapter-summary-content-empty {
+  color: var(--color-on-surface-variant);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 24px;
+}
+
+.chapter-summary-skeleton {
+  display: grid;
+  gap: 16px;
+  padding: 32px;
+}
+
+.chapter-summary-skeleton span {
+  display: block;
+  height: 18px;
+  border-radius: 999px;
+  background:
+    linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.58), transparent),
+    var(--color-surface-container-high);
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1200ms ease-in-out infinite;
+}
+
+.chapter-summary-skeleton span:first-child {
+  width: 36%;
+}
+
+.chapter-summary-skeleton span:nth-child(2) {
+  width: 92%;
+  height: 120px;
+  border-radius: 4px;
+}
+
+.chapter-summary-skeleton span:nth-child(3) {
+  width: 64%;
+}
+
 .novel-outline-panel {
   position: relative;
   display: grid;
@@ -6473,7 +6762,7 @@ html[data-theme="dark"] .novel-detail-page::before {
 
 .chapter-row {
   display: grid;
-  grid-template-columns: 128px minmax(0, 1fr) 168px;
+  grid-template-columns: 128px minmax(0, 1fr) 228px;
   min-height: 72px;
   align-items: center;
   gap: 18px;
@@ -6547,13 +6836,11 @@ html[data-theme="dark"] .novel-detail-page::before {
   white-space: nowrap;
 }
 
+.chapter-summary-button,
 .chapter-delete-button {
   width: 52px;
   min-height: 32px;
-  border: 1px solid color-mix(in srgb, var(--color-error) 48%, transparent);
   border-radius: 4px;
-  background: color-mix(in srgb, var(--color-error) 8%, transparent);
-  color: var(--color-error);
   cursor: pointer;
   opacity: 0;
   padding: 6px 10px;
@@ -6566,10 +6853,32 @@ html[data-theme="dark"] .novel-detail-page::before {
     transform 180ms ease;
 }
 
+.chapter-summary-button {
+  border: 1px solid color-mix(in srgb, var(--color-secondary) 52%, transparent);
+  background: color-mix(in srgb, var(--color-secondary-container) 42%, transparent);
+  color: var(--color-secondary);
+}
+
+.chapter-delete-button {
+  border: 1px solid color-mix(in srgb, var(--color-error) 48%, transparent);
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  color: var(--color-error);
+}
+
+.chapter-row:hover .chapter-summary-button,
+.chapter-row:focus-within .chapter-summary-button,
+.chapter-summary-button:focus-visible,
 .chapter-row:hover .chapter-delete-button,
 .chapter-row:focus-within .chapter-delete-button,
 .chapter-delete-button:focus-visible {
   opacity: 1;
+}
+
+.chapter-summary-button:hover,
+.chapter-summary-button:focus-visible {
+  background: var(--color-secondary);
+  color: var(--color-on-secondary);
+  transform: translateY(-1px);
 }
 
 .chapter-delete-button:hover,
@@ -7664,6 +7973,7 @@ html[data-theme="dark"] .chapter-editor-page {
     justify-content: space-between;
   }
 
+  .chapter-summary-button,
   .chapter-delete-button {
     opacity: 1;
   }

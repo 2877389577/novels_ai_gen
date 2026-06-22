@@ -232,6 +232,7 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
                 onChapterCreate={props.onChapterCreate}
                 onChapterDeleted={handleChapterDeleted}
                 onChapterEdit={props.onChapterEdit}
+                onChapterSummaryOpen={props.onChapterSummaryOpen}
                 onUnauthorized={props.onUnauthorized}
               />
             </div>
