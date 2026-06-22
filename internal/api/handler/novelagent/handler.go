@@ -36,26 +36,6 @@ type ChatRequest struct {
 	ChapterNumber int `json:"chapter_number,omitempty" example:"3"`
 }
 
-// PromptRecommendationRequest 表示 Swagger 文档中的提示词库推荐判定请求。
-type PromptRecommendationRequest struct {
-	// ProviderID 表示本次推荐判定使用的 AI 提供商 ID。
-	ProviderID uint64 `json:"provider_id" example:"1"`
-	// Model 表示本次推荐判定使用的模型标识。
-	Model string `json:"model" example:"gpt-5"`
-	// Message 表示用户当前尚未发送的 AI 输入框原文。
-	Message string `json:"message" example:"帮我把这一段润色得更有压迫感"`
-}
-
-// PromptRecommendationData 表示 Swagger 文档中的提示词库推荐判定结果。
-type PromptRecommendationData struct {
-	// Action 表示前端下一步动作，prompt_search 表示查询数据库提示词，none 表示无需推荐。
-	Action string `json:"action" example:"prompt_search"`
-	// Matched 表示是否匹配到小说修改或润色相关意图。
-	Matched bool `json:"matched" example:"true"`
-	// PromptType 表示匹配到的提示词类型，不匹配时为空。
-	PromptType string `json:"prompt_type" example:"润色"`
-}
-
 // StreamEvent 表示小说写作 Agent NDJSON 流事件。
 type StreamEvent struct {
 	// Type 表示事件类型，支持 meta、delta、done、error。
@@ -176,18 +156,6 @@ type DeleteConversationSuccessResponse struct {
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示删除结果。
 	Data DeleteConversationData `json:"data"`
-}
-
-// PromptRecommendationSuccessResponse 表示提示词库推荐判定接口 Swagger 成功响应结构。
-type PromptRecommendationSuccessResponse struct {
-	// Code 表示业务响应码，成功固定为 0。
-	Code int `json:"code" example:"0"`
-	// Message 表示响应提示信息。
-	Message string `json:"message" example:"ok"`
-	// RequestID 表示本次请求的追踪标识。
-	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
-	// Data 表示提示词库推荐判定结果。
-	Data PromptRecommendationData `json:"data"`
 }
 
 // NewHandler 创建小说写作 Agent HTTP 处理器。
@@ -365,40 +333,6 @@ func (h *Handler) StreamChat(c *gin.Context) {
 			Message:   agentErrorMessage(err),
 		})
 	}
-}
-
-// PromptRecommendation 处理提示词库推荐判定请求。
-// 参数 c 表示 Gin 请求上下文。
-//
-// @Summary 提示词库推荐判定
-// @Description 使用当前 AI 提供商和模型判断用户输入是否需要查询提示词库推荐；该请求不进入 Agent 记忆。
-// @Tags ai-agents
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param request body PromptRecommendationRequest true "提示词库推荐判定请求"
-// @Success 200 {object} PromptRecommendationSuccessResponse "判定成功"
-// @Failure 400 {object} response.ErrorBody "请求参数错误"
-// @Failure 401 {object} response.ErrorBody "未登录或登录已过期"
-// @Failure 500 {object} response.ErrorBody "服务器内部错误"
-// @Router /ai/agents/prompt-recommendation [post]
-func (h *Handler) PromptRecommendation(c *gin.Context) {
-	var req PromptRecommendationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "请求参数错误")
-		return
-	}
-
-	data, err := h.service.RecommendPromptType(c.Request.Context(), biznovelagent.PromptRecommendationRequest{
-		ProviderID: req.ProviderID,
-		Model:      req.Model,
-		Message:    req.Message,
-	})
-	if err != nil {
-		writeAgentError(c, err)
-		return
-	}
-	response.OK(c, data)
 }
 
 // ndjsonWriter 表示基于 HTTP 响应的 NDJSON 流事件写出器。

@@ -10,10 +10,9 @@ import (
 )
 
 const (
-	defaultPage                   = 1
-	defaultPageSize               = 20
-	defaultRecommendationPageSize = 10
-	maxPageSize                   = 100
+	defaultPage     = 1
+	defaultPageSize = 20
+	maxPageSize     = 100
 )
 
 // Repository 表示提示词数据库仓储。
@@ -189,28 +188,6 @@ func (s *Service) List(ctx context.Context, req ListRequest) (ListResponse, erro
 	}, nil
 }
 
-// ListRecommendations 查询指定类型的提示词推荐列表，并返回完整提示词正文。
-// 参数 ctx 表示请求上下文；参数 req 表示提示词推荐列表查询参数。
-func (s *Service) ListRecommendations(ctx context.Context, req RecommendationListRequest) (RecommendationListResponse, error) {
-	req = normalizeRecommendationListRequest(req)
-	if strings.TrimSpace(req.PromptType) == "" {
-		return RecommendationListResponse{}, ErrTypeRequired
-	}
-	if err := s.ensureTypeExists(req.PromptType); err != nil {
-		return RecommendationListResponse{}, err
-	}
-
-	items, total, err := s.repo.List(ctx, req.PromptType, 0, req.PageSize)
-	if err != nil {
-		return RecommendationListResponse{}, fmt.Errorf("查询提示词推荐列表失败: %w", err)
-	}
-	return RecommendationListResponse{
-		Items:    toResponses(items),
-		Total:    total,
-		PageSize: req.PageSize,
-	}, nil
-}
-
 // GetByID 查询提示词详情。
 // 参数 ctx 表示请求上下文；参数 id 表示提示词主键 ID。
 func (s *Service) GetByID(ctx context.Context, id uint64) (PromptResponse, error) {
@@ -339,19 +316,6 @@ func normalizeListRequest(req ListRequest) ListRequest {
 	}
 	if req.PageSize <= 0 {
 		req.PageSize = defaultPageSize
-	}
-	if req.PageSize > maxPageSize {
-		req.PageSize = maxPageSize
-	}
-	req.PromptType = normalizeTypeName(req.PromptType)
-	return req
-}
-
-// normalizeRecommendationListRequest 标准化提示词推荐列表查询参数。
-// 参数 req 表示提示词推荐列表查询参数。
-func normalizeRecommendationListRequest(req RecommendationListRequest) RecommendationListRequest {
-	if req.PageSize <= 0 {
-		req.PageSize = defaultRecommendationPageSize
 	}
 	if req.PageSize > maxPageSize {
 		req.PageSize = maxPageSize

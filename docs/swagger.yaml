@@ -1496,21 +1496,6 @@ definitions:
     required:
     - novel_id
     type: object
-  internal_api_handler_novelagent.PromptRecommendationRequest:
-    properties:
-      message:
-        description: Message 表示用户当前尚未发送的 AI 输入框原文。
-        example: 帮我把这一段润色得更有压迫感
-        type: string
-      model:
-        description: Model 表示本次推荐判定使用的模型标识。
-        example: gpt-5
-        type: string
-      provider_id:
-        description: ProviderID 表示本次推荐判定使用的 AI 提供商 ID。
-        example: 1
-        type: integer
-    type: object
   internal_api_handler_novelagent.StreamEvent:
     properties:
       content:
@@ -1923,40 +1908,6 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
-  novelagent.PromptRecommendationData:
-    properties:
-      action:
-        description: Action 表示前端下一步动作，prompt_search 表示查询数据库提示词，none 表示无需推荐。
-        example: prompt_search
-        type: string
-      matched:
-        description: Matched 表示是否匹配到小说修改或润色相关意图。
-        example: true
-        type: boolean
-      prompt_type:
-        description: PromptType 表示匹配到的提示词类型，不匹配时为空。
-        example: 润色
-        type: string
-    type: object
-  novelagent.PromptRecommendationSuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/novelagent.PromptRecommendationData'
-        description: Data 表示提示词库推荐判定结果。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
   noveloutline.DeleteData:
     properties:
       deleted:
@@ -2221,41 +2172,6 @@ definitions:
         allOf:
         - $ref: '#/definitions/prompt.PromptListData'
         description: Data 表示提示词分页列表。
-      message:
-        description: Message 表示响应提示信息。
-        example: ok
-        type: string
-      request_id:
-        description: RequestID 表示本次请求的追踪标识。
-        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
-        type: string
-    type: object
-  prompt.PromptRecommendationListData:
-    properties:
-      items:
-        description: Items 表示推荐提示词列表，包含提示词正文。
-        items:
-          $ref: '#/definitions/prompt.PromptData'
-        type: array
-      page_size:
-        description: PageSize 表示本次推荐查询数量。
-        example: 10
-        type: integer
-      total:
-        description: Total 表示符合条件的提示词总数。
-        example: 1
-        type: integer
-    type: object
-  prompt.PromptRecommendationListSuccessResponse:
-    properties:
-      code:
-        description: Code 表示业务响应码，成功固定为 0。
-        example: 0
-        type: integer
-      data:
-        allOf:
-        - $ref: '#/definitions/prompt.PromptRecommendationListData'
-        description: Data 表示提示词推荐列表。
       message:
         description: Message 表示响应提示信息。
         example: ok
@@ -2695,42 +2611,6 @@ paths:
       summary: 小说写作 Agent 流式对话
       tags:
       - ai-agents
-  /ai/agents/prompt-recommendation:
-    post:
-      consumes:
-      - application/json
-      description: 使用当前 AI 提供商和模型判断用户输入是否需要查询提示词库推荐；该请求不进入 Agent 记忆。
-      parameters:
-      - description: 提示词库推荐判定请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_api_handler_novelagent.PromptRecommendationRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 判定成功
-          schema:
-            $ref: '#/definitions/novelagent.PromptRecommendationSuccessResponse'
-        "400":
-          description: 请求参数错误
-          schema:
-            $ref: '#/definitions/response.ErrorBody'
-        "401":
-          description: 未登录或登录已过期
-          schema:
-            $ref: '#/definitions/response.ErrorBody'
-        "500":
-          description: 服务器内部错误
-          schema:
-            $ref: '#/definitions/response.ErrorBody'
-      security:
-      - Bearer: []
-      summary: 提示词库推荐判定
-      tags:
-      - ai-agents
   /ai/prompt-types:
     delete:
       description: 删除配置文件 ai.prompt_types 中的类型；已被提示词引用时禁止删除。
@@ -3071,43 +2951,6 @@ paths:
       security:
       - Bearer: []
       summary: 更新提示词
-      tags:
-      - ai-prompts
-  /ai/prompts/recommendations:
-    get:
-      description: 按提示词类型查询推荐提示词，列表项返回完整提示词正文。
-      parameters:
-      - description: 提示词类型
-        in: query
-        name: prompt_type
-        required: true
-        type: string
-      - description: 推荐数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 查询成功
-          schema:
-            $ref: '#/definitions/prompt.PromptRecommendationListSuccessResponse'
-        "400":
-          description: 请求参数错误
-          schema:
-            $ref: '#/definitions/response.ErrorBody'
-        "401":
-          description: 未登录或登录过期
-          schema:
-            $ref: '#/definitions/response.ErrorBody'
-        "500":
-          description: 服务器内部错误
-          schema:
-            $ref: '#/definitions/response.ErrorBody'
-      security:
-      - Bearer: []
-      summary: 查询提示词推荐列表
       tags:
       - ai-prompts
   /ai/providers:

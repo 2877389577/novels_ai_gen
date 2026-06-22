@@ -59,14 +59,6 @@ type ListRequest struct {
 	PromptType string `form:"prompt_type" example:"润色"`
 }
 
-// RecommendationListRequest 表示提示词推荐列表查询参数。
-type RecommendationListRequest struct {
-	// PromptType 表示需要推荐的提示词类型，必须存在于配置文件 ai.prompt_types 中。
-	PromptType string `form:"prompt_type" binding:"required" example:"润色"`
-	// PageSize 表示推荐返回数量，最大为 100。
-	PageSize int `form:"page_size" example:"10"`
-}
-
 // PromptResponse 表示提示词详情响应数据。
 type PromptResponse struct {
 	// ID 表示提示词主键 ID。
@@ -107,16 +99,6 @@ type ListResponse struct {
 	Page int `json:"page" example:"1"`
 	// PageSize 表示每页数量。
 	PageSize int `json:"page_size" example:"20"`
-}
-
-// RecommendationListResponse 表示提示词推荐列表响应数据。
-type RecommendationListResponse struct {
-	// Items 表示推荐提示词列表，包含提示词正文。
-	Items []PromptResponse `json:"items"`
-	// Total 表示符合条件的提示词总数。
-	Total int64 `json:"total" example:"1"`
-	// PageSize 表示本次推荐查询数量。
-	PageSize int `json:"page_size" example:"10"`
 }
 
 // DeleteResponse 表示删除提示词后的响应数据。

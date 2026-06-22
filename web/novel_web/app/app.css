@@ -9290,117 +9290,6 @@ html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-user
     box-shadow 180ms ease;
 }
 
-.chapter-ai-prompt-recommendations {
-  display: grid;
-  grid-column: 2;
-  gap: 8px;
-  min-width: 0;
-  max-height: 168px;
-  overflow: auto;
-  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 58%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--color-paper) 82%, var(--color-surface-container-low));
-  padding: 10px;
-  scrollbar-width: thin;
-}
-
-html[data-theme="dark"] .chapter-ai-prompt-recommendations {
-  background: color-mix(in srgb, var(--color-surface-container-high) 86%, #20222d);
-}
-
-.chapter-ai-prompt-recommendation-header {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  color: var(--color-on-surface-variant);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 16px;
-}
-
-.chapter-ai-prompt-recommendation-header strong {
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary-container) 64%, transparent);
-  color: var(--color-on-primary-container);
-  font-size: 12px;
-  line-height: 16px;
-  padding: 2px 7px;
-}
-
-.chapter-ai-prompt-recommendation-header em {
-  margin-left: auto;
-  color: var(--color-on-surface-variant);
-  font-style: normal;
-  font-weight: 600;
-}
-
-.chapter-ai-prompt-recommendation-list {
-  display: grid;
-  gap: 6px;
-}
-
-.chapter-ai-prompt-recommendation-item {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--color-surface-container-low) 72%, var(--color-paper));
-  color: var(--color-on-surface);
-  cursor: pointer;
-  padding: 8px 10px;
-  text-align: left;
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    transform 160ms ease;
-}
-
-.chapter-ai-prompt-recommendation-item:hover,
-.chapter-ai-prompt-recommendation-item:focus-visible {
-  border-color: color-mix(in srgb, var(--color-primary) 42%, transparent);
-  background: color-mix(in srgb, var(--color-primary-container) 22%, var(--color-paper));
-  outline: none;
-  transform: translateY(-1px);
-}
-
-html[data-theme="dark"] .chapter-ai-prompt-recommendation-item {
-  background: color-mix(in srgb, var(--color-surface-container-high) 78%, #252733);
-}
-
-html[data-theme="dark"] .chapter-ai-prompt-recommendation-item:hover,
-html[data-theme="dark"] .chapter-ai-prompt-recommendation-item:focus-visible {
-  background: color-mix(in srgb, var(--color-primary-container) 24%, #252733);
-}
-
-.chapter-ai-prompt-recommendation-meta {
-  color: var(--color-primary);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 16px;
-}
-
-.chapter-ai-prompt-recommendation-item strong {
-  overflow: hidden;
-  color: var(--color-on-surface);
-  font-size: 13px;
-  line-height: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chapter-ai-prompt-recommendation-preview {
-  display: -webkit-box;
-  overflow: hidden;
-  color: var(--color-on-surface-variant);
-  font-size: 12px;
-  line-height: 17px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  white-space: pre-wrap;
-}
-
 .chapter-ai-input-shell:focus-within {
   border-color: color-mix(in srgb, var(--color-primary) 52%, transparent);
   background: color-mix(in srgb, var(--color-paper) 84%, #f7f7fb);
@@ -10176,11 +10065,6 @@ html[data-theme="dark"] .chapter-ai-input-shell:focus-within {
   .chapter-ai-model-picker {
     grid-row: auto;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .chapter-ai-prompt-recommendations {
-    grid-column: 1;
-    max-height: 142px;
   }
 
   .chapter-ai-input-shell {
