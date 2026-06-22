@@ -339,7 +339,8 @@ func isImplementedAgentTool(name string) bool {
 		agenttools.ToolNameUpdateNovelOutline,
 		agenttools.ToolNameListCharacters,
 		agenttools.ToolNameSearchCharactersByName,
-		agenttools.ToolNameSaveCharacter:
+		agenttools.ToolNameSaveCharacter,
+		agenttools.ToolNameQueryCharacterRelationships:
 		return true
 	default:
 		return false

@@ -19,6 +19,9 @@ type Repository interface {
 	// ExistingCharacterIDs 查询指定小说下存在的角色卡 ID 集合。
 	// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 characterIDs 表示需要校验的角色卡 ID 列表。
 	ExistingCharacterIDs(ctx context.Context, novelID uint64, characterIDs []uint64) (map[uint64]bool, error)
+	// QueryDirectRelationshipsByCharacterName 根据角色姓名查询关系图中的直接关联角色。
+	// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 name 表示需要精确匹配的角色姓名。
+	QueryDirectRelationshipsByCharacterName(ctx context.Context, novelID uint64, name string) ([]CharacterDirectRelationships, error)
 }
 
 // Service 表示角色关系图业务服务。

@@ -233,6 +233,25 @@ ai:
           novel_id: 本次查询实际使用的小说 ID。
           count: 本次搜索命中的角色数量。
           characters: 命中的角色列表；字段含义与 list_characters 的 characters[] 相同。
+      - name: query_character_relationships
+        description: |-
+          根据小说 ID 和角色姓名精确查询角色关系图中的直接关联角色；未传 novel_id 时使用当前 Agent 请求关联的小说 ID。允许存在重名角色，工具会返回全部同名角色各自的直接关系。只返回角色和关系备注，不返回画布坐标、缩放、连接点或时间字段。
+
+          **返回的JSON字段详解：**
+          novel_id: 本次查询实际使用的小说 ID。
+          query_name: 本次查询实际使用的角色姓名。
+          matched_count: 本次返回的有直接关系的同名角色数量。
+          characters: 命中的同名角色及其直接关系；没有直接关系时为空数组。
+
+          characters[] 内字段说明：
+          id: 命中角色的角色卡主键 ID。
+          name: 命中角色的姓名。
+          relationships: 该角色在关系图中直接关联的角色列表。
+
+          relationships[] 内字段说明：
+          id: 直接关联角色的角色卡主键 ID。
+          name: 直接关联角色的姓名。
+          note: 关系线备注，可能为空字符串。
       - name: save_character
         description: |-
           新增或更新指定小说下的角色核心设定；id 为 0 或不传时新增，id 大于 0 时更新，只写入姓名、性别、标签、背景、性格、能力和目的字段。

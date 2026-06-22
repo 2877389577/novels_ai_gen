@@ -1,0 +1,791 @@
+import type {
+  AgentConfig,
+  AgentDefinition,
+  AgentParameterDefinition,
+  AgentToolConfig,
+  AIProviderAPIType,
+  AIProviderItem,
+  AIProviderModelItem,
+  AIProviderType,
+  AIProviderUpsertParams,
+} from "../api";
+import type {
+  AgentChildFormState,
+  AgentSettingsFormState,
+  AIProviderFormState,
+  AIProviderFormMode,
+} from "./types";
+import {
+  aiProviderAPITypeOptions,
+  aiProviderTypeOptions,
+} from "./settings-constants";
+
+const defaultAIProviderFormState: AIProviderFormState = {
+  name: "",
+  providerType: "openai",
+  apiKey: "",
+  baseURL: "",
+  defaultModel: "",
+  priority: "0",
+  apiType: "completions",
+  enabled: true,
+};
+const defaultAgentSettingsFormState: AgentSettingsFormState = {
+  toolRegistry: [],
+  memoryRecentRounds: "10",
+  retryMaxRetries: "0",
+  retryBackoffMS: "300",
+  supervisor: {
+    name: "",
+    description: "",
+    instruction: "",
+    maxIterations: "8",
+    toolNames: [],
+    providerId: "",
+    model: "",
+    reasoningEffort: "",
+  },
+  children: [],
+};
+let agentChildIDSeed = 0;
+
+export function createDefaultAgentSettingsFormState(): AgentSettingsFormState {
+  return {
+    toolRegistry: defaultAgentSettingsFormState.toolRegistry.map(copyAgentToolConfig),
+    memoryRecentRounds: defaultAgentSettingsFormState.memoryRecentRounds,
+    retryMaxRetries: defaultAgentSettingsFormState.retryMaxRetries,
+    retryBackoffMS: defaultAgentSettingsFormState.retryBackoffMS,
+    supervisor: { ...defaultAgentSettingsFormState.supervisor },
+    children: [],
+  };
+}
+
+// createDefaultAgentChildFormState 创建空白子 Agent 表单状态。
+export function createDefaultAgentChildFormState(): AgentChildFormState {
+  return {
+    id: createAgentChildID(),
+    enabled: true,
+    shareChatHistory: false,
+    name: "",
+    task: "",
+    description: "",
+    instruction: "",
+    maxIterations: "6",
+    toolNames: [],
+    providerId: "",
+    model: "",
+    reasoningEffort: "",
+    parametersText: "{}",
+  };
+}
+
+// createAgentChildID 创建子 Agent 表单项前端渲染标识。
+function createAgentChildID(): string {
+  agentChildIDSeed += 1;
+  return `agent-child-${Date.now()}-${agentChildIDSeed}`;
+}
+
+// copyAgentToolConfig 复制普通工具配置，避免表单状态共享引用。
+// 参数 toolConfig 表示需要复制的普通工具配置。
+export function copyAgentToolConfig(toolConfig: AgentToolConfig): AgentToolConfig {
+  return {
+    name: toolConfig.name ?? "",
+    description: toolConfig.description ?? "",
+  };
+}
+
+// normalizeAgentToolNames 标准化 Agent 已选择的工具名称列表。
+// 参数 toolNames 表示接口返回的工具名称列表。
+export function normalizeAgentToolNames(toolNames: string[] | null): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const rawName of toolNames ?? []) {
+    const name = rawName.trim();
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    result.push(name);
+  }
+  return result;
+}
+
+// renderReasoningEffortOption 渲染 GPT 推理强度下拉选项。
+// 参数 option 表示推理强度选项配置。
+export function renderReasoningEffortOption(option: { value: string; label: string }) {
+  return (
+    <option key={option.value || "default"} value={option.value}>
+      {option.label}
+    </option>
+  );
+}
+
+// toggleAgentToolName 根据复选框状态增删指定工具名称。
+// 参数 toolNames 表示当前已选择的工具名称列表；参数 toolName 表示需要切换的工具名称；参数 enabled 表示是否启用该工具。
+export function toggleAgentToolName(
+  toolNames: string[],
+  toolName: string,
+  enabled: boolean,
+): string[] {
+  const normalizedName = toolName.trim();
+  if (!normalizedName) {
+    return normalizeAgentToolNames(toolNames);
+  }
+  const current = normalizeAgentToolNames(toolNames);
+  if (enabled) {
+    return current.includes(normalizedName)
+      ? current
+      : [...current, normalizedName];
+  }
+  return current.filter(function keepToolName(name) {
+    return name !== normalizedName;
+  });
+}
+
+// agentConfigToFormState 将智能体接口数据转换为前端表单状态。
+// 参数 agent 表示后端返回的结构化智能体配置。
+export function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormState {
+  return {
+    toolRegistry: (agent.tools ?? []).map(copyAgentToolConfig),
+    memoryRecentRounds: String(agent.memory?.recent_rounds ?? 10),
+    retryMaxRetries: String(agent.retry?.max_retries ?? 0),
+    retryBackoffMS: String(agent.retry?.backoff_ms ?? 300),
+    supervisor: {
+      name: agent.supervisor?.name ?? "",
+      description: agent.supervisor?.description ?? "",
+      instruction: agent.supervisor?.instruction ?? "",
+      maxIterations: String(agent.supervisor?.max_iterations ?? 8),
+      toolNames: normalizeAgentToolNames(agent.supervisor?.tools ?? []),
+      providerId:
+        Number(agent.supervisor?.provider_id ?? 0) > 0
+          ? String(agent.supervisor?.provider_id ?? "")
+          : "",
+      model: agent.supervisor?.model ?? "",
+      reasoningEffort: agent.supervisor?.reasoning_effort ?? "",
+    },
+    children: (agent.agent ?? []).map(agentDefinitionToChildFormState),
+  };
+}
+
+// agentDefinitionToChildFormState 将子 Agent 配置转换为表单状态。
+// 参数 definition 表示后端返回的子 Agent 配置；参数 index 表示子 Agent 在列表中的位置。
+export function agentDefinitionToChildFormState(
+  definition: AgentDefinition,
+  index: number,
+): AgentChildFormState {
+  return {
+    id: `${createAgentChildID()}-${index}`,
+    enabled: definition.enabled !== false,
+    shareChatHistory: definition.share_chat_history === true,
+    name: definition.name ?? "",
+    task: definition.task ?? "",
+    description: definition.description ?? "",
+    instruction: definition.instruction ?? "",
+    maxIterations: String(definition.max_iterations ?? 6),
+    toolNames: normalizeAgentToolNames(definition.tools ?? []),
+    providerId:
+      Number(definition.provider_id ?? 0) > 0
+        ? String(definition.provider_id ?? "")
+        : "",
+    model: definition.model ?? "",
+    reasoningEffort: definition.reasoning_effort ?? "",
+    parametersText: formatAgentParameters(definition.parameters),
+  };
+}
+
+// formatAgentParameters 将参数对象格式化为稳定的 JSON 文本。
+// 参数 parameters 表示后端返回的子 Agent 参数定义。
+export function formatAgentParameters(
+  parameters: Record<string, AgentParameterDefinition> | null,
+): string {
+  return JSON.stringify(parameters ?? {}, null, 2);
+}
+
+// validateAgentSettingsForm 校验智能体设置表单。
+// 参数 form 表示当前智能体设置表单状态。
+export function validateAgentSettingsForm(form: AgentSettingsFormState): string {
+  return buildAgentConfigFromForm(form).error;
+}
+
+// buildAgentConfigFromForm 将智能体设置表单转换为后端保存参数。
+// 参数 form 表示当前智能体设置表单状态。
+export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
+  agent: AgentConfig | null;
+  error: string;
+} {
+  const toolRegistry = normalizeAgentToolRegistryForSave(form.toolRegistry);
+  if (toolRegistry.error) {
+    return { agent: null, error: toolRegistry.error };
+  }
+  const registeredToolNames = new Set(
+    (toolRegistry.value ?? []).map(function collectToolName(toolConfig) {
+      return toolConfig.name;
+    }),
+  );
+
+  const recentRounds = parseNonNegativeInteger(
+    form.memoryRecentRounds,
+    "最近对话轮数",
+  );
+  if (recentRounds.error) {
+    return { agent: null, error: recentRounds.error };
+  }
+
+  const retryMaxRetries = parseNonNegativeInteger(
+    form.retryMaxRetries,
+    "模型失败最大重试次数",
+  );
+  if (retryMaxRetries.error) {
+    return { agent: null, error: retryMaxRetries.error };
+  }
+
+  const retryBackoffMS = parseNonNegativeInteger(
+    form.retryBackoffMS,
+    "模型失败重试间隔毫秒",
+  );
+  if (retryBackoffMS.error) {
+    return { agent: null, error: retryBackoffMS.error };
+  }
+
+  const supervisorMaxIterations = parseNonNegativeInteger(
+    form.supervisor.maxIterations,
+    "顶层 Agent 最大迭代次数",
+  );
+  if (supervisorMaxIterations.error) {
+    return { agent: null, error: supervisorMaxIterations.error };
+  }
+
+  const supervisorName = form.supervisor.name.trim();
+  const supervisorDescription = form.supervisor.description.trim();
+  const supervisorInstruction = form.supervisor.instruction.trim();
+  if (!supervisorName) {
+    return { agent: null, error: "顶层 Agent name 不能为空" };
+  }
+  if (!supervisorDescription) {
+    return { agent: null, error: "顶层 Agent description 不能为空" };
+  }
+  if (!supervisorInstruction) {
+    return { agent: null, error: "顶层 Agent instruction 不能为空" };
+  }
+  const supervisorModel = parseAgentCustomModel(
+    form.supervisor.providerId,
+    form.supervisor.model,
+    "顶层 Agent",
+  );
+  if (supervisorModel.error) {
+    return { agent: null, error: supervisorModel.error };
+  }
+  const supervisorTools = normalizeSelectedAgentTools(
+    form.supervisor.toolNames,
+    registeredToolNames,
+    "顶层 Agent",
+  );
+  if (supervisorTools.error) {
+    return { agent: null, error: supervisorTools.error };
+  }
+
+  const names = new Set<string>();
+  const children: AgentDefinition[] = [];
+  for (const [index, child] of form.children.entries()) {
+    const childName = child.name.trim();
+    const childDescription = child.description.trim();
+    const childInstruction = child.instruction.trim();
+    const childTask = child.task.trim();
+    if (child.enabled) {
+      if (!childName) {
+        return { agent: null, error: `第 ${index + 1} 个子 Agent name 不能为空` };
+      }
+      if (!childDescription) {
+        return {
+          agent: null,
+          error: `第 ${index + 1} 个子 Agent description 不能为空`,
+        };
+      }
+      if (!childInstruction) {
+        return {
+          agent: null,
+          error: `第 ${index + 1} 个子 Agent instruction 不能为空`,
+        };
+      }
+      if (childTask === "direct") {
+        return { agent: null, error: "子 Agent task 不能为 direct" };
+      }
+      if (names.has(childName)) {
+        return { agent: null, error: `子 Agent 名称重复：${childName}` };
+      }
+      names.add(childName);
+    }
+
+    const childMaxIterations = parseNonNegativeInteger(
+      child.maxIterations,
+      `第 ${index + 1} 个子 Agent 最大迭代次数`,
+    );
+    if (child.enabled && childMaxIterations.error) {
+      return { agent: null, error: childMaxIterations.error };
+    }
+
+    const parameters = parseAgentParametersText(child.parametersText, index);
+    if (child.enabled && (parameters.error || !parameters.value)) {
+      return { agent: null, error: parameters.error };
+    }
+    const childModel = parseAgentCustomModel(
+      child.providerId,
+      child.model,
+      `第 ${index + 1} 个子 Agent`,
+    );
+    if (childModel.error) {
+      return { agent: null, error: childModel.error };
+    }
+    const childTools = normalizeSelectedAgentTools(
+      child.toolNames,
+      registeredToolNames,
+      `第 ${index + 1} 个子 Agent`,
+    );
+    if (childTools.error) {
+      return { agent: null, error: childTools.error };
+    }
+
+    children.push({
+      name: childName,
+      enabled: child.enabled,
+      share_chat_history: child.shareChatHistory,
+      provider_id: childModel.providerId,
+      model: childModel.model,
+      reasoning_effort: child.reasoningEffort.trim(),
+      task: childTask,
+      description: childDescription,
+      instruction: childInstruction,
+      max_iterations: childMaxIterations.error ? 0 : childMaxIterations.value,
+      tools: childTools.value,
+      parameters: parameters.value ?? {},
+    });
+  }
+  for (const toolName of supervisorTools.value) {
+    if (names.has(toolName)) {
+      return {
+        agent: null,
+        error: `顶层 Agent 工具 ${toolName} 与启用子 Agent 名称冲突`,
+      };
+    }
+  }
+
+  return {
+    agent: {
+      tools: toolRegistry.value ?? [],
+      memory: {
+        recent_rounds: recentRounds.value,
+      },
+      retry: {
+        max_retries: retryMaxRetries.value,
+        backoff_ms: retryBackoffMS.value,
+      },
+      supervisor: {
+        name: supervisorName,
+        provider_id: supervisorModel.providerId,
+        model: supervisorModel.model,
+        reasoning_effort: form.supervisor.reasoningEffort.trim(),
+        task: "",
+        description: supervisorDescription,
+        instruction: supervisorInstruction,
+        max_iterations: supervisorMaxIterations.value,
+        tools: supervisorTools.value,
+        parameters: {},
+      },
+      agent: children,
+    },
+    error: "",
+  };
+}
+
+// normalizeAgentToolRegistryForSave 标准化并校验普通工具注册表。
+// 参数 tools 表示当前表单中的普通工具注册表。
+export function normalizeAgentToolRegistryForSave(
+  tools: AgentToolConfig[],
+): { value: AgentToolConfig[] | null; error: string } {
+  const seen = new Set<string>();
+  const result: AgentToolConfig[] = [];
+  for (const [index, toolConfig] of tools.entries()) {
+    const name = toolConfig.name.trim();
+    const description = toolConfig.description.trim();
+    if (!name) {
+      return { value: null, error: `第 ${index + 1} 个工具名称不能为空` };
+    }
+    if (!description) {
+      return { value: null, error: `工具 ${name} 的描述不能为空` };
+    }
+    if (seen.has(name)) {
+      return { value: null, error: `工具名称重复：${name}` };
+    }
+    seen.add(name);
+    result.push({ name, description });
+  }
+  return { value: result, error: "" };
+}
+
+// normalizeSelectedAgentTools 标准化并校验单个 Agent 选择的普通工具列表。
+// 参数 toolNames 表示 Agent 当前选择的工具名称；参数 registeredToolNames 表示工具注册表名称集合；参数 label 表示错误提示使用的 Agent 名称。
+export function normalizeSelectedAgentTools(
+  toolNames: string[],
+  registeredToolNames: Set<string>,
+  label: string,
+): { value: string[]; error: string } {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const rawName of toolNames) {
+    const name = rawName.trim();
+    if (!name) {
+      return { value: [], error: `${label} 工具名称不能为空` };
+    }
+    if (!registeredToolNames.has(name)) {
+      return {
+        value: [],
+        error: `${label} 工具 ${name} 未在工具注册表中配置`,
+      };
+    }
+    if (seen.has(name)) {
+      return { value: [], error: `${label} 工具名称重复：${name}` };
+    }
+    seen.add(name);
+    result.push(name);
+  }
+  return { value: result, error: "" };
+}
+
+// parseAgentCustomModel 将 Agent 模型表单字段转换为后端字段。
+// 参数 providerId 表示提供商 ID 文本；参数 model 表示模型标识文本；参数 label 表示错误提示使用的 Agent 名称。
+export function parseAgentCustomModel(
+  providerId: string,
+  model: string,
+  label: string,
+): { providerId: number; model: string; error: string } {
+  const normalizedProviderID = providerId.trim();
+  if (!/^[1-9]\d*$/.test(normalizedProviderID)) {
+    return { providerId: 0, model: "", error: `${label} 必须选择模型提供商` };
+  }
+  const normalizedModel = model.trim();
+  if (!normalizedModel) {
+    return { providerId: 0, model: "", error: `${label} 必须选择模型` };
+  }
+  return {
+    providerId: Number.parseInt(normalizedProviderID, 10),
+    model: normalizedModel,
+    error: "",
+  };
+}
+
+// parseAgentParametersText 解析子 Agent 参数 JSON 文本。
+// 参数 value 表示参数 JSON 文本；参数 childIndex 表示子 Agent 在表单列表中的位置。
+export function parseAgentParametersText(
+  value: string,
+  childIndex: number,
+): { value: Record<string, AgentParameterDefinition> | null; error: string } {
+  const text = value.trim();
+  if (!text) {
+    return { value: {}, error: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!isPlainRecord(parsed)) {
+      return {
+        value: null,
+        error: `第 ${childIndex + 1} 个子 Agent parameters 必须是 JSON 对象`,
+      };
+    }
+    return {
+      value: parsed as Record<string, AgentParameterDefinition>,
+      error: "",
+    };
+  } catch {
+    return {
+      value: null,
+      error: `第 ${childIndex + 1} 个子 Agent parameters 不是合法 JSON`,
+    };
+  }
+}
+
+// parseNonNegativeInteger 将表单数字文本转换为非负整数。
+// 参数 value 表示表单中的数字文本；参数 label 表示错误提示使用的字段名。
+export function parseNonNegativeInteger(
+  value: string,
+  label: string,
+): { value: number; error: string } {
+  const text = value.trim();
+  if (!text) {
+    return { value: 0, error: "" };
+  }
+  if (!/^\d+$/.test(text)) {
+    return { value: 0, error: `${label}必须是非负整数` };
+  }
+  return { value: Number.parseInt(text, 10), error: "" };
+}
+
+// isPlainRecord 判断未知值是否为普通 JSON 对象。
+// 参数 value 表示需要判断的未知值。
+export function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// createDefaultAIProviderFormState 创建 AI 提供商默认表单状态。
+export function createDefaultAIProviderFormState(): AIProviderFormState {
+  return { ...defaultAIProviderFormState };
+}
+
+// providerToAIProviderFormState 将 AI 提供商接口数据转换为表单状态。
+// 参数 provider 表示需要编辑的 AI 提供商。
+export function providerToAIProviderFormState(
+  provider: AIProviderItem,
+): AIProviderFormState {
+  return {
+    name: provider.name,
+    providerType: provider.provider_type,
+    apiKey: "",
+    baseURL: provider.base_url,
+    defaultModel: provider.default_model,
+    priority: String(provider.priority ?? 0),
+    apiType: provider.provider_type === "openai" ? "completions" : provider.api_type,
+    enabled: provider.enabled,
+  };
+}
+
+// validateAIProviderForm 校验 AI 提供商表单输入。
+// 参数 form 表示 AI 提供商表单状态；参数 mode 表示当前表单模式。
+export function validateAIProviderForm(
+  form: AIProviderFormState,
+  mode: AIProviderFormMode,
+): string {
+  if (!form.name.trim()) {
+    return "AI 提供商名称不能为空";
+  }
+  if (!form.providerType.trim()) {
+    return "AI 提供商类型不能为空";
+  }
+  if (!isAIProviderType(form.providerType)) {
+    return "AI 提供商类型只能是 openai、claude 或 gemini";
+  }
+  if (mode === "create" && !form.apiKey.trim()) {
+    return "AI 提供商 API Key 不能为空";
+  }
+  const priority = parseAIProviderPriority(form.priority);
+  if (priority === null) {
+    return form.priority.trim().startsWith("-")
+      ? "优先级不能小于 0"
+      : "优先级必须是非负整数";
+  }
+  if (!isAIProviderAPIType(form.apiType)) {
+    return "AI 接口类型只能是 response 或 completions";
+  }
+  return "";
+}
+
+// toAIProviderUpsertParams 将表单状态转换为后端创建或更新参数。
+// 参数 form 表示 AI 提供商表单状态。
+export function toAIProviderUpsertParams(
+  form: AIProviderFormState,
+): AIProviderUpsertParams {
+  const providerType = form.providerType.trim() as AIProviderType;
+  const apiType =
+    providerType === "openai"
+      ? "completions"
+      : (form.apiType.trim() as AIProviderAPIType);
+
+  return {
+    name: form.name.trim(),
+    provider_type: providerType,
+    api_key: form.apiKey.trim(),
+    base_url: form.baseURL.trim(),
+    default_model: form.defaultModel.trim(),
+    priority: parseAIProviderPriority(form.priority) ?? 0,
+    api_type: apiType,
+    enabled: form.enabled,
+  };
+}
+
+// isProviderConnectionUnchanged 判断编辑表单中的模型列表连接配置是否仍与已保存提供商一致。
+// 参数 form 表示 AI 提供商表单状态；参数 provider 表示当前正在编辑的已保存 AI 提供商。
+export function isProviderConnectionUnchanged(
+  form: AIProviderFormState,
+  provider: AIProviderItem,
+): boolean {
+  return (
+    form.providerType.trim() === provider.provider_type &&
+    form.baseURL.trim() === provider.base_url.trim()
+  );
+}
+
+// uniqueAIProviderModelOptions 对模型列表按模型标识去重并过滤空标识。
+// 参数 items 表示接口返回的模型候选列表。
+export function uniqueAIProviderModelOptions(
+  items: AIProviderModelItem[],
+): AIProviderModelItem[] {
+  const seen = new Set<string>();
+  const result: AIProviderModelItem[] = [];
+  for (const item of items) {
+    const id = item.id.trim();
+    if (!id || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    result.push({
+      ...item,
+      id,
+      display_name: item.display_name || id,
+    });
+  }
+  return result;
+}
+
+// parseAIProviderPriority 将表单优先级文本转换为非负整数。
+// 参数 value 表示 AI 提供商优先级输入文本。
+export function parseAIProviderPriority(value: string): number | null {
+  const text = value.trim();
+  if (text === "") {
+    return 0;
+  }
+  if (!/^\d+$/.test(text)) {
+    return null;
+  }
+  return Number.parseInt(text, 10);
+}
+
+// isAIProviderType 判断前端表单中的 AI 提供商类型是否为允许值。
+// 参数 value 表示需要校验的 AI 提供商类型文本。
+export function isAIProviderType(value: string): value is AIProviderType {
+  return aiProviderTypeOptions.some(
+    function matchAIProviderType(option) {
+      return option.value === value;
+    },
+  );
+}
+
+// isAIProviderAPIType 判断前端表单中的 AI 接口类型是否为允许值。
+// 参数 value 表示需要校验的 AI 接口类型文本。
+export function isAIProviderAPIType(value: string): value is AIProviderAPIType {
+  return aiProviderAPITypeOptions.some(
+    function matchAIProviderAPIType(option) {
+      return option.value === value;
+    },
+  );
+}
+
+// defaultAgentModelOption 根据模型标识创建智能体设置页的模型选项。
+// 参数 modelID 表示 AI 提供商默认模型或已配置模型标识。
+export function defaultAgentModelOption(modelID: string): AIProviderModelItem {
+  return {
+    id: modelID,
+    display_name: modelID,
+    owned_by: "",
+    created_at: "",
+    supported_generation_methods: [],
+  };
+}
+
+// defaultModelForAgentProvider 返回指定 AI 提供商配置的默认模型。
+// 参数 providers 表示 AI 提供商列表；参数 providerId 表示需要查找的提供商 ID 文本。
+export function defaultModelForAgentProvider(
+  providers: AIProviderItem[],
+  providerId: string,
+): string {
+  const provider = providers.find(function matchAgentProvider(item) {
+    return String(item.id) === providerId.trim();
+  });
+  return provider?.default_model?.trim() ?? "";
+}
+
+// modelsWithDefaultAgentModel 合并模型列表和提供商默认模型。
+// 参数 items 表示模型列表接口返回的模型选项；参数 defaultModel 表示提供商默认模型标识。
+export function modelsWithDefaultAgentModel(
+  items: AIProviderModelItem[],
+  defaultModel: string,
+): AIProviderModelItem[] {
+  const normalizedDefaultModel = defaultModel.trim();
+  if (!normalizedDefaultModel) {
+    return items;
+  }
+  const hasDefaultModel = items.some(function matchDefaultModel(model) {
+    return model.id === normalizedDefaultModel;
+  });
+  if (hasDefaultModel) {
+    return items;
+  }
+  return [defaultAgentModelOption(normalizedDefaultModel), ...items];
+}
+
+// agentModelOptionsForProvider 返回指定提供商在表单中可选的模型列表。
+// 参数 providerId 表示当前选择的 AI 提供商 ID 文本；参数 configuredModel 表示配置文件中已保存的模型；参数 providers 表示 AI 提供商列表；参数 optionsByProvider 表示已加载的模型选项缓存。
+export function agentModelOptionsForProvider(
+  providerId: string,
+  configuredModel: string,
+  providers: AIProviderItem[],
+  optionsByProvider: Record<string, AIProviderModelItem[]>,
+): AIProviderModelItem[] {
+  const normalizedProviderID = providerId.trim();
+  if (!normalizedProviderID) {
+    return [];
+  }
+  let items = optionsByProvider[normalizedProviderID] ?? [];
+  items = modelsWithDefaultAgentModel(
+    items,
+    defaultModelForAgentProvider(providers, normalizedProviderID),
+  );
+
+  const normalizedConfiguredModel = configuredModel.trim();
+  if (
+    normalizedConfiguredModel &&
+    !items.some(function matchConfiguredModel(model) {
+      return model.id === normalizedConfiguredModel;
+    })
+  ) {
+    return [defaultAgentModelOption(normalizedConfiguredModel), ...items];
+  }
+  return items;
+}
+
+// formatAgentModelOption 返回智能体设置页模型下拉选项文案。
+// 参数 model 表示需要展示的模型选项。
+export function formatAgentModelOption(model: AIProviderModelItem): string {
+  if (!model.display_name || model.display_name === model.id) {
+    return model.id;
+  }
+  return `${model.display_name} (${model.id})`;
+}
+
+// formatAgentProviderOption 返回智能体设置页提供商下拉选项文案。
+// 参数 provider 表示需要展示的 AI 提供商。
+export function formatAgentProviderOption(provider: AIProviderItem): string {
+  const suffix = provider.enabled ? "" : "（已停用）";
+  return `${provider.name}${suffix}`;
+}
+
+// formatTime 将接口返回的时间文本转换为本地展示文本。
+// 参数 value 表示接口返回的 ISO 时间文本。
+export function formatTime(value?: string): string {
+  if (!value) {
+    return "未知";
+  }
+
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) {
+    return "未知";
+  }
+  return time.toLocaleString();
+}
+
+// formatOptionalText 格式化可能为空的文本字段。
+// 参数 value 表示需要展示的可选文本。
+export function formatOptionalText(value?: string): string {
+  const text = value?.trim();
+  return text ? text : "未设置";
+}
+
+// getErrorMessage 从未知错误中提取用户提示。
+// 参数 error 表示捕获到的未知错误；参数 fallback 表示兜底提示。
+export function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+// isAbortError 判断错误是否来自请求取消。
+// 参数 error 表示捕获到的未知错误。
+export function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}

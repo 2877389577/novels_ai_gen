@@ -193,6 +193,26 @@ type GraphResponse struct {
 	UpdatedAt *time.Time `json:"updated_at" example:"2026-06-15T10:00:00+08:00"`
 }
 
+// DirectRelationship 表示某个角色在关系图中直接关联的另一名角色。
+type DirectRelationship struct {
+	// ID 表示直接关联角色的角色卡主键 ID。
+	ID uint64 `json:"id" example:"2"`
+	// Name 表示直接关联角色的姓名。
+	Name string `json:"name" example:"沈砚"`
+	// Note 表示关系线备注，用于描述两个角色之间的关系。
+	Note string `json:"note" example:"旧友"`
+}
+
+// CharacterDirectRelationships 表示一个命中角色及其直接关系列表。
+type CharacterDirectRelationships struct {
+	// ID 表示命中角色的角色卡主键 ID。
+	ID uint64 `json:"id" example:"1"`
+	// Name 表示命中角色的姓名。
+	Name string `json:"name" example:"林知夏"`
+	// Relationships 表示该角色在关系图中直接关联的角色列表。
+	Relationships []DirectRelationship `json:"relationships"`
+}
+
 // EdgeID 根据无方向角色对生成稳定关系线 ID。
 // 参数 characterAID 表示关系线一端角色卡 ID；参数 characterBID 表示关系线另一端角色卡 ID。
 func EdgeID(characterAID uint64, characterBID uint64) string {
