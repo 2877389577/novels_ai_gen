@@ -16,7 +16,7 @@ import {
   updateChapterAiPairRetryableInList,
 } from "./chapter-ai-message-list-utils";
 import { ChapterAiAssistantShell } from "./chapter-ai-shell";
-import type { ChapterAiAssistantPanelProps, ChapterAiMessage, ChapterAiReplyDraft, ChapterAiRetryPayload, ChapterAiSavedChapterContext, ChapterAiStreamRequest } from "./types";
+import type { ChapterAiAssistantPanelProps, ChapterAiMessage, ChapterAiReplyDraft, ChapterAiRequestContext, ChapterAiRetryPayload, ChapterAiStreamRequest } from "./types";
 import { createChapterAiMessageID, createChapterAiPairID, createChapterAiReplyMessageID, chapterAiMessageFromHistory, syncChapterAiInputHeight } from "./chapter-ai-utils";
 import { getErrorMessage } from "./content-editor-utils";
 
@@ -340,20 +340,25 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     }
 
     setAssistantSending(true);
-    let savedChapterContext: ChapterAiSavedChapterContext | null;
+    let requestContext: ChapterAiRequestContext | null;
     try {
-      savedChapterContext = await props.ensureChapterSavedForAgent();
+      requestContext = await props.prepareRequestContext();
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         setAssistantSending(false);
         onUnauthorized();
         return;
       }
-      Toast.error(getErrorMessage(error, "章节保存失败，请稍后再试"));
+      Toast.error(
+        getErrorMessage(
+          error,
+          props.prepareRequestErrorMessage || "AI 请求准备失败，请稍后再试",
+        ),
+      );
       setAssistantSending(false);
       return;
     }
-    if (savedChapterContext === null) {
+    if (requestContext === null) {
       setAssistantSending(false);
       return;
     }
@@ -395,8 +400,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     await runChapterAiStream({
       pairID,
       assistantMessageID,
-      savedChapterID: savedChapterContext.chapterId,
-      savedChapterNumber: savedChapterContext.chapterNumber,
+      requestContext,
       retryPayload,
     });
   }
@@ -426,20 +430,25 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     }
 
     setAssistantSending(true);
-    let savedChapterContext: ChapterAiSavedChapterContext | null;
+    let requestContext: ChapterAiRequestContext | null;
     try {
-      savedChapterContext = await props.ensureChapterSavedForAgent();
+      requestContext = await props.prepareRequestContext();
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         setAssistantSending(false);
         onUnauthorized();
         return;
       }
-      Toast.error(getErrorMessage(error, "章节保存失败，请稍后再试"));
+      Toast.error(
+        getErrorMessage(
+          error,
+          props.prepareRequestErrorMessage || "AI 请求准备失败，请稍后再试",
+        ),
+      );
       setAssistantSending(false);
       return;
     }
-    if (savedChapterContext === null) {
+    if (requestContext === null) {
       setAssistantSending(false);
       return;
     }
@@ -448,8 +457,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     await runChapterAiStream({
       pairID,
       assistantMessageID,
-      savedChapterID: savedChapterContext.chapterId,
-      savedChapterNumber: savedChapterContext.chapterNumber,
+      requestContext,
       retryPayload,
     });
   }
@@ -556,8 +564,8 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           message: request.retryPayload.message,
           novelId: props.novelId,
           conversationId: request.retryPayload.conversationId,
-          chapterId: request.savedChapterID,
-          chapterNumber: request.savedChapterNumber,
+          chapterId: request.requestContext.chapterId,
+          chapterNumber: request.requestContext.chapterNumber,
           signal: controller.signal,
         },
         {

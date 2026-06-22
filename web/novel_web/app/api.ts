@@ -211,8 +211,8 @@ export interface NovelAgentChatParams {
   conversationId?: number;
   // chapterId 表示当前请求关联的章节 ID，普通对话可为空。
   chapterId?: number;
-  // chapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。
-  chapterNumber: number;
+  // chapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x，普通对话可为空。
+  chapterNumber?: number;
   // signal 表示用于取消 AI 流式请求的浏览器 AbortSignal。
   signal?: AbortSignal;
 }
@@ -1835,8 +1835,14 @@ export async function streamNovelAgentChat(
     throw new Error("当前小说信息缺失，请刷新后重试");
   }
   if (
-    !Number.isSafeInteger(params.chapterNumber) ||
-    params.chapterNumber <= 0
+    params.chapterId !== undefined &&
+    (!Number.isSafeInteger(params.chapterId) || params.chapterId <= 0)
+  ) {
+    throw new Error("当前章节 ID 缺失，请刷新后重试");
+  }
+  if (
+    params.chapterNumber !== undefined &&
+    (!Number.isSafeInteger(params.chapterNumber) || params.chapterNumber <= 0)
   ) {
     throw new Error("当前章节号缺失，请刷新后重试");
   }
@@ -1851,8 +1857,12 @@ export async function streamNovelAgentChat(
       message: params.message,
       novel_id: params.novelId,
       conversation_id: params.conversationId,
-      chapter_id: params.chapterId,
-      chapter_number: params.chapterNumber,
+      ...(params.chapterId !== undefined
+        ? { chapter_id: params.chapterId }
+        : {}),
+      ...(params.chapterNumber !== undefined
+        ? { chapter_number: params.chapterNumber }
+        : {}),
     }),
     signal: params.signal,
   });

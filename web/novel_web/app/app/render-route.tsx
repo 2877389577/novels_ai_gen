@@ -52,6 +52,7 @@ export function renderRoute(route: AppRoute, handlers: RouteHandlers) {
           onChapterEdit={handlers.onChapterEdit}
           onChapterSummaryOpen={handlers.onChapterSummaryOpen}
           onDeleted={handlers.onNovelDeleted}
+          onAiPanelOpenChange={handlers.onAgentPanelOpenChange}
           onUnauthorized={handlers.onUnauthorized}
         />
       );
@@ -61,7 +62,7 @@ export function renderRoute(route: AppRoute, handlers: RouteHandlers) {
           novelId={route.novelId}
           chapterId={route.chapterId}
           onBackToNovelDetail={handlers.onBackToNovelDetail}
-          onAiPanelOpenChange={handlers.onChapterEditorAiPanelOpenChange}
+          onAiPanelOpenChange={handlers.onAgentPanelOpenChange}
           onChapterPersisted={handlers.onChapterPersisted}
           onUnauthorized={handlers.onUnauthorized}
         />

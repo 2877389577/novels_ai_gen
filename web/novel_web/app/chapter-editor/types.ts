@@ -34,16 +34,22 @@ export interface ChapterAiMessage extends Message {
   chapterAiLoading?: boolean;
 }
 
+// ChapterAiRequestContext 表示发送 AI 请求前准备好的可选章节上下文。
+export interface ChapterAiRequestContext {
+  // chapterId 表示章节数据库主键 ID；小说级普通对话可为空。
+  chapterId?: number;
+  // chapterNumber 表示章节号，即“第 x 章”中的 x；小说级普通对话可为空。
+  chapterNumber?: number;
+}
+
 // ChapterAiStreamRequest 表示一次章节 AI 流式请求所需的本地上下文。
 export interface ChapterAiStreamRequest {
   // pairID 表示当前用户消息和助手消息共用的配对 ID。
   pairID: string;
   // assistantMessageID 表示当前助手消息的基础 ID。
   assistantMessageID: string;
-  // savedChapterID 表示发送请求前已保存到后端的章节 ID。
-  savedChapterID: number;
-  // savedChapterNumber 表示发送请求前已确认的章节号，即“第 x 章”中的 x。
-  savedChapterNumber: number;
+  // requestContext 表示本次发送给后端的可选章节上下文。
+  requestContext: ChapterAiRequestContext;
   // retryPayload 表示本次请求使用的原始 AI 调用参数。
   retryPayload: ChapterAiRetryPayload;
 }
@@ -54,14 +60,6 @@ export interface ChapterAiReplyDraft {
   messageID: string;
   // content 表示该段助手回复当前已收到的文本。
   content: string;
-}
-
-// ChapterAiSavedChapterContext 表示发送 AI 请求前已保存的章节上下文。
-export interface ChapterAiSavedChapterContext {
-  // chapterId 表示章节数据库主键 ID。
-  chapterId: number;
-  // chapterNumber 表示章节号，即“第 x 章”中的 x。
-  chapterNumber: number;
 }
 
 // ChapterAiPrefillMessage 表示一次从正文选区填入 AI 输入框的请求。
@@ -125,10 +123,10 @@ export type ChapterEditorState = "loading" | "ready" | "error";
 export interface ChapterAiAssistantPanelProps {
   // novelId 表示当前章节所属小说主键 ID。
   novelId: number;
-  // ensureChapterSavedForAgent 表示发送 AI 前确保章节已保存并返回章节上下文的方法。
-  ensureChapterSavedForAgent: () => Promise<
-    ChapterAiSavedChapterContext | null
-  >;
+  // prepareRequestContext 表示发送 AI 前准备可选章节上下文的方法。
+  prepareRequestContext: () => Promise<ChapterAiRequestContext | null>;
+  // prepareRequestErrorMessage 表示准备请求上下文失败时展示的兜底错误文案。
+  prepareRequestErrorMessage?: string;
   // prefillMessage 表示需要填入 AI 输入框的一次性正文选中文本。
   prefillMessage: ChapterAiPrefillMessage | null;
   // onClose 表示关闭章节 AI 助手侧栏时执行的回调。

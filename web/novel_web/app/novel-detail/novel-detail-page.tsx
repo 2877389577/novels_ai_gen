@@ -7,6 +7,7 @@ import {
   type ChapterSummaryItem,
   type NovelItem,
 } from "../api";
+import { ChapterAiAssistantPanel } from "../chapter-editor/chapter-ai-panel";
 import { EventGraphPanel } from "../event-graph";
 import { RelationshipGraphPanel } from "../relationship-graph";
 import { CharacterCardPanel } from "./character-card-panel";
@@ -39,8 +40,10 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
   const [wordCount, setWordCount] = useState<number | null>(null);
   const [editVisible, setEditVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<NovelDetailTab>("detail");
   const onUnauthorized = props.onUnauthorized;
+  const onAiPanelOpenChange = props.onAiPanelOpenChange;
 
   // loadNovelDetail 从后端加载小说详情数据。
   // 参数 signal 表示可选的请求取消信号。
@@ -132,8 +135,21 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
   useEffect(
     function resetActiveTabOnNovelChange() {
       setActiveTab("detail");
+      setAiPanelOpen(false);
     },
     [props.novelId],
+  );
+
+  // syncAiPanelOpenState 将小说详情页 AI 侧栏打开状态同步给应用层页脚布局。
+  useEffect(
+    function syncAiPanelOpenState() {
+      onAiPanelOpenChange(aiPanelOpen);
+
+      return function resetAiPanelOpenState() {
+        onAiPanelOpenChange(false);
+      };
+    },
+    [aiPanelOpen, onAiPanelOpenChange],
   );
 
   // handleRetry 处理详情加载失败后的重试。
@@ -183,6 +199,24 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
     setDeleteVisible(false);
   }
 
+  // handleOpenAiAssistant 打开小说级 AI 写作助手侧栏。
+  function handleOpenAiAssistant() {
+    setAiPanelOpen(true);
+  }
+
+  // handleCloseAiAssistant 关闭小说级 AI 写作助手侧栏。
+  function handleCloseAiAssistant() {
+    setAiPanelOpen(false);
+  }
+
+  // prepareNovelAgentContext 准备小说级 AI 请求上下文。
+  const prepareNovelAgentContext = useCallback(
+    async function prepareNovelAgentContext() {
+      return {};
+    },
+    [],
+  );
+
   // handleTabChange 处理详情页顶部 Tab 切换。
   // 参数 nextTab 表示用户选择的目标 Tab。
   function handleTabChange(nextTab: NovelDetailTab) {
@@ -190,80 +224,101 @@ export function NovelDetailPage(props: NovelDetailPageProps) {
   }
 
   return (
-    <main className="novel-detail-page">
+    <main
+      className={`novel-detail-page${
+        aiPanelOpen ? " novel-detail-page-ai-open" : ""
+      }`}
+    >
       <DetailNav
         activeTab={activeTab}
         onBackToBookshelf={props.onBackToBookshelf}
         onTabChange={handleTabChange}
       />
 
-      <section
-        className={
-          activeTab === "relationshipGraph" || activeTab === "events"
-            ? "novel-detail-content novel-detail-content-relationship"
-            : "novel-detail-content"
-        }
-        aria-label="小说详情内容"
+      <div
+        className={`novel-detail-workbench${
+          aiPanelOpen ? " novel-detail-workbench-ai-open" : ""
+        }`}
       >
-        {state === "loading" ? <NovelDetailSkeleton /> : null}
-        {state === "error" ? (
-          <NovelDetailError
-            message={message}
-            onBackToBookshelf={props.onBackToBookshelf}
-            onRetry={handleRetry}
+        <section
+          className={
+            activeTab === "relationshipGraph" || activeTab === "events"
+              ? "novel-detail-content novel-detail-content-relationship"
+              : "novel-detail-content"
+          }
+          aria-label="小说详情内容"
+        >
+          {state === "loading" ? <NovelDetailSkeleton /> : null}
+          {state === "error" ? (
+            <NovelDetailError
+              message={message}
+              onBackToBookshelf={props.onBackToBookshelf}
+              onRetry={handleRetry}
+            />
+          ) : null}
+          {state === "ready" && novel ? (
+            activeTab === "detail" ? (
+              <div className="detail-tab-panel" id="detail-panel" role="tabpanel">
+                <NovelDetailHero
+                  novel={novel}
+                  wordCountText={formatNovelWordCountText(
+                    wordCountState,
+                    wordCount,
+                  )}
+                  onBackToBookshelf={props.onBackToBookshelf}
+                  onDelete={handleOpenDeleteModal}
+                  onEdit={handleOpenEditModal}
+                  onOpenAI={handleOpenAiAssistant}
+                  onUnauthorized={props.onUnauthorized}
+                />
+                <ChapterListPanel
+                  novelId={props.novelId}
+                  onChapterCreate={props.onChapterCreate}
+                  onChapterDeleted={handleChapterDeleted}
+                  onChapterEdit={props.onChapterEdit}
+                  onChapterSummaryOpen={props.onChapterSummaryOpen}
+                  onUnauthorized={props.onUnauthorized}
+                />
+              </div>
+            ) : activeTab === "summary" ? (
+              <NovelSummaryPanel
+                novel={novel}
+                onUnauthorized={props.onUnauthorized}
+              />
+            ) : activeTab === "outline" ? (
+              <NovelOutlinePanel
+                novel={novel}
+                onUnauthorized={props.onUnauthorized}
+              />
+            ) : activeTab === "characters" ? (
+              <CharacterCardPanel
+                novel={novel}
+                onUnauthorized={props.onUnauthorized}
+              />
+            ) : activeTab === "relationshipGraph" ? (
+              <RelationshipGraphPanel
+                novel={novel}
+                onUnauthorized={props.onUnauthorized}
+              />
+            ) : (
+              <EventGraphPanel
+                novel={novel}
+                onUnauthorized={props.onUnauthorized}
+              />
+            )
+          ) : null}
+        </section>
+
+        {aiPanelOpen ? (
+          <ChapterAiAssistantPanel
+            novelId={props.novelId}
+            prepareRequestContext={prepareNovelAgentContext}
+            prefillMessage={null}
+            onClose={handleCloseAiAssistant}
+            onUnauthorized={props.onUnauthorized}
           />
         ) : null}
-        {state === "ready" && novel ? (
-          activeTab === "detail" ? (
-            <div className="detail-tab-panel" id="detail-panel" role="tabpanel">
-              <NovelDetailHero
-                novel={novel}
-                wordCountText={formatNovelWordCountText(
-                  wordCountState,
-                  wordCount,
-                )}
-                onBackToBookshelf={props.onBackToBookshelf}
-                onDelete={handleOpenDeleteModal}
-                onEdit={handleOpenEditModal}
-                onUnauthorized={props.onUnauthorized}
-              />
-              <ChapterListPanel
-                novelId={props.novelId}
-                onChapterCreate={props.onChapterCreate}
-                onChapterDeleted={handleChapterDeleted}
-                onChapterEdit={props.onChapterEdit}
-                onChapterSummaryOpen={props.onChapterSummaryOpen}
-                onUnauthorized={props.onUnauthorized}
-              />
-            </div>
-          ) : activeTab === "summary" ? (
-            <NovelSummaryPanel
-              novel={novel}
-              onUnauthorized={props.onUnauthorized}
-            />
-          ) : activeTab === "outline" ? (
-            <NovelOutlinePanel
-              novel={novel}
-              onUnauthorized={props.onUnauthorized}
-            />
-          ) : activeTab === "characters" ? (
-            <CharacterCardPanel
-              novel={novel}
-              onUnauthorized={props.onUnauthorized}
-            />
-          ) : activeTab === "relationshipGraph" ? (
-            <RelationshipGraphPanel
-              novel={novel}
-              onUnauthorized={props.onUnauthorized}
-            />
-          ) : (
-            <EventGraphPanel
-              novel={novel}
-              onUnauthorized={props.onUnauthorized}
-            />
-          )
-        ) : null}
-      </section>
+      </div>
 
       {novel ? (
         <>
