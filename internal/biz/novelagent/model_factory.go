@@ -18,6 +18,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/cloudwego/eino/schema/openai"
 	"google.golang.org/genai"
 
 	agenttools "novels_ai_gen/internal/biz/novelagent/tools"
@@ -33,7 +34,7 @@ const (
 	modelPathChat      = "chat"
 	modelPathAgentic   = "agentic"
 	defaultMaxTokens   = 4096
-	defaultTimeout     = 120 * time.Second
+	defaultTimeout     = 300 * time.Second
 )
 
 const summarySystemPrompt = "你是小说写作 Agent 的长期记忆摘要器。请把旧摘要和新增对话整理成一份紧凑、准确、可持续更新的中文摘要，保留用户偏好、小说设定、角色关系、写作要求、已经确认的修改方向和重要上下文。不要输出寒暄、标题或 Markdown 代码块，只输出摘要正文。"
@@ -133,12 +134,22 @@ func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeMod
 // 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
 func (f *EinoAgentRuntimeFactory) newChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseChatModel, error) {
 	_ = f
-	model, err := einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
+	modelConfig := &einoopenai.ChatModelConfig{
 		APIKey:  cfg.APIKey,
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
 		Timeout: defaultTimeout,
-	})
+	}
+
+	reasoningEffort, ok, err := chatModelReasoningEffort(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		modelConfig.ReasoningEffort = reasoningEffort
+	}
+
+	model, err := einoopenai.NewChatModel(ctx, modelConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +305,34 @@ func normalizeModelConfig(cfg ModelConfig) ModelConfig {
 	cfg.APIType = strings.ToLower(strings.TrimSpace(cfg.APIType))
 	cfg.BaseURL = strings.TrimSpace(cfg.BaseURL)
 	cfg.Model = strings.TrimSpace(cfg.Model)
+	cfg.ReasoningEffort = strings.ToLower(strings.TrimSpace(cfg.ReasoningEffort))
 	return cfg
+}
+
+// chatModelReasoningEffort 返回 ChatModel 应使用的 GPT 推理强度。
+// 参数 cfg 表示模型创建配置。
+func chatModelReasoningEffort(cfg ModelConfig) (einoopenai.ReasoningEffortLevel, bool, error) {
+	if !isGPTModel(cfg.Model) {
+		return "", false, nil
+	}
+
+	effort := strings.ToLower(strings.TrimSpace(cfg.ReasoningEffort))
+	if effort == "" {
+		return einoopenai.ReasoningEffortLevel(openai.ReasoningEffortHigh), true, nil
+	}
+
+	switch openai.ReasoningEffort(effort) {
+	case openai.ReasoningEffortLow, openai.ReasoningEffortMedium, openai.ReasoningEffortHigh:
+		return einoopenai.ReasoningEffortLevel(effort), true, nil
+	default:
+		return "", false, fmt.Errorf("%w: reasoning_effort 仅支持 low、medium、high", ErrAgentConfigInvalid)
+	}
+}
+
+// isGPTModel 判断模型名称是否属于 GPT 类模型。
+// 参数 model 表示模型标识。
+func isGPTModel(model string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(model)), "gpt")
 }
 
 // modelPathForConfig 判断模型配置使用的 Eino 消息路径。
@@ -891,7 +929,7 @@ func chatModelRetryConfig(retry RuntimeRetryConfig) *adk.ModelRetryConfig {
 	}
 	return &adk.ModelRetryConfig{
 		MaxRetries:  retry.MaxRetries,
-		IsRetryAble: isRetryableModelError,
+		ShouldRetry: shouldRetryModelError[*schema.Message],
 		BackoffFunc: fixedRetryBackoff(retry.Backoff),
 	}
 }
@@ -904,8 +942,19 @@ func agenticModelRetryConfig(retry RuntimeRetryConfig) *adk.TypedModelRetryConfi
 	}
 	return &adk.TypedModelRetryConfig[*schema.AgenticMessage]{
 		MaxRetries:  retry.MaxRetries,
-		IsRetryAble: isRetryableModelError,
+		ShouldRetry: shouldRetryModelError[*schema.AgenticMessage],
 		BackoffFunc: fixedRetryBackoff(retry.Backoff),
+	}
+}
+
+// shouldRetryModelError 根据 ADK 重试上下文判断本次模型调用是否需要重试。
+// 参数 ctx 表示当前请求上下文；参数 retryCtx 表示 ADK 传入的模型调用结果与重试上下文。
+func shouldRetryModelError[M adk.MessageType](ctx context.Context, retryCtx *adk.TypedRetryContext[M]) *adk.TypedRetryDecision[M] {
+	if retryCtx == nil {
+		return &adk.TypedRetryDecision[M]{Retry: false}
+	}
+	return &adk.TypedRetryDecision[M]{
+		Retry: isRetryableModelError(ctx, retryCtx.Err),
 	}
 }
 

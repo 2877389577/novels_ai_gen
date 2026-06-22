@@ -131,6 +131,8 @@ interface AgentSupervisorFormState {
   providerId: string;
   // model 表示顶层 Agent 使用的模型标识。
   model: string;
+  // reasoningEffort 表示顶层 Agent 使用 GPT 类模型时的推理强度。
+  reasoningEffort: string;
 }
 
 // AgentChildFormState 表示子 Agent 表单输入状态。
@@ -157,6 +159,8 @@ interface AgentChildFormState {
   providerId: string;
   // model 表示该子 Agent 使用的模型标识。
   model: string;
+  // reasoningEffort 表示该子 Agent 使用 GPT 类模型时的推理强度。
+  reasoningEffort: string;
   // parametersText 表示子 Agent 工具参数 JSON 文本。
   parametersText: string;
 }
@@ -218,6 +222,12 @@ const aiProviderAPITypeOptions: {
   { value: "completions", label: "completions" },
   { value: "response", label: "response" },
 ];
+const agentReasoningEffortOptions: { value: string; label: string }[] = [
+  { value: "", label: "默认 high" },
+  { value: "low", label: "low" },
+  { value: "medium", label: "medium" },
+  { value: "high", label: "high" },
+];
 const defaultAIProviderFormState: AIProviderFormState = {
   name: "",
   providerType: "openai",
@@ -241,6 +251,7 @@ const defaultAgentSettingsFormState: AgentSettingsFormState = {
     toolNames: [],
     providerId: "",
     model: "",
+    reasoningEffort: "",
   },
   children: [],
 };
@@ -1312,6 +1323,23 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
+  // handleSupervisorReasoningEffortChange 处理顶层 Agent GPT 推理强度变化。
+  // 参数 event 表示下拉框变化事件。
+  function handleSupervisorReasoningEffortChange(
+    event: ChangeEvent<HTMLSelectElement>,
+  ) {
+    const reasoningEffort = event.target.value;
+    setForm(function updateSupervisorReasoningEffort(current) {
+      return {
+        ...current,
+        supervisor: {
+          ...current.supervisor,
+          reasoningEffort,
+        },
+      };
+    });
+  }
+
   // handleChildEnabledChange 处理子 Agent 启用状态变化。
   // 参数 index 表示子 Agent 在表单列表中的位置；参数 enabled 表示是否启用。
   function handleChildEnabledChange(index: number, enabled: boolean) {
@@ -1366,6 +1394,25 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     updateChildForm(index, function updateChildModel(child) {
       return { ...child, model };
     });
+  }
+
+  // handleChildReasoningEffortChange 处理子 Agent GPT 推理强度变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 reasoningEffort 表示新的推理强度。
+  function handleChildReasoningEffortChange(
+    index: number,
+    reasoningEffort: string,
+  ) {
+    updateChildForm(index, function updateChildReasoningEffort(child) {
+      return { ...child, reasoningEffort };
+    });
+  }
+
+  // handleEditingChildReasoningEffortChange 处理当前编辑子 Agent 的 GPT 推理强度变化。
+  // 参数 event 表示下拉框变化事件。
+  function handleEditingChildReasoningEffortChange(
+    event: ChangeEvent<HTMLSelectElement>,
+  ) {
+    handleChildReasoningEffortChange(editingChildIndex, event.target.value);
   }
 
   // handleAgentModelSelectFocus 处理模型下拉框聚焦时的按需加载。
@@ -1841,6 +1888,16 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                     })}
                   </select>
                 </label>
+                <label className="ai-provider-field">
+                  <span>Reasoning Effort</span>
+                  <select
+                    value={form.supervisor.reasoningEffort}
+                    disabled={loading || saving}
+                    onChange={handleSupervisorReasoningEffortChange}
+                  >
+                    {agentReasoningEffortOptions.map(renderReasoningEffortOption)}
+                  </select>
+                </label>
                 <label className="ai-provider-field ai-provider-field-wide">
                   <span>Description</span>
                   <input
@@ -2072,6 +2129,16 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                         </option>
                       );
                     })}
+                  </select>
+                </label>
+                <label className="ai-provider-field">
+                  <span>Reasoning Effort</span>
+                  <select
+                    value={editingChild.reasoningEffort}
+                    disabled={saving}
+                    onChange={handleEditingChildReasoningEffortChange}
+                  >
+                    {agentReasoningEffortOptions.map(renderReasoningEffortOption)}
                   </select>
                 </label>
                 <label className="ai-provider-field ai-provider-field-wide">
@@ -2959,6 +3026,7 @@ function createDefaultAgentChildFormState(): AgentChildFormState {
     toolNames: [],
     providerId: "",
     model: "",
+    reasoningEffort: "",
     parametersText: "{}",
   };
 }
@@ -2992,6 +3060,16 @@ function normalizeAgentToolNames(toolNames: string[] | null): string[] {
     result.push(name);
   }
   return result;
+}
+
+// renderReasoningEffortOption 渲染 GPT 推理强度下拉选项。
+// 参数 option 表示推理强度选项配置。
+function renderReasoningEffortOption(option: { value: string; label: string }) {
+  return (
+    <option key={option.value || "default"} value={option.value}>
+      {option.label}
+    </option>
+  );
 }
 
 // toggleAgentToolName 根据复选框状态增删指定工具名称。
@@ -3035,6 +3113,7 @@ function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormState {
           ? String(agent.supervisor?.provider_id ?? "")
           : "",
       model: agent.supervisor?.model ?? "",
+      reasoningEffort: agent.supervisor?.reasoning_effort ?? "",
     },
     children: (agent.agent ?? []).map(agentDefinitionToChildFormState),
   };
@@ -3061,6 +3140,7 @@ function agentDefinitionToChildFormState(
         ? String(definition.provider_id ?? "")
         : "",
     model: definition.model ?? "",
+    reasoningEffort: definition.reasoning_effort ?? "",
     parametersText: formatAgentParameters(definition.parameters),
   };
 }
@@ -3223,6 +3303,7 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
       share_chat_history: child.shareChatHistory,
       provider_id: childModel.providerId,
       model: childModel.model,
+      reasoning_effort: child.reasoningEffort.trim(),
       task: childTask,
       description: childDescription,
       instruction: childInstruction,
@@ -3254,6 +3335,7 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
         name: supervisorName,
         provider_id: supervisorModel.providerId,
         model: supervisorModel.model,
+        reasoning_effort: form.supervisor.reasoningEffort.trim(),
         task: "",
         description: supervisorDescription,
         instruction: supervisorInstruction,

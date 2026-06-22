@@ -449,6 +449,8 @@ export interface AgentDefinition {
   provider_id: number;
   // model 表示该 Agent 使用的模型标识，保存时不能为空。
   model: string;
+  // reasoning_effort 表示 GPT 类模型使用的推理强度。
+  reasoning_effort?: string;
   // task 表示子 Agent 产生流式事件时返回给前端的任务标识。
   task: string;
   // description 表示 Agent 能力描述。

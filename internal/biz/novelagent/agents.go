@@ -26,6 +26,8 @@ type runtimeAgentDefinition struct {
 	providerID uint64
 	// model 表示该 Agent 使用的模型标识。
 	model string
+	// reasoningEffort 表示 GPT 类模型使用的推理强度。
+	reasoningEffort string
 	// task 表示子 Agent 产生流式事件时返回给前端的任务标识。
 	task string
 	// shareChatHistory 表示父 Agent 调用该子 Agent 时是否传入完整聊天历史。
@@ -206,13 +208,14 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition, registry map[string
 		maxIterations = defaultSupervisorMaxIterations
 	}
 	return runtimeAgentDefinition{
-		name:          name,
-		providerID:    def.ProviderID,
-		model:         model,
-		description:   description,
-		instruction:   instruction,
-		maxIterations: maxIterations,
-		toolNames:     toolNames,
+		name:            name,
+		providerID:      def.ProviderID,
+		model:           model,
+		reasoningEffort: strings.TrimSpace(def.ReasoningEffort),
+		description:     description,
+		instruction:     instruction,
+		maxIterations:   maxIterations,
+		toolNames:       toolNames,
 	}, nil
 }
 
@@ -267,6 +270,7 @@ func normalizeChildAgent(def appconfig.AgentDefinition, registry map[string]runt
 		name:             name,
 		providerID:       def.ProviderID,
 		model:            model,
+		reasoningEffort:  strings.TrimSpace(def.ReasoningEffort),
 		task:             task,
 		shareChatHistory: shareChatHistory,
 		description:      description,
@@ -286,6 +290,12 @@ func normalizeAgentModelOverride(def appconfig.AgentDefinition, label string) (s
 	}
 	if model == "" {
 		return "", fmt.Errorf("%w: %s model 不能为空", ErrAgentConfigInvalid, label)
+	}
+	if _, _, err := chatModelReasoningEffort(ModelConfig{
+		Model:           model,
+		ReasoningEffort: def.ReasoningEffort,
+	}); err != nil {
+		return "", fmt.Errorf("%w: %s reasoning_effort 仅支持 low、medium、high", ErrAgentConfigInvalid, label)
 	}
 	return model, nil
 }
@@ -455,6 +465,7 @@ func isEmptyAgentDefinition(def appconfig.AgentDefinition) bool {
 		strings.TrimSpace(def.Description) == "" &&
 		strings.TrimSpace(def.Instruction) == "" &&
 		strings.TrimSpace(def.Model) == "" &&
+		strings.TrimSpace(def.ReasoningEffort) == "" &&
 		def.ProviderID == 0 &&
 		def.MaxIterations == 0 &&
 		def.Enabled == nil &&

@@ -353,6 +353,7 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 		"顶层 Agent",
 		agentCfg.supervisor.providerID,
 		agentCfg.supervisor.model,
+		agentCfg.supervisor.reasoningEffort,
 	)
 	if err != nil {
 		return RuntimeModelConfig{}, err
@@ -366,7 +367,13 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 		if child.providerID == 0 {
 			continue
 		}
-		childConfig, err := s.agentModelOverrideConfig(ctx, "子 Agent "+child.name, child.providerID, child.model)
+		childConfig, err := s.agentModelOverrideConfig(
+			ctx,
+			"子 Agent "+child.name,
+			child.providerID,
+			child.model,
+			child.reasoningEffort,
+		)
 		if err != nil {
 			return RuntimeModelConfig{}, err
 		}
@@ -379,12 +386,13 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 }
 
 // agentModelOverrideConfig 读取单个 Agent 模型对应的提供商凭据。
-// 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示模型提供商 ID；参数 model 表示配置文件中的模型标识。
+// 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示模型提供商 ID；参数 model 表示配置文件中的模型标识；参数 reasoningEffort 表示 GPT 类模型推理强度配置。
 func (s *Service) agentModelOverrideConfig(
 	ctx context.Context,
 	label string,
 	providerID uint64,
 	model string,
+	reasoningEffort string,
 ) (ModelConfig, error) {
 	provider, apiKey, err := s.providerCredential(ctx, providerID)
 	if err != nil {
@@ -395,12 +403,13 @@ func (s *Service) agentModelOverrideConfig(
 		return ModelConfig{}, fmt.Errorf("%w: %s 模型不能为空", ErrAgentConfigInvalid, label)
 	}
 	return ModelConfig{
-		ProviderID:   provider.ID,
-		ProviderType: provider.ProviderType,
-		APIType:      provider.APIType,
-		APIKey:       apiKey,
-		BaseURL:      provider.BaseURL,
-		Model:        model,
+		ProviderID:      provider.ID,
+		ProviderType:    provider.ProviderType,
+		APIType:         provider.APIType,
+		APIKey:          apiKey,
+		BaseURL:         provider.BaseURL,
+		Model:           model,
+		ReasoningEffort: strings.TrimSpace(reasoningEffort),
 	}, nil
 }
 
