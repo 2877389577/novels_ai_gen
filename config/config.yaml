@@ -98,6 +98,41 @@ ai:
     - 润色
     - 情感
     - 扩写
+  # 后台章节概要独立 Agent 配置；启用后会在章节创建或更新成功后自动覆盖 chapters.summary。
+  chapter_summary_agent:
+    retry:
+      max_retries: 0
+      backoff_ms: 300
+    agent:
+      name: generate_chapter_summary
+      enabled: false
+      provider_id: 0
+      model: ""
+      reasoning_effort: ""
+      task: generate_summary
+      description: 后台自动生成章节概要的独立 Agent，只针对单个章节正文生成客观、精炼的剧情概要。
+      instruction: |-
+        # 角色定义
+        你是一名资深文学编辑与小说拆解专家，极度擅长抓住故事的核心骨架。你的任务只有一个：根据用户提供的章节标题和正文，生成高度精炼、客观且直指本质的概要总结。你绝不罗列流水账，只提取推动因果的关键节点。
+
+        # 核心方法论：骨骼抽取法
+        你在总结时必须严格遵循以下内在思考步骤，但最终输出只呈现成熟的结果，不暴露分析过程。
+
+        1. 识别本章的视角人物、即时核心目标、核心行动、主要阻碍和阶段性结果。
+        2. 找到本章结束后发生的不可逆变化，包括人物处境、内心认知、人物关系或故事局势的关键转变。
+        3. 指出本章结尾为下文留下的悬而未决的问题或线索。
+
+        # 语言转化原则
+        - 弃血肉，留骨骼：删去状态描写、心理渲染和冗余对话，只保留推动叙事的行动和决定性信息。
+        - 写因果，不写流水账：不要写成“先A，后B，再C”，而要写成“因为A，所以B，导致C”。
+        - 对话信息化：不转述大段对话，只萃取其中揭示的关键事实或决定。
+        - 完全客观：禁止出现“这章很精彩”等个人评价，只进行中性叙述。
+
+        # 输出格式
+        默认输出一段流畅短文，不要输出标题、寒暄、解释或 Markdown 代码块。必须精悍，通常不超过 300 字，除非原文信息密度极大。
+      max_iterations: 1
+      tools: []
+      parameters: {}
   # 小说写作多层 Agent 配置。
   agent:
     # Agent 普通工具注册表；Agent 配置中的 tools 字段只能引用这里定义的 name。
@@ -116,6 +151,9 @@ ai:
       - name: query_chapters
         description: |-
           按小说 ID 查询章节数据，可按章节 ID、章节号或章节号范围查询，并可通过 fields 只返回正文、总结等指定字段。
+          当你不知道当前小说具体有多少章时，必须先不传 chapter_id、chapter_number、start_chapter_number、end_chapter_number 调用一次本工具，获取轻量目录 catalog 和章节范围 chapter_scope。
+          查询正文前必须查看 chapter_scope.max_chapter_number，不要请求超过 max_chapter_number 的章节。
+          章节号范围查询单次最多返回 5 章；超过 5 章会自动裁剪，并通过 chapter_scope.clipped 提示你继续分批查询。
           像created_at、updated_at等字段，非必要不获取。
 
           **fields列表字段解释：**
@@ -134,6 +172,8 @@ ai:
           count: 本次查询命中的章节数量。
           fields: 本次实际返回的字段名列表。
           chapters: 查询到的章节数组。
+          chapter_scope: 当前小说实际章节范围和本次查询范围，包括 total_count、min_chapter_number、max_chapter_number、next_chapter_number、requested_start_chapter_number、requested_end_chapter_number、effective_start_chapter_number、effective_end_chapter_number、missing_chapter_numbers、out_of_range、clipped、message。
+          catalog: 不传章节选择器时返回的轻量章节目录，不包含 content 正文。
 
           chapters[] 内字段说明：
           id: 章节主键 ID。

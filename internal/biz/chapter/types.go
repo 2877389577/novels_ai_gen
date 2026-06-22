@@ -43,6 +43,8 @@ type CreateRequest struct {
 	Title string `json:"title" binding:"required" example:"初入长夜"`
 	// Content 表示章节正文，可以为空。
 	Content string `json:"content" example:"夜色像墨一样铺开。"`
+	// GenerateSummary 表示本次创建成功后是否触发后台章节概要生成，通常只由手动保存传入。
+	GenerateSummary bool `json:"generate_summary" example:"true"`
 }
 
 // UpdateRequest 表示更新章节请求参数。
@@ -51,6 +53,14 @@ type UpdateRequest struct {
 	Title string `json:"title" binding:"required" example:"初入长夜"`
 	// Content 表示章节正文，可以为空。
 	Content string `json:"content" example:"夜色像墨一样铺开。"`
+	// GenerateSummary 表示本次更新成功后是否触发后台章节概要生成，自动保存应保持 false。
+	GenerateSummary bool `json:"generate_summary" example:"true"`
+}
+
+// SummarySaveRequest 表示保存章节概要请求参数。
+type SummarySaveRequest struct {
+	// Summary 表示需要保存的章节概要，允许为空字符串并保留原始空格和换行。
+	Summary string `json:"summary" example:"主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。"`
 }
 
 // ListRequest 表示章节列表查询参数。
@@ -77,6 +87,32 @@ type QueryChaptersCondition struct {
 	Fields []string
 }
 
+// QueryChapterCatalogCondition 表示章节轻量目录查询条件。
+type QueryChapterCatalogCondition struct {
+	// NovelID 表示所属小说 ID。
+	NovelID uint64
+}
+
+// ChapterRangeInfo 表示小说章节号边界信息。
+type ChapterRangeInfo struct {
+	// TotalCount 表示当前小说实际章节数量。
+	TotalCount int64 `json:"total_count" example:"3"`
+	// MinChapterNumber 表示当前小说最小章节号，没有章节时为 0。
+	MinChapterNumber int `json:"min_chapter_number" example:"1"`
+	// MaxChapterNumber 表示当前小说最大章节号，没有章节时为 0。
+	MaxChapterNumber int `json:"max_chapter_number" example:"3"`
+	// NextChapterNumber 表示当前小说下一章建议章节号。
+	NextChapterNumber int `json:"next_chapter_number" example:"4"`
+}
+
+// QueryChapterCatalogResult 表示章节轻量目录和章节号边界查询结果。
+type QueryChapterCatalogResult struct {
+	// Range 表示当前小说章节号边界信息。
+	Range ChapterRangeInfo `json:"range"`
+	// Chapters 表示当前小说章节轻量目录，不包含正文。
+	Chapters []Chapter `json:"chapters"`
+}
+
 // UpdateChapterSummaryCondition 表示章节总结更新条件。
 type UpdateChapterSummaryCondition struct {
 	// NovelID 表示所属小说 ID。
@@ -87,6 +123,27 @@ type UpdateChapterSummaryCondition struct {
 	ChapterNumber int
 	// Summary 表示需要写入的章节总结，允许为空字符串以清空总结。
 	Summary string
+}
+
+// ChapterSummaryGenerationTask 表示后台生成章节概要所需的章节快照。
+type ChapterSummaryGenerationTask struct {
+	// NovelID 表示所属小说 ID。
+	NovelID uint64
+	// ChapterID 表示章节主键 ID。
+	ChapterID uint64
+	// ChapterNumber 表示章节号，即“第 x 章”中的 x。
+	ChapterNumber int
+	// Title 表示章节名。
+	Title string
+	// Content 表示章节正文原文。
+	Content string
+}
+
+// ChapterSummaryScheduler 表示章节概要后台生成调度器。
+type ChapterSummaryScheduler interface {
+	// Enqueue 将章节概要生成任务加入后台队列。
+	// 参数 task 表示需要生成概要的章节快照。
+	Enqueue(task ChapterSummaryGenerationTask)
 }
 
 // ChapterResponse 表示章节详情响应数据。
@@ -107,6 +164,22 @@ type ChapterResponse struct {
 	WordCount int `json:"word_count" example:"8"`
 	// CreatedAt 表示创建时间。
 	CreatedAt time.Time `json:"created_at" example:"2026-06-14T22:00:00+08:00"`
+	// UpdatedAt 表示更新时间。
+	UpdatedAt time.Time `json:"updated_at" example:"2026-06-14T22:00:00+08:00"`
+}
+
+// ChapterSummaryDetailResponse 表示单章概要详情响应数据。
+type ChapterSummaryDetailResponse struct {
+	// ID 表示章节主键 ID。
+	ID uint64 `json:"id" example:"1"`
+	// NovelID 表示所属小说 ID。
+	NovelID uint64 `json:"novel_id" example:"1"`
+	// ChapterNumber 表示章节号，即“第 x 章”中的 x。
+	ChapterNumber int `json:"chapter_number" example:"1"`
+	// Title 表示章节名。
+	Title string `json:"title" example:"初入长夜"`
+	// Summary 表示章节概要，允许为空字符串。
+	Summary string `json:"summary" example:"主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。"`
 	// UpdatedAt 表示更新时间。
 	UpdatedAt time.Time `json:"updated_at" example:"2026-06-14T22:00:00+08:00"`
 }

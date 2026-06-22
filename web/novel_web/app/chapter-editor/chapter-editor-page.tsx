@@ -168,9 +168,14 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   const persistChapterValues = useCallback(
     async function persistChapterValues(
       values: ChapterUpdateParams,
+      options?: { generateSummary?: boolean },
     ): Promise<ChapterDetailItem> {
       const currentChapterID = persistedChapterIDRef.current;
       let savedChapter: ChapterDetailItem;
+      const saveValues: ChapterUpdateParams = {
+        ...values,
+        generate_summary: options?.generateSummary === true,
+      };
 
       if (currentChapterID === null) {
         const currentChapterNumber = chapterNumberRef.current;
@@ -180,7 +185,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
 
         savedChapter = await createChapter(
           props.novelId,
-          normalizeChapterCreateValues(values, currentChapterNumber),
+          normalizeChapterCreateValues(saveValues, currentChapterNumber),
         );
         syncPersistedChapterID(savedChapter.id);
         skipRouteLoadChapterIDRef.current = savedChapter.id;
@@ -189,7 +194,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         savedChapter = await updateChapter(
           props.novelId,
           currentChapterID,
-          values,
+          saveValues,
         );
       }
 
@@ -237,11 +242,26 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
           return null;
         }
         if (!hasUnsavedChapterChanges(values)) {
+          if (options.generateSummary && persistedChapterIDRef.current !== null) {
+            const nextSavingPromise = persistChapterValues(values, {
+              generateSummary: true,
+            });
+            savingPromiseRef.current = nextSavingPromise;
+            try {
+              return await nextSavingPromise;
+            } finally {
+              if (savingPromiseRef.current === nextSavingPromise) {
+                savingPromiseRef.current = null;
+              }
+            }
+          }
           return null;
         }
 
         setTitleError("");
-        const nextSavingPromise = persistChapterValues(values);
+        const nextSavingPromise = persistChapterValues(values, {
+          generateSummary: options.generateSummary === true,
+        });
         savingPromiseRef.current = nextSavingPromise;
         try {
           return await nextSavingPromise;
@@ -678,7 +698,11 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     setSubmitting(true);
 
     try {
-      await saveCurrentChapter({ force: true, showTitleError: true });
+      await saveCurrentChapter({
+        force: true,
+        showTitleError: true,
+        generateSummary: true,
+      });
       if (
         !readCurrentChapterValues().title ||
         persistedChapterIDRef.current === null
@@ -728,7 +752,11 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         },
         actions: {
           save: function saveChapterFromContext() {
-            void saveCurrentChapter({ force: true, showTitleError: true });
+            void saveCurrentChapter({
+              force: true,
+              showTitleError: true,
+              generateSummary: true,
+            });
           },
           toggleAI: handleAiAssistantToggle,
         },

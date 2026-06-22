@@ -3,6 +3,7 @@ import { LogsPanel } from "../logs";
 import { ConfigSettingsPanel } from "./config-panel";
 import { AgentSettingsPanel } from "./agent-settings-panel";
 import { AgentToolsSettingsPanel } from "./agent-tools-panel";
+import { ChapterSummaryAgentSettingsPanel } from "./chapter-summary-agent-panel";
 import { AIProviderSettingsPanel } from "./ai-provider-panel";
 import { SystemSettingsPanel } from "./system-panel";
 
@@ -22,6 +23,11 @@ export function SettingsPage(props: SettingsPageProps) {
   // handleAgentToolsSectionClick 切换到智能体工具分区。
   function handleAgentToolsSectionClick() {
     props.onSectionChange("agent-tools");
+  }
+
+  // handleChapterSummaryAgentSectionClick 切换到章节概要 Agent 设置分区。
+  function handleChapterSummaryAgentSectionClick() {
+    props.onSectionChange("chapter-summary-agent");
   }
 
   // handleLogsSectionClick 切换到日志预览分区。
@@ -100,6 +106,17 @@ export function SettingsPage(props: SettingsPageProps) {
             <button
               type="button"
               className="settings-sidebar-button"
+              aria-current={
+                props.section === "chapter-summary-agent" ? "page" : undefined
+              }
+              onClick={handleChapterSummaryAgentSectionClick}
+            >
+              <span aria-hidden="true">摘</span>
+              <span>章节概要 Agent</span>
+            </button>
+            <button
+              type="button"
+              className="settings-sidebar-button"
               aria-current={props.section === "logs" ? "page" : undefined}
               onClick={handleLogsSectionClick}
             >
@@ -138,6 +155,11 @@ export function SettingsPage(props: SettingsPageProps) {
           ) : null}
           {props.section === "agent-tools" ? (
             <AgentToolsSettingsPanel onUnauthorized={props.onUnauthorized} />
+          ) : null}
+          {props.section === "chapter-summary-agent" ? (
+            <ChapterSummaryAgentSettingsPanel
+              onUnauthorized={props.onUnauthorized}
+            />
           ) : null}
           {props.section === "logs" ? (
             <LogsPanel onUnauthorized={props.onUnauthorized} />

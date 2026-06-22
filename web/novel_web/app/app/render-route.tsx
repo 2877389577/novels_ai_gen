@@ -1,5 +1,6 @@
 import { BookshelfPage } from "../bookshelf";
 import { ChapterEditorPage } from "../chapter-editor";
+import { ChapterSummaryPage } from "../chapter-summary";
 import { InspirationPage } from "../inspiration";
 import { LoginPage } from "../login";
 import { NovelDetailPage } from "../novel-detail";
@@ -49,6 +50,7 @@ export function renderRoute(route: AppRoute, handlers: RouteHandlers) {
           onBackToBookshelf={handlers.onBackToBookshelf}
           onChapterCreate={handlers.onChapterCreate}
           onChapterEdit={handlers.onChapterEdit}
+          onChapterSummaryOpen={handlers.onChapterSummaryOpen}
           onDeleted={handlers.onNovelDeleted}
           onUnauthorized={handlers.onUnauthorized}
         />
@@ -61,6 +63,15 @@ export function renderRoute(route: AppRoute, handlers: RouteHandlers) {
           onBackToNovelDetail={handlers.onBackToNovelDetail}
           onAiPanelOpenChange={handlers.onChapterEditorAiPanelOpenChange}
           onChapterPersisted={handlers.onChapterPersisted}
+          onUnauthorized={handlers.onUnauthorized}
+        />
+      );
+    case "chapterSummary":
+      return (
+        <ChapterSummaryPage
+          novelId={route.novelId}
+          chapterId={route.chapterId}
+          onBackToNovelDetail={handlers.onBackToNovelDetail}
           onUnauthorized={handlers.onUnauthorized}
         />
       );

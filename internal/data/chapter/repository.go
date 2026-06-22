@@ -179,6 +179,50 @@ func (r *Repository) QueryChapters(ctx context.Context, condition bizchapter.Que
 	return items, nil
 }
 
+// QueryChapterCatalog 查询指定小说章节轻量目录和章节号边界信息。
+// 参数 ctx 表示请求上下文；参数 condition 表示章节轻量目录查询条件。
+func (r *Repository) QueryChapterCatalog(ctx context.Context, condition bizchapter.QueryChapterCatalogCondition) (bizchapter.QueryChapterCatalogResult, error) {
+	db := r.db.WithContext(ctx)
+	if condition.NovelID == 0 {
+		return bizchapter.QueryChapterCatalogResult{}, bizchapter.ErrNovelNotFound
+	}
+	if err := ensureNovelExists(db, condition.NovelID); err != nil {
+		return bizchapter.QueryChapterCatalogResult{}, err
+	}
+
+	var stats chapterCatalogStats
+	if err := db.
+		Model(&bizchapter.Chapter{}).
+		Select("COUNT(*) AS total_count, COALESCE(MIN(chapter_number), 0) AS min_chapter_number, COALESCE(MAX(chapter_number), 0) AS max_chapter_number").
+		Where("novel_id = ?", condition.NovelID).
+		Scan(&stats).Error; err != nil {
+		return bizchapter.QueryChapterCatalogResult{}, fmt.Errorf("查询章节范围失败: %w", err)
+	}
+
+	result := bizchapter.QueryChapterCatalogResult{
+		Range: bizchapter.ChapterRangeInfo{
+			TotalCount:        stats.TotalCount,
+			MinChapterNumber:  stats.MinChapterNumber,
+			MaxChapterNumber:  stats.MaxChapterNumber,
+			NextChapterNumber: stats.MaxChapterNumber + 1,
+		},
+		Chapters: []bizchapter.Chapter{},
+	}
+	if stats.TotalCount == 0 {
+		result.Range.NextChapterNumber = 1
+		return result, nil
+	}
+
+	if err := db.
+		Select("id", "novel_id", "chapter_number", "title", "summary", "word_count", "created_at", "updated_at").
+		Where("novel_id = ?", condition.NovelID).
+		Order("chapter_number ASC").
+		Find(&result.Chapters).Error; err != nil {
+		return bizchapter.QueryChapterCatalogResult{}, fmt.Errorf("查询章节目录失败: %w", err)
+	}
+	return result, nil
+}
+
 // UpdateChapterSummary 只更新章节总结字段并返回更新后的章节。
 // 参数 ctx 表示请求上下文；参数 condition 表示章节总结更新条件。
 func (r *Repository) UpdateChapterSummary(ctx context.Context, condition bizchapter.UpdateChapterSummaryCondition) (*bizchapter.Chapter, error) {
@@ -305,6 +349,16 @@ func normalizeChapterSelectFields(fields []string) ([]string, error) {
 		normalized = append(normalized, field)
 	}
 	return normalized, nil
+}
+
+// chapterCatalogStats 表示章节目录统计 SQL 的扫描结果。
+type chapterCatalogStats struct {
+	// TotalCount 表示当前小说实际章节数量。
+	TotalCount int64 `gorm:"column:total_count"`
+	// MinChapterNumber 表示当前小说最小章节号。
+	MinChapterNumber int `gorm:"column:min_chapter_number"`
+	// MaxChapterNumber 表示当前小说最大章节号。
+	MaxChapterNumber int `gorm:"column:max_chapter_number"`
 }
 
 // ensureNovelExists 确认章节所属小说存在。

@@ -17,6 +17,8 @@ const novelDetailRoutePattern = /^\/novels\/([1-9]\d*)$/;
 const chapterCreateRoutePattern = /^\/novels\/([1-9]\d*)\/chapters\/new$/;
 const chapterEditRoutePattern =
   /^\/novels\/([1-9]\d*)\/chapters\/([1-9]\d*)$/;
+const chapterSummaryRoutePattern =
+  /^\/novels\/([1-9]\d*)\/chapters\/([1-9]\d*)\/summary$/;
 
 // getInitialAppRoute 根据本地登录态和浏览器路径判断首次展示的页面。
 export function getInitialAppRoute(): AppRoute {
@@ -99,6 +101,17 @@ export function resolveGuardedRoute(
     };
   }
 
+  const chapterSummaryRoute = parseChapterSummaryPath(pathname);
+  if (chapterSummaryRoute !== null) {
+    return {
+      path: chapterSummaryRoutePath(
+        chapterSummaryRoute.novelId,
+        chapterSummaryRoute.chapterId,
+      ),
+      route: { view: "chapterSummary", ...chapterSummaryRoute },
+    };
+  }
+
   const chapterEditorRoute = parseChapterEditorPath(pathname);
   if (chapterEditorRoute !== null) {
     return {
@@ -155,6 +168,7 @@ export function parseSettingsSectionPath(pathname: string): SettingsSection | nu
   if (
     section === "config" ||
     section === "agents" ||
+    section === "chapter-summary-agent" ||
     section === "agent-tools" ||
     section === "logs" ||
     section === "system" ||
@@ -211,6 +225,23 @@ export function parseChapterEditorPath(
     : null;
 }
 
+// parseChapterSummaryPath 从浏览器路径中解析章节概要页参数。
+// 参数 pathname 表示浏览器地址栏中的路径。
+export function parseChapterSummaryPath(
+  pathname: string,
+): { novelId: number; chapterId: number } | null {
+  const matched = normalizeRoutePath(pathname).match(chapterSummaryRoutePattern);
+  if (!matched) {
+    return null;
+  }
+
+  const novelId = Number(matched[1]);
+  const chapterId = Number(matched[2]);
+  return Number.isSafeInteger(novelId) && Number.isSafeInteger(chapterId)
+    ? { novelId, chapterId }
+    : null;
+}
+
 // novelDetailRoutePath 生成小说详情页路径。
 // 参数 novelId 表示小说主键 ID。
 export function novelDetailRoutePath(novelId: number): string {
@@ -227,6 +258,15 @@ export function chapterCreateRoutePath(novelId: number): string {
 // 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID。
 export function chapterEditRoutePath(novelId: number, chapterId: number): string {
   return `/novels/${novelId}/chapters/${chapterId}`;
+}
+
+// chapterSummaryRoutePath 生成章节概要页路径。
+// 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID。
+export function chapterSummaryRoutePath(
+  novelId: number,
+  chapterId: number,
+): string {
+  return `/novels/${novelId}/chapters/${chapterId}/summary`;
 }
 
 // settingsSectionRoutePath 生成设置中心指定分区路径。
@@ -257,6 +297,12 @@ export function shouldResetWindowScroll(
     if (previousRoute.chapterId === null || nextRoute.chapterId === null) {
       return false;
     }
+    return previousRoute.chapterId !== nextRoute.chapterId;
+  }
+  if (
+    previousRoute.view === "chapterSummary" &&
+    nextRoute.view === "chapterSummary"
+  ) {
     return previousRoute.chapterId !== nextRoute.chapterId;
   }
   return false;

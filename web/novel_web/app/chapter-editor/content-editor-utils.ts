@@ -126,6 +126,7 @@ export function normalizeChapterCreateValues(
     chapter_number: chapterNumber ?? 0,
     title: values.title,
     content: values.content,
+    generate_summary: values.generate_summary,
   };
 }
 

@@ -75,6 +75,8 @@ type AIConfig struct {
 	PromptTypes []string `mapstructure:"prompt_types" json:"prompt_types" yaml:"prompt_types"`
 	// Agent 表示小说写作多层 Agent 配置。
 	Agent AgentConfig `mapstructure:"agent" json:"agent" yaml:"agent"`
+	// ChapterSummaryAgent 表示后台生成章节概要的独立 Agent 配置。
+	ChapterSummaryAgent ChapterSummaryAgentConfig `mapstructure:"chapter_summary_agent" json:"chapter_summary_agent" yaml:"chapter_summary_agent"`
 }
 
 // AgentConfig 表示小说写作多层 Agent 配置集合。
@@ -88,6 +90,14 @@ type AgentConfig struct {
 	// Memory 表示小说写作 Agent 的持久记忆配置。
 	Memory AgentMemoryConfig `mapstructure:"memory" json:"memory" yaml:"memory"`
 	// Retry 表示小说写作 Agent 调用上游模型失败时的重试配置。
+	Retry AgentRetryConfig `mapstructure:"retry" json:"retry" yaml:"retry"`
+}
+
+// ChapterSummaryAgentConfig 表示后台章节概要独立 Agent 配置集合。
+type ChapterSummaryAgentConfig struct {
+	// Agent 表示生成章节概要的单层 Agent 配置。
+	Agent AgentDefinition `mapstructure:"agent" json:"agent" yaml:"agent"`
+	// Retry 表示章节概要 Agent 调用上游模型失败时的重试配置。
 	Retry AgentRetryConfig `mapstructure:"retry" json:"retry" yaml:"retry"`
 }
 

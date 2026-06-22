@@ -98,6 +98,8 @@ export interface ChapterSaveOptions {
   force: boolean;
   // showTitleError 表示标题为空时是否展示表单错误和提示。
   showTitleError?: boolean;
+  // generateSummary 表示保存成功后是否请求后端触发后台章节概要生成。
+  generateSummary?: boolean;
 }
 
 // ChapterEditorPageProps 表示章节编辑页需要的外部参数和回调。

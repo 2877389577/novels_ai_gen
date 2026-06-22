@@ -62,6 +62,87 @@ func NewEinoAgentRuntimeFactory(chapterReader agenttools.ChapterReader, novelSum
 	return &EinoAgentRuntimeFactory{chapterReader: chapterReader, novelSummaryStore: novelSummaryStore, novelOutlineStore: novelOutlineStore, characterStore: characterStore, relationshipGraphStore: relationshipGraphStore}
 }
 
+// GenerateText 根据模型配置直接生成一段文本，不创建多层 Agent。
+// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置；参数 retry 表示模型失败重试配置；参数 input 表示本次生成的提示词。
+func (f *EinoAgentRuntimeFactory) GenerateText(ctx context.Context, cfg ModelConfig, retry RuntimeRetryConfig, input ModelTextInput) (string, error) {
+	cfg = normalizeModelConfig(cfg)
+	retry = normalizeRuntimeRetryConfig(retry)
+	path, err := modelPathForConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+
+	switch path {
+	case modelPathChat:
+		model, err := f.newChatModel(ctx, cfg)
+		if err != nil {
+			return "", err
+		}
+		return generateTextWithRetry(ctx, retry, func() (string, error) {
+			output, err := model.Generate(ctx, []*schema.Message{
+				schema.SystemMessage(input.SystemPrompt),
+				schema.UserMessage(input.UserPrompt),
+			})
+			if err != nil {
+				return "", err
+			}
+			if output == nil {
+				return "", fmt.Errorf("模型返回空消息")
+			}
+			return output.Content, nil
+		})
+	case modelPathAgentic:
+		model, err := f.newAgenticModel(ctx, cfg, retry)
+		if err != nil {
+			return "", err
+		}
+		return generateTextWithRetry(ctx, retry, func() (string, error) {
+			output, err := model.Generate(ctx, []*schema.AgenticMessage{
+				schema.SystemAgenticMessage(input.SystemPrompt),
+				schema.UserAgenticMessage(input.UserPrompt),
+			})
+			if err != nil {
+				return "", err
+			}
+			return agenticMessageText(output), nil
+		})
+	default:
+		return "", fmt.Errorf("不支持的模型路径: %s", path)
+	}
+}
+
+// generateTextWithRetry 按运行时重试配置执行直接文本生成。
+// 参数 ctx 表示请求上下文；参数 retry 表示模型失败重试配置；参数 generate 表示单次模型生成函数。
+func generateTextWithRetry(ctx context.Context, retry RuntimeRetryConfig, generate func() (string, error)) (string, error) {
+	if generate == nil {
+		return "", fmt.Errorf("模型生成函数未初始化")
+	}
+	var lastErr error
+	for attempt := 0; attempt <= retry.MaxRetries; attempt += 1 {
+		content, err := generate()
+		if err == nil {
+			return content, nil
+		}
+		lastErr = err
+		if attempt >= retry.MaxRetries || !isRetryableModelError(ctx, err) {
+			break
+		}
+		timer := time.NewTimer(retry.Backoff)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return "", ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return "", lastErr
+}
+
 // NewRuntime 按 AI 提供商协议创建 Eino 多层 Agent 运行时。
 // 参数 ctx 表示请求上下文；参数 cfg 表示入口模型和启用 Agent 模型配置。
 func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeModelConfig) (AgentRuntime, error) {

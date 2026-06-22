@@ -479,6 +479,14 @@ export interface AgentConfig {
   retry: AgentRetryConfig;
 }
 
+// ChapterSummaryAgentConfig 表示后台章节概要独立 Agent 配置集合。
+export interface ChapterSummaryAgentConfig {
+  // agent 表示生成章节概要的单层 Agent 配置。
+  agent: AgentDefinition;
+  // retry 表示章节概要 Agent 的模型失败重试配置。
+  retry: AgentRetryConfig;
+}
+
 // AgentConfigData 表示后端结构化智能体配置和加载状态。
 export interface AgentConfigData {
   // config_file 表示后端启动 -f 参数使用的实际配置文件路径。
@@ -491,10 +499,28 @@ export interface AgentConfigData {
   reloaded_at: string;
 }
 
+// ChapterSummaryAgentConfigData 表示后端结构化章节概要 Agent 配置和加载状态。
+export interface ChapterSummaryAgentConfigData {
+  // config_file 表示后端启动 -f 参数使用的实际配置文件路径。
+  config_file: string;
+  // chapter_summary_agent 表示当前章节概要 Agent 配置。
+  chapter_summary_agent: ChapterSummaryAgentConfig;
+  // modified_at 表示配置文件最后修改时间。
+  modified_at: string;
+  // reloaded_at 表示后端最近一次成功加载配置的时间。
+  reloaded_at: string;
+}
+
 // AgentConfigUpdateParams 表示保存结构化智能体配置时提交给后端的参数。
 export interface AgentConfigUpdateParams {
   // agent 表示需要写入配置文件 ai.agent 子树的智能体配置。
   agent: AgentConfig;
+}
+
+// ChapterSummaryAgentConfigUpdateParams 表示保存章节概要 Agent 配置时提交给后端的参数。
+export interface ChapterSummaryAgentConfigUpdateParams {
+  // chapter_summary_agent 表示需要写入配置文件 ai.chapter_summary_agent 子树的配置。
+  chapter_summary_agent: ChapterSummaryAgentConfig;
 }
 
 // SystemUpdateData 表示后端一键更新启动后的结果。
@@ -802,11 +828,29 @@ export interface ChapterDetailItem {
   title: string;
   // content 表示章节正文。
   content: string;
+  // summary 表示章节概要。
+  summary: string;
   // word_count 表示章节正文的非空白字符数量。
   word_count: number;
   // created_at 表示章节创建时间。
   created_at: string;
   // updated_at 表示章节更新时间。
+  updated_at: string;
+}
+
+// ChapterSummaryDetailItem 表示单章概要详情数据。
+export interface ChapterSummaryDetailItem {
+  // id 表示章节主键 ID。
+  id: number;
+  // novel_id 表示章节所属小说 ID。
+  novel_id: number;
+  // chapter_number 表示章节号，即“第 x 章”中的 x。
+  chapter_number: number;
+  // title 表示章节名。
+  title: string;
+  // summary 表示章节概要，允许为空字符串。
+  summary: string;
+  // updated_at 表示更新时间。
   updated_at: string;
 }
 
@@ -848,6 +892,8 @@ export interface ChapterCreateParams {
   title: string;
   // content 表示章节正文，可以为空。
   content: string;
+  // generate_summary 表示本次创建成功后是否触发后台章节概要生成，通常只由手动保存传入。
+  generate_summary?: boolean;
 }
 
 // ChapterUpdateParams 表示更新章节时提交给后端的参数。
@@ -856,6 +902,20 @@ export interface ChapterUpdateParams {
   title: string;
   // content 表示章节正文，可以为空。
   content: string;
+  // generate_summary 表示本次更新成功后是否触发后台章节概要生成，自动保存应保持 false。
+  generate_summary?: boolean;
+}
+
+// ChapterSummarySaveParams 表示保存章节概要时提交给后端的参数。
+export interface ChapterSummarySaveParams {
+  // summary 表示需要保存的章节概要，允许为空字符串并保留原始空格和换行。
+  summary: string;
+}
+
+// ChapterSummaryDeleteData 表示删除章节概要接口返回的数据。
+export interface ChapterSummaryDeleteData {
+  // deleted 表示后端是否已经清空该章节概要。
+  deleted: boolean;
 }
 
 // ChapterDeleteData 表示删除章节接口返回的数据。
@@ -1426,6 +1486,68 @@ export async function updateAgentConfig(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "智能体配置保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchChapterSummaryAgentConfig 查询后端当前结构化章节概要 Agent 配置。
+// 参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchChapterSummaryAgentConfig(
+  signal?: AbortSignal,
+): Promise<ChapterSummaryAgentConfigData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/config/chapter-summary-agent", {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<ChapterSummaryAgentConfigData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节概要 Agent 配置加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// updateChapterSummaryAgentConfig 保存后端当前结构化章节概要 Agent 配置。
+// 参数 params 表示章节概要 Agent 配置保存请求参数。
+export async function updateChapterSummaryAgentConfig(
+  params: ChapterSummaryAgentConfigUpdateParams,
+): Promise<ChapterSummaryAgentConfigData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch("/api/v1/config/chapter-summary-agent", {
+    method: "PUT",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = await parseApiResponse<ChapterSummaryAgentConfigData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节概要 Agent 配置保存失败，请稍后再试");
   }
 
   return payload.data;
@@ -2748,6 +2870,112 @@ export async function fetchChapterDetail(
 
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "章节详情加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// fetchChapterSummary 查询指定章节概要详情。
+// 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchChapterSummary(
+  novelId: number,
+  chapterId: number,
+  signal?: AbortSignal,
+): Promise<ChapterSummaryDetailItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/chapters/${chapterId}/summary`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+  const payload = await parseApiResponse<ChapterSummaryDetailItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节概要加载失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// saveChapterSummary 调用后端接口创建或更新章节概要。
+// 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID；参数 params 表示需要保存的章节概要数据。
+export async function saveChapterSummary(
+  novelId: number,
+  chapterId: number,
+  params: ChapterSummarySaveParams,
+): Promise<ChapterSummaryDetailItem> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/chapters/${chapterId}/summary`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    },
+  );
+  const payload = await parseApiResponse<ChapterSummaryDetailItem>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节概要保存失败，请稍后再试");
+  }
+
+  return payload.data;
+}
+
+// deleteChapterSummary 调用后端接口清空指定章节概要。
+// 参数 novelId 表示小说主键 ID；参数 chapterId 表示章节主键 ID。
+export async function deleteChapterSummary(
+  novelId: number,
+  chapterId: number,
+): Promise<ChapterSummaryDeleteData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(
+    `/api/v1/novels/${novelId}/chapters/${chapterId}/summary`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+    },
+  );
+  const payload = await parseApiResponse<ChapterSummaryDeleteData>(response);
+
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "章节概要删除失败，请稍后再试");
   }
 
   return payload.data;

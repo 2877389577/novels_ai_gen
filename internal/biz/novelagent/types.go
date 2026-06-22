@@ -287,6 +287,21 @@ type AgentConversationTitleInput struct {
 	Message string
 }
 
+// ModelTextInput 表示直接调用单个模型生成文本所需的提示词。
+type ModelTextInput struct {
+	// SystemPrompt 表示发送给模型的系统提示词。
+	SystemPrompt string
+	// UserPrompt 表示发送给模型的用户提示词。
+	UserPrompt string
+}
+
+// ModelTextGenerator 表示可根据模型配置直接生成文本的组件。
+type ModelTextGenerator interface {
+	// GenerateText 根据模型配置直接生成一段文本。
+	// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置；参数 retry 表示模型失败重试配置；参数 input 表示本次生成的提示词。
+	GenerateText(ctx context.Context, cfg ModelConfig, retry RuntimeRetryConfig, input ModelTextInput) (string, error)
+}
+
 // ConversationSummaryUpdate 表示需要写回 Agent 会话的滚动摘要更新。
 type ConversationSummaryUpdate struct {
 	// Summary 表示新的长期记忆摘要正文。
