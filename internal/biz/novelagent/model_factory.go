@@ -1343,7 +1343,7 @@ func isAssistantChatMessage(variant *adk.TypedMessageVariant[*schema.Message], m
 	if len(msg.ToolCalls) > 0 {
 		return false
 	}
-	return (variant.Role == "" || variant.Role == schema.Assistant || msg.Role == schema.Assistant) && strings.TrimSpace(msg.Content) != ""
+	return (variant.Role == "" || variant.Role == schema.Assistant || msg.Role == schema.Assistant) && msg.Content != ""
 }
 
 // isAssistantAgenticMessage 判断 schema.AgenticMessage 是否为可展示的助手文本。
@@ -1356,7 +1356,7 @@ func isAssistantAgenticMessage(variant *adk.TypedMessageVariant[*schema.AgenticM
 	if role == "" {
 		role = variant.AgenticRole
 	}
-	return role == schema.AgenticRoleTypeAssistant && strings.TrimSpace(agenticMessageText(msg)) != ""
+	return role == schema.AgenticRoleTypeAssistant && agenticMessageText(msg) != ""
 }
 
 // emitTextDelta 写出文本增量并累积完整结果。

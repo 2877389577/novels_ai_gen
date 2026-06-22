@@ -2,3 +2,4 @@ config/config-dev.yaml
 .trae/
 logs/
 .idea/
+**/*_test.go

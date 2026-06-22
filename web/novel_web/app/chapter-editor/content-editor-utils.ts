@@ -95,7 +95,7 @@ export function clampToViewport(value: number, min: number, max: number): number
 export function chapterToFormValues(chapter: ChapterDetailItem): ChapterFormValues {
   return {
     title: normalizeText(chapter.title),
-    content: normalizeText(chapter.content),
+    content: normalizeChapterContentText(chapter.content),
   };
 }
 
@@ -106,8 +106,14 @@ export function normalizeChapterFormValues(
 ): ChapterUpdateParams {
   return {
     title: normalizeText(values.title),
-    content: normalizeText(values.content),
+    content: normalizeChapterContentText(values.content),
   };
+}
+
+// normalizeChapterContentText 将章节正文转换为字符串并保留 Markdown 所需的原始空白。
+// 参数 value 表示后端返回或编辑器提交的章节正文。
+export function normalizeChapterContentText(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 // normalizeChapterCreateValues 生成创建章节时提交给后端的请求参数。

@@ -1,12 +1,23 @@
-import { IconArrowUp, IconClose, IconDelete, IconDeleteStroked, IconEditStroked, IconPlus, IconRedoStroked, IconStop } from "@douyinfe/semi-icons";
-import { AIChatDialogue, Button, Modal, Select, Toast } from "@douyinfe/semi-ui-19";
+import { Modal, Toast } from "@douyinfe/semi-ui-19";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import type { DialogueRenderConfig, RenderActionProps } from "@douyinfe/semi-ui-19/lib/es/aiChatDialogue/interface";
 import { UnauthorizedError, deleteNovelAgentConversation, fetchNovelAgentConversationMessages, fetchNovelAgentConversations, streamNovelAgentChat, type NovelAgentConversationItem } from "../api";
-import { chapterAiAssistantMessages, chapterAiAssistantRoleConfig } from "./constants";
+import { chapterAiAssistantMessages } from "./constants";
 import { ChapterAIContext } from "./chapter-ai-context";
+import { createChapterAiDialogueRenderConfig } from "./chapter-ai-dialogue-actions";
+import {
+  appendAssistantReplyMessageToList,
+  appendChapterAiThinkingMessageToList,
+  bindChapterAiPairConversation,
+  collapseAssistantRepliesToStatusInList,
+  removeAssistantRepliesNotInList,
+  removeChapterAiThinkingMessageFromList,
+  resetChapterAiRequestForRetryInList,
+  updateAssistantReplyMessageInList,
+  updateChapterAiPairRetryableInList,
+} from "./chapter-ai-message-list-utils";
+import { ChapterAiAssistantShell } from "./chapter-ai-shell";
 import type { ChapterAiAssistantPanelProps, ChapterAiMessage, ChapterAiReplyDraft, ChapterAiRetryPayload, ChapterAiSavedChapterContext, ChapterAiStreamRequest } from "./types";
-import { createChapterAiMessageID, createChapterAiPairID, createChapterAiRenderMessageID, createChapterAiReplyMessageID, createChapterAiThinkingMessageID, chapterAiMessageFromHistory, handleChapterAiPendingMessageAction, syncChapterAiInputHeight } from "./chapter-ai-utils";
+import { createChapterAiMessageID, createChapterAiPairID, createChapterAiReplyMessageID, chapterAiMessageFromHistory, syncChapterAiInputHeight } from "./chapter-ai-utils";
 import { getErrorMessage } from "./content-editor-utils";
 
 // ChapterAiAssistantPanel 渲染章节编辑页右侧 AI 对话侧栏。
@@ -672,21 +683,11 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   // 参数 pairID 表示需要更新的消息配对 ID；参数 conversationID 表示后端返回的 Agent 会话 ID。
   function updateChapterAiPairConversation(pairID: string, conversationID: number) {
     setChats(function updateConversationID(currentChats) {
-      return currentChats.map(function updateChatConversationID(chat) {
-        if (chat.chapterAiPairID !== pairID) {
-          return chat;
-        }
-        return {
-          ...chat,
-          chapterAiConversationID: conversationID,
-          chapterAiRetryPayload: chat.chapterAiRetryPayload
-            ? {
-                ...chat.chapterAiRetryPayload,
-                conversationId: conversationID,
-              }
-            : undefined,
-        };
-      });
+      return bindChapterAiPairConversation(
+        currentChats,
+        pairID,
+        conversationID,
+      );
     });
   }
 
@@ -694,15 +695,11 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   // 参数 pairID 表示需要更新的消息配对 ID；参数 retryable 表示是否允许展示重试按钮。
   function updateChapterAiPairRetryable(pairID: string, retryable: boolean) {
     setChats(function updateMessageRetryable(currentChats) {
-      return currentChats.map(function updateChatRetryable(chat) {
-        if (chat.role !== "user" || chat.chapterAiPairID !== pairID) {
-          return chat;
-        }
-        return {
-          ...chat,
-          chapterAiRetryable: retryable,
-        };
-      });
+      return updateChapterAiPairRetryableInList(
+        currentChats,
+        pairID,
+        retryable,
+      );
     });
   }
 
@@ -710,36 +707,11 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   // 参数 pairID 表示需要重试的消息配对 ID；参数 assistantMessageID 表示助手消息基础 ID。
   function resetChapterAiRequestForRetry(pairID: string, assistantMessageID: string) {
     setChats(function resetRetryMessages(currentChats) {
-      let assistantReset = false;
-      return currentChats.flatMap(function resetRetryMessage(chat) {
-        if (chat.chapterAiPairID !== pairID) {
-          return [chat];
-        }
-        if (chat.role === "user") {
-          return [{
-            ...chat,
-            chapterAiRetryable: false,
-          }];
-        }
-        if (chat.role === "assistant") {
-          if (chat.chapterAiThinking) {
-            return [];
-          }
-          if (assistantReset) {
-            return [];
-          }
-          assistantReset = true;
-          return [{
-            ...chat,
-            id: assistantMessageID,
-            chapterAiSourceID: assistantMessageID,
-            chapterAiReplyIndex: 1,
-            content: "",
-            status: "in_progress",
-          }];
-        }
-        return [chat];
-      });
+      return resetChapterAiRequestForRetryInList(
+        currentChats,
+        pairID,
+        assistantMessageID,
+      );
     });
   }
 
@@ -750,25 +722,11 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     conversationID: number | undefined,
   ) {
     setChats(function appendThinkingMessage(currentChats) {
-      if (
-        currentChats.some(function hasThinkingMessage(chat) {
-          return chat.chapterAiPairID === pairID && chat.chapterAiThinking;
-        })
-      ) {
-        return currentChats;
-      }
-      return [
-        ...currentChats,
-        {
-          id: createChapterAiThinkingMessageID(pairID),
-          chapterAiConversationID: conversationID,
-          chapterAiPairID: pairID,
-          chapterAiThinking: true,
-          role: "assistant",
-          content: "正在思考中...",
-          status: "in_progress",
-        },
-      ];
+      return appendChapterAiThinkingMessageToList(
+        currentChats,
+        pairID,
+        conversationID,
+      );
     });
   }
 
@@ -776,9 +734,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   // 参数 pairID 表示当前用户消息和助手消息共用的配对 ID。
   function removeChapterAiThinkingMessage(pairID: string) {
     setChats(function removeThinkingMessage(currentChats) {
-      return currentChats.filter(function keepMessage(chat) {
-        return !(chat.chapterAiPairID === pairID && chat.chapterAiThinking);
-      });
+      return removeChapterAiThinkingMessageFromList(currentChats, pairID);
     });
   }
 
@@ -792,40 +748,14 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     replyIndex: number,
   ) {
     setChats(function appendReplyMessage(currentChats) {
-      if (
-        currentChats.some(function hasReplyMessage(chat) {
-          return (
-            chat.role === "assistant" &&
-            chat.chapterAiSourceID === sourceMessageID &&
-            chat.chapterAiReplyIndex === replyIndex
-          );
-        })
-      ) {
-        return currentChats;
-      }
-      const replyMessage: ChapterAiMessage = {
-        id: messageID,
-        chapterAiConversationID: conversationID,
-        chapterAiPairID: pairID,
-        chapterAiSourceID: sourceMessageID,
-        chapterAiReplyIndex: replyIndex,
-        role: "assistant",
-        content: "",
-        status: "in_progress",
-      };
-      const thinkingMessageIndex = currentChats.findIndex(
-        function findThinkingMessage(chat) {
-          return chat.chapterAiPairID === pairID && chat.chapterAiThinking;
-        },
+      return appendAssistantReplyMessageToList(
+        currentChats,
+        sourceMessageID,
+        messageID,
+        pairID,
+        conversationID,
+        replyIndex,
       );
-      if (thinkingMessageIndex < 0) {
-        return [...currentChats, replyMessage];
-      }
-      return [
-        ...currentChats.slice(0, thinkingMessageIndex),
-        replyMessage,
-        ...currentChats.slice(thinkingMessageIndex),
-      ];
     });
   }
 
@@ -837,29 +767,14 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     content: string,
     status: string,
   ) {
-    const messageID = createChapterAiReplyMessageID(sourceMessageID, replyIndex);
     setChats(function updateMessage(currentChats) {
-      return currentChats.map(function updateChat(chat) {
-        const chatReplyIndex = chat.chapterAiReplyIndex ?? 1;
-        if (
-          chat.role !== "assistant" ||
-          chat.chapterAiSourceID !== sourceMessageID ||
-          chatReplyIndex !== replyIndex
-        ) {
-          return chat;
-        }
-        return {
-          ...chat,
-          id:
-            status === "in_progress"
-              ? chat.id
-              : createChapterAiRenderMessageID(messageID, status, content.length),
-          chapterAiSourceID: sourceMessageID,
-          chapterAiReplyIndex: replyIndex,
-          content,
-          status,
-        };
-      });
+      return updateAssistantReplyMessageInList(
+        currentChats,
+        sourceMessageID,
+        replyIndex,
+        content,
+        status,
+      );
     });
   }
 
@@ -871,31 +786,12 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     status: string,
   ) {
     setChats(function collapseReplyMessages(currentChats) {
-      let statusMessageKept = false;
-      return currentChats.flatMap(function collapseReplyMessage(chat) {
-        if (
-          chat.role !== "assistant" ||
-          chat.chapterAiSourceID !== sourceMessageID
-        ) {
-          return [chat];
-        }
-        if (statusMessageKept) {
-          return [];
-        }
-        statusMessageKept = true;
-        return [{
-          ...chat,
-          id: createChapterAiRenderMessageID(
-            sourceMessageID,
-            status,
-            content.length,
-          ),
-          chapterAiSourceID: sourceMessageID,
-          chapterAiReplyIndex: 1,
-          content,
-          status,
-        }];
-      });
+      return collapseAssistantRepliesToStatusInList(
+        currentChats,
+        sourceMessageID,
+        content,
+        status,
+      );
     });
   }
 
@@ -906,73 +802,25 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     replyIndexes: Set<number>,
   ) {
     setChats(function removeStaleReplies(currentChats) {
-      return currentChats.filter(function keepReplyMessage(chat) {
-        if (
-          chat.role !== "assistant" ||
-          chat.chapterAiSourceID !== sourceMessageID
-        ) {
-          return true;
-        }
-        return replyIndexes.has(chat.chapterAiReplyIndex ?? 1);
-      });
+      return removeAssistantRepliesNotInList(
+        currentChats,
+        sourceMessageID,
+        replyIndexes,
+      );
     });
   }
 
-  // renderChapterAiDialogueAction 渲染章节 AI 对话消息操作区，按消息角色保留允许的操作按钮。
-  // 参数 actionProps 表示 Semi AIChatDialogue 传入的默认操作节点和样式类名。
-  function renderChapterAiDialogueAction(actionProps: RenderActionProps) {
-    const copyNode = actionProps.defaultActionsObj?.copyNode ?? null;
-    const message = actionProps.message as ChapterAiMessage | undefined;
-    if (message?.role !== "user") {
-      return <div className={actionProps.className}>{copyNode}</div>;
-    }
-
-    return (
-      <div className={actionProps.className}>
-        {copyNode}
-        {message.chapterAiRetryable === true ? (
-          <Button
-            aria-label="重试用户消息"
-            className="semi-ai-chat-dialogue-action-btn"
-            htmlType="button"
-            icon={<IconRedoStroked aria-hidden="true" />}
-            onClick={function retryChapterAiMessage(event) {
-              event.preventDefault();
-              event.stopPropagation();
-              void handleRetryAssistantMessage(message);
-            }}
-            theme="borderless"
-            title="重试"
-            type="tertiary"
-          />
-        ) : null}
-        <Button
-          aria-label="修改用户消息"
-          className="semi-ai-chat-dialogue-action-btn"
-          htmlType="button"
-          icon={<IconEditStroked aria-hidden="true" />}
-          onClick={handleChapterAiPendingMessageAction}
-          theme="borderless"
-          title="修改"
-          type="tertiary"
-        />
-        <Button
-          aria-label="删除用户消息"
-          className="semi-ai-chat-dialogue-action-btn"
-          htmlType="button"
-          icon={<IconDeleteStroked aria-hidden="true" />}
-          onClick={handleChapterAiPendingMessageAction}
-          theme="borderless"
-          title="删除"
-          type="tertiary"
-        />
-      </div>
-    );
-  }
-
-  const chapterAiDialogueRenderConfig: DialogueRenderConfig = {
-    renderDialogueAction: renderChapterAiDialogueAction,
-  };
+  const chapterAiDialogueRenderConfig = useMemo(
+    // buildChapterAiDialogueRenderConfig 创建章节 AI 对话消息操作区渲染配置。
+    function buildChapterAiDialogueRenderConfig() {
+      return createChapterAiDialogueRenderConfig(
+        function retryChapterAiMessage(message) {
+          void handleRetryAssistantMessage(message);
+        },
+      );
+    },
+    [assistantSending, chats],
+  );
   const chapterAIContextValue = useMemo(
     // buildChapterAIContextValue 创建章节 AI 助手的组合式上下文值。
     function buildChapterAIContextValue() {
@@ -981,148 +829,51 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           chats,
           conversations,
           assistantSending,
+          inputValue,
+          conversationLoading,
+          historyLoading,
+          conversationDeleting,
+          conversationSelectOptions,
         },
         actions: {
           submit: function submitChapterAIFromContext() {
             void submitAssistantMessage();
           },
           cancel: handleCancelAssistantMessage,
+          close: handleAssistantClose,
+          changeInput: handleAssistantInputChange,
+          handleInputKeyDown: handleAssistantInputKeyDown,
+          submitForm: handleAssistantSubmit,
+          changeConversation: handleConversationChange,
+          startNewConversation: handleStartNewConversation,
+          deleteConversation: handleDeleteAssistantConversation,
         },
         meta: {
           selectedConversationID,
+          conversationSelectPlaceholder,
+          assistantInputRef,
+          dialogueRenderConfig: chapterAiDialogueRenderConfig,
         },
       };
     },
-    [assistantSending, chats, conversations, selectedConversationID],
+    [
+      assistantSending,
+      chats,
+      chapterAiDialogueRenderConfig,
+      conversationDeleting,
+      conversationLoading,
+      conversationSelectOptions,
+      conversationSelectPlaceholder,
+      conversations,
+      historyLoading,
+      inputValue,
+      selectedConversationID,
+    ],
   );
 
   return (
     <ChapterAIContext value={chapterAIContextValue}>
-      <aside
-        aria-label="AI 写作助手"
-        className="chapter-ai-assistant-panel"
-        id="chapter-ai-assistant-panel"
-      >
-      <div className="chapter-ai-assistant-card">
-        <header className="chapter-ai-assistant-header">
-          <div>
-            <p>AI Assistant</p>
-            <h2>写作助手</h2>
-          </div>
-          <div className="chapter-ai-assistant-actions">
-            <button
-              aria-label="删除当前 AI 会话"
-              className="chapter-ai-assistant-clear"
-              disabled={
-                conversationLoading ||
-                historyLoading ||
-                conversationDeleting ||
-                assistantSending ||
-                selectedConversationID === null
-              }
-              onClick={handleDeleteAssistantConversation}
-              title="删除会话"
-              type="button"
-            >
-              <IconDelete aria-hidden="true" />
-            </button>
-            <button
-              aria-label="关闭 AI 写作助手"
-              className="chapter-ai-assistant-close"
-              onClick={handleAssistantClose}
-              type="button"
-            >
-              <IconClose aria-hidden="true" />
-            </button>
-          </div>
-        </header>
-        <div className="chapter-ai-conversation-bar">
-          <span
-            className="chapter-ai-conversation-label"
-            id="chapter-ai-conversation-label"
-          >
-            会话
-          </span>
-          <Select<string>
-            aria-labelledby="chapter-ai-conversation-label"
-            className="chapter-ai-conversation-select"
-            disabled={
-              conversationLoading || assistantSending || conversations.length === 0
-            }
-            loading={conversationLoading}
-            onChange={handleConversationChange}
-            optionList={conversationSelectOptions}
-            placeholder={conversationSelectPlaceholder}
-            size="small"
-            value={
-              selectedConversationID === null
-                ? undefined
-                : String(selectedConversationID)
-            }
-          />
-          <button
-            aria-label="开启新 AI 会话"
-            className="chapter-ai-new-conversation"
-            disabled={conversationLoading || assistantSending}
-            onClick={handleStartNewConversation}
-            title="新会话"
-            type="button"
-          >
-            <IconPlus aria-hidden="true" />
-            <span>新会话</span>
-          </button>
-        </div>
-        <div className="chapter-ai-dialogue-wrap">
-          <AIChatDialogue
-            align="leftRight"
-            chats={chats}
-            className="chapter-ai-dialogue"
-            dialogueRenderConfig={chapterAiDialogueRenderConfig}
-            mode="bubble"
-            roleConfig={chapterAiAssistantRoleConfig}
-            style={{ height: "100%" }}
-          />
-        </div>
-        <form className="chapter-ai-composer" onSubmit={handleAssistantSubmit}>
-          <div className="chapter-ai-input-shell">
-            <textarea
-              ref={assistantInputRef}
-              aria-label="AI 对话输入"
-              className="chapter-ai-input"
-              disabled={assistantSending}
-              onChange={handleAssistantInputChange}
-              onKeyDown={handleAssistantInputKeyDown}
-              placeholder="输入你的问题或写作目标..."
-              rows={1}
-              value={inputValue}
-            />
-            <div className="chapter-ai-input-actions">
-              <button
-                aria-label={assistantSending ? "中断 AI 回复" : "发送给 AI 写作助手"}
-                className={
-                  assistantSending
-                    ? "chapter-ai-send chapter-ai-send-stop"
-                    : "chapter-ai-send"
-                }
-                onClick={
-                  assistantSending
-                    ? handleCancelAssistantMessage
-                    : undefined
-                }
-                title={assistantSending ? "中断" : "发送"}
-                type={assistantSending ? "button" : "submit"}
-              >
-                {assistantSending ? (
-                  <IconStop aria-hidden="true" />
-                ) : (
-                  <IconArrowUp aria-hidden="true" />
-                )}
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-      </aside>
+      <ChapterAiAssistantShell />
     </ChapterAIContext>
   );
 }
