@@ -32,6 +32,12 @@ export function createChapterAiPairID(createdAt: number): string {
   return `chapter-ai-pair-${createdAt}`;
 }
 
+// createChapterAiThinkingMessageID 创建章节 AI 进行中提示消息 ID。
+// 参数 pairID 表示当前用户消息和助手消息共用的配对 ID。
+export function createChapterAiThinkingMessageID(pairID: string): string {
+  return `${pairID}-thinking`;
+}
+
 // chapterAiMessageFromHistory 将后端历史消息转换为 AIChatDialogue 消息。
 // 参数 item 表示后端返回的单条 Agent 历史消息。
 export function chapterAiMessageFromHistory(item: NovelAgentMessageItem): ChapterAiMessage {

@@ -6,7 +6,7 @@ import { UnauthorizedError, deleteNovelAgentConversation, fetchNovelAgentConvers
 import { chapterAiAssistantMessages, chapterAiAssistantRoleConfig } from "./constants";
 import { ChapterAIContext } from "./chapter-ai-context";
 import type { ChapterAiAssistantPanelProps, ChapterAiMessage, ChapterAiReplyDraft, ChapterAiRetryPayload, ChapterAiSavedChapterContext, ChapterAiStreamRequest } from "./types";
-import { createChapterAiMessageID, createChapterAiPairID, createChapterAiRenderMessageID, createChapterAiReplyMessageID, chapterAiMessageFromHistory, handleChapterAiPendingMessageAction, syncChapterAiInputHeight } from "./chapter-ai-utils";
+import { createChapterAiMessageID, createChapterAiPairID, createChapterAiRenderMessageID, createChapterAiReplyMessageID, createChapterAiThinkingMessageID, chapterAiMessageFromHistory, handleChapterAiPendingMessageAction, syncChapterAiInputHeight } from "./chapter-ai-utils";
 import { getErrorMessage } from "./content-editor-utils";
 
 // ChapterAiAssistantPanel 渲染章节编辑页右侧 AI 对话侧栏。
@@ -449,6 +449,10 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     const controller = new AbortController();
     streamControllerRef.current?.abort();
     streamControllerRef.current = controller;
+    appendChapterAiThinkingMessage(
+      request.pairID,
+      request.retryPayload.conversationId,
+    );
 
     let assistantContent = "";
     let handledFailure = false;
@@ -577,6 +581,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             if (event.type === "done") {
               assistantContent = event.content || assistantContent;
               completeAssistantReplies(event.replies ?? []);
+              removeChapterAiThinkingMessage(request.pairID);
               if (event.conversation_id && event.conversation_id > 0) {
                 const conversationTitle =
                   event.conversation_title?.trim() || "新会话";
@@ -614,6 +619,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       }
       if (controller.signal.aborted) {
         updateChapterAiPairRetryable(request.pairID, false);
+        removeChapterAiThinkingMessage(request.pairID);
         collapseAssistantRepliesToStatus(
           request.assistantMessageID,
           "本次 AI 回复已取消。",
@@ -629,6 +635,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       const errorMessage = getErrorMessage(error, "AI 写作助手生成失败，请稍后再试");
       handleChapterAiStreamFailure(errorMessage);
     } finally {
+      removeChapterAiThinkingMessage(request.pairID);
       if (streamControllerRef.current === controller) {
         streamControllerRef.current = null;
       }
@@ -643,6 +650,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     assistantMessageID: string,
     errorMessage: string,
   ) {
+    removeChapterAiThinkingMessage(pairID);
     updateChapterAiPairRetryable(pairID, true);
     collapseAssistantRepliesToStatus(assistantMessageID, errorMessage, "failed");
   }
@@ -714,6 +722,9 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           }];
         }
         if (chat.role === "assistant") {
+          if (chat.chapterAiThinking) {
+            return [];
+          }
           if (assistantReset) {
             return [];
           }
@@ -728,6 +739,45 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           }];
         }
         return [chat];
+      });
+    });
+  }
+
+  // appendChapterAiThinkingMessage 追加当前 AI 请求仍在进行中的本地提示气泡。
+  // 参数 pairID 表示当前用户消息和助手消息共用的配对 ID；参数 conversationID 表示当前会话 ID。
+  function appendChapterAiThinkingMessage(
+    pairID: string,
+    conversationID: number | undefined,
+  ) {
+    setChats(function appendThinkingMessage(currentChats) {
+      if (
+        currentChats.some(function hasThinkingMessage(chat) {
+          return chat.chapterAiPairID === pairID && chat.chapterAiThinking;
+        })
+      ) {
+        return currentChats;
+      }
+      return [
+        ...currentChats,
+        {
+          id: createChapterAiThinkingMessageID(pairID),
+          chapterAiConversationID: conversationID,
+          chapterAiPairID: pairID,
+          chapterAiThinking: true,
+          role: "assistant",
+          content: "正在思考中...",
+          status: "in_progress",
+        },
+      ];
+    });
+  }
+
+  // removeChapterAiThinkingMessage 移除当前 AI 请求的本地进行中提示气泡。
+  // 参数 pairID 表示当前用户消息和助手消息共用的配对 ID。
+  function removeChapterAiThinkingMessage(pairID: string) {
+    setChats(function removeThinkingMessage(currentChats) {
+      return currentChats.filter(function keepMessage(chat) {
+        return !(chat.chapterAiPairID === pairID && chat.chapterAiThinking);
       });
     });
   }
@@ -753,18 +803,28 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       ) {
         return currentChats;
       }
-      return [
-        ...currentChats,
-        {
-          id: messageID,
-          chapterAiConversationID: conversationID,
-          chapterAiPairID: pairID,
-          chapterAiSourceID: sourceMessageID,
-          chapterAiReplyIndex: replyIndex,
-          role: "assistant",
-          content: "",
-          status: "in_progress",
+      const replyMessage: ChapterAiMessage = {
+        id: messageID,
+        chapterAiConversationID: conversationID,
+        chapterAiPairID: pairID,
+        chapterAiSourceID: sourceMessageID,
+        chapterAiReplyIndex: replyIndex,
+        role: "assistant",
+        content: "",
+        status: "in_progress",
+      };
+      const thinkingMessageIndex = currentChats.findIndex(
+        function findThinkingMessage(chat) {
+          return chat.chapterAiPairID === pairID && chat.chapterAiThinking;
         },
+      );
+      if (thinkingMessageIndex < 0) {
+        return [...currentChats, replyMessage];
+      }
+      return [
+        ...currentChats.slice(0, thinkingMessageIndex),
+        replyMessage,
+        ...currentChats.slice(thinkingMessageIndex),
       ];
     });
   }
