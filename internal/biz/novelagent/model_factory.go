@@ -726,13 +726,12 @@ func summaryUserPrompt(input AgentSummaryInput) string {
 	}
 	builder.WriteString("需要滚入摘要的新对话：\n")
 	for _, message := range input.Messages {
-		content := strings.TrimSpace(message.Content)
-		if content == "" {
+		if strings.TrimSpace(message.Content) == "" {
 			continue
 		}
 		builder.WriteString(summaryMessageRoleLabel(message.Role))
 		builder.WriteString("：")
-		builder.WriteString(content)
+		builder.WriteString(message.Content)
 		builder.WriteString("\n")
 	}
 	return builder.String()
@@ -774,11 +773,10 @@ func summaryMessageRoleLabel(role MessageRole) string {
 // normalizeSummaryContent 标准化摘要模型返回的正文。
 // 参数 content 表示模型生成的原始摘要文本。
 func normalizeSummaryContent(content string) (string, error) {
-	summary := strings.TrimSpace(content)
-	if summary == "" {
+	if strings.TrimSpace(content) == "" {
 		return "", fmt.Errorf("摘要模型返回空内容")
 	}
-	return summary, nil
+	return content, nil
 }
 
 // newChatSupervisorAgent 创建基于 schema.Message 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
