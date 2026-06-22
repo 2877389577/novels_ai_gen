@@ -6,11 +6,11 @@ import { ChapterAIContext } from "./chapter-ai-context";
 import { createChapterAiDialogueRenderConfig } from "./chapter-ai-dialogue-actions";
 import {
   appendAssistantReplyMessageToList,
-  appendChapterAiThinkingMessageToList,
+  appendChapterAiLoadingMessageToList,
   bindChapterAiPairConversation,
   collapseAssistantRepliesToStatusInList,
   removeAssistantRepliesNotInList,
-  removeChapterAiThinkingMessageFromList,
+  removeChapterAiLoadingMessageFromList,
   resetChapterAiRequestForRetryInList,
   updateAssistantReplyMessageInList,
   updateChapterAiPairRetryableInList,
@@ -460,10 +460,6 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     const controller = new AbortController();
     streamControllerRef.current?.abort();
     streamControllerRef.current = controller;
-    appendChapterAiThinkingMessage(
-      request.pairID,
-      request.retryPayload.conversationId,
-    );
 
     let assistantContent = "";
     let handledFailure = false;
@@ -587,12 +583,16 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
                 draft.content,
                 "in_progress",
               );
+              appendChapterAiLoadingMessage(
+                request.pairID,
+                request.retryPayload.conversationId,
+              );
               return;
             }
             if (event.type === "done") {
               assistantContent = event.content || assistantContent;
               completeAssistantReplies(event.replies ?? []);
-              removeChapterAiThinkingMessage(request.pairID);
+              removeChapterAiLoadingMessage(request.pairID);
               if (event.conversation_id && event.conversation_id > 0) {
                 const conversationTitle =
                   event.conversation_title?.trim() || "新会话";
@@ -630,7 +630,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       }
       if (controller.signal.aborted) {
         updateChapterAiPairRetryable(request.pairID, false);
-        removeChapterAiThinkingMessage(request.pairID);
+        removeChapterAiLoadingMessage(request.pairID);
         collapseAssistantRepliesToStatus(
           request.assistantMessageID,
           "本次 AI 回复已取消。",
@@ -646,7 +646,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       const errorMessage = getErrorMessage(error, "AI 写作助手生成失败，请稍后再试");
       handleChapterAiStreamFailure(errorMessage);
     } finally {
-      removeChapterAiThinkingMessage(request.pairID);
+      removeChapterAiLoadingMessage(request.pairID);
       if (streamControllerRef.current === controller) {
         streamControllerRef.current = null;
       }
@@ -661,7 +661,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     assistantMessageID: string,
     errorMessage: string,
   ) {
-    removeChapterAiThinkingMessage(pairID);
+    removeChapterAiLoadingMessage(pairID);
     updateChapterAiPairRetryable(pairID, true);
     collapseAssistantRepliesToStatus(assistantMessageID, errorMessage, "failed");
   }
@@ -715,14 +715,14 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     });
   }
 
-  // appendChapterAiThinkingMessage 追加当前 AI 请求仍在进行中的本地提示气泡。
+  // appendChapterAiLoadingMessage 追加当前 AI 请求仍在进行中的本地加载占位消息。
   // 参数 pairID 表示当前用户消息和助手消息共用的配对 ID；参数 conversationID 表示当前会话 ID。
-  function appendChapterAiThinkingMessage(
+  function appendChapterAiLoadingMessage(
     pairID: string,
     conversationID: number | undefined,
   ) {
-    setChats(function appendThinkingMessage(currentChats) {
-      return appendChapterAiThinkingMessageToList(
+    setChats(function appendLoadingMessage(currentChats) {
+      return appendChapterAiLoadingMessageToList(
         currentChats,
         pairID,
         conversationID,
@@ -730,11 +730,11 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     });
   }
 
-  // removeChapterAiThinkingMessage 移除当前 AI 请求的本地进行中提示气泡。
+  // removeChapterAiLoadingMessage 移除当前 AI 请求的本地加载占位消息。
   // 参数 pairID 表示当前用户消息和助手消息共用的配对 ID。
-  function removeChapterAiThinkingMessage(pairID: string) {
-    setChats(function removeThinkingMessage(currentChats) {
-      return removeChapterAiThinkingMessageFromList(currentChats, pairID);
+  function removeChapterAiLoadingMessage(pairID: string) {
+    setChats(function removeLoadingMessage(currentChats) {
+      return removeChapterAiLoadingMessageFromList(currentChats, pairID);
     });
   }
 
