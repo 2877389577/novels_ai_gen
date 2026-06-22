@@ -2,6 +2,7 @@ package novelagent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -802,6 +803,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 			Instruction:      instructionWithRequestContext(child.instruction, req),
 			Model:            childModel,
 			ToolsConfig:      childToolsConfig(childTools),
+			Handlers:         safeToolErrorHandlers[*schema.Message](),
 			MaxIterations:    child.maxIterations,
 			ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 		})
@@ -829,6 +831,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
+		Handlers:         safeToolErrorHandlers[*schema.Message](),
 		MaxIterations:    cfg.supervisor.maxIterations,
 		ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 	})
@@ -867,6 +870,7 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 			Instruction:      instructionWithRequestContext(child.instruction, req),
 			Model:            childModel,
 			ToolsConfig:      childToolsConfig(childTools),
+			Handlers:         safeToolErrorHandlers[*schema.AgenticMessage](),
 			MaxIterations:    child.maxIterations,
 			ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 		})
@@ -894,9 +898,115 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
+		Handlers:         safeToolErrorHandlers[*schema.AgenticMessage](),
 		MaxIterations:    cfg.supervisor.maxIterations,
 		ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 	})
+}
+
+// toolErrorResult 表示返回给模型的工具错误结果。
+type toolErrorResult struct {
+	// OK 表示工具是否成功执行。
+	OK bool `json:"ok"`
+	// Tool 表示执行失败的工具名称。
+	Tool string `json:"tool,omitempty"`
+	// CallID 表示本次工具调用 ID。
+	CallID string `json:"call_id,omitempty"`
+	// Error 表示工具返回的原始错误文本。
+	Error string `json:"error"`
+	// Message 表示模型可直接理解的中文错误说明。
+	Message string `json:"message"`
+}
+
+// safeToolErrorHandler 将普通工具错误转换为模型可读的工具结果。
+type safeToolErrorHandler[M adk.MessageType] struct {
+	// TypedBaseChatModelAgentMiddleware 表示 Eino ADK 默认空实现。
+	*adk.TypedBaseChatModelAgentMiddleware[M]
+}
+
+// safeToolErrorHandlers 创建 Agent 使用的工具错误处理器列表。
+func safeToolErrorHandlers[M adk.MessageType]() []adk.TypedChatModelAgentMiddleware[M] {
+	return []adk.TypedChatModelAgentMiddleware[M]{newSafeToolErrorHandler[M]()}
+}
+
+// newSafeToolErrorHandler 创建单个工具错误处理器。
+func newSafeToolErrorHandler[M adk.MessageType]() adk.TypedChatModelAgentMiddleware[M] {
+	return &safeToolErrorHandler[M]{
+		TypedBaseChatModelAgentMiddleware: &adk.TypedBaseChatModelAgentMiddleware[M]{},
+	}
+}
+
+// WrapInvokableToolCall 包装普通工具调用，将可恢复错误转换为工具结果。
+// 参数 ctx 表示包装发生时的上下文；参数 endpoint 表示原始工具调用入口；参数 toolCtx 表示工具调用元信息。
+func (h *safeToolErrorHandler[M]) WrapInvokableToolCall(ctx context.Context, endpoint adk.InvokableToolCallEndpoint, toolCtx *adk.ToolContext) (adk.InvokableToolCallEndpoint, error) {
+	return func(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+		result, err := endpoint(ctx, argumentsInJSON, opts...)
+		if err == nil {
+			return result, nil
+		}
+		if shouldPropagateToolError(err) {
+			return result, err
+		}
+		return toolErrorResultJSON(toolCtx, err), nil
+	}, nil
+}
+
+// WrapStreamableToolCall 包装流式工具启动调用，将可恢复启动错误转换为单帧工具结果流。
+// 参数 ctx 表示包装发生时的上下文；参数 endpoint 表示原始流式工具调用入口；参数 toolCtx 表示工具调用元信息。
+func (h *safeToolErrorHandler[M]) WrapStreamableToolCall(ctx context.Context, endpoint adk.StreamableToolCallEndpoint, toolCtx *adk.ToolContext) (adk.StreamableToolCallEndpoint, error) {
+	return func(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (*schema.StreamReader[string], error) {
+		result, err := endpoint(ctx, argumentsInJSON, opts...)
+		if err == nil {
+			return result, nil
+		}
+		if shouldPropagateToolError(err) {
+			return nil, err
+		}
+		return schema.StreamReaderFromArray([]string{toolErrorResultJSON(toolCtx, err)}), nil
+	}, nil
+}
+
+// shouldPropagateToolError 判断工具错误是否必须继续向外传播。
+// 参数 err 表示工具调用返回的错误。
+func shouldPropagateToolError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if _, ok := compose.IsInterruptRerunError(err); ok {
+		return true
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, adk.ErrStreamCanceled) {
+		return true
+	}
+	var cancelErr *adk.CancelError
+	return errors.As(err, &cancelErr)
+}
+
+// toolErrorResultJSON 将工具错误序列化为模型可读的 JSON 字符串。
+// 参数 toolCtx 表示工具调用元信息；参数 err 表示工具调用返回的错误。
+func toolErrorResultJSON(toolCtx *adk.ToolContext, err error) string {
+	toolName := ""
+	callID := ""
+	if toolCtx != nil {
+		toolName = toolCtx.Name
+		callID = toolCtx.CallID
+	}
+	message := fmt.Sprintf("工具 %s 执行失败：%s", toolName, err.Error())
+	if toolName == "" {
+		message = fmt.Sprintf("工具执行失败：%s", err.Error())
+	}
+	result := toolErrorResult{
+		OK:      false,
+		Tool:    toolName,
+		CallID:  callID,
+		Error:   err.Error(),
+		Message: message,
+	}
+	data, marshalErr := json.Marshal(result)
+	if marshalErr != nil {
+		return fmt.Sprintf(`{"ok":false,"error":%q,"message":%q}`, err.Error(), message)
+	}
+	return string(data)
 }
 
 // childAgentToolOptions 根据子 Agent 配置生成父 Agent 包装子 Agent 时使用的 ADK tool 选项。
