@@ -203,10 +203,6 @@ export interface NovelAgentDeleteConversationData {
 
 // NovelAgentChatParams 表示小说写作 Agent 流式对话请求参数。
 export interface NovelAgentChatParams {
-  // providerId 表示本次对话使用的 AI 提供商 ID。
-  providerId: number;
-  // model 表示本次对话使用的模型标识。
-  model: string;
   // message 表示用户输入的写作需求或问题。
   message: string;
   // novelId 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
@@ -218,67 +214,6 @@ export interface NovelAgentChatParams {
   // chapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。
   chapterNumber: number;
   // signal 表示用于取消 AI 流式请求的浏览器 AbortSignal。
-  signal?: AbortSignal;
-}
-
-// PromptRecommendationAction 表示提示词库推荐判定后的前端动作。
-export type PromptRecommendationAction = "prompt_search" | "none" | string;
-
-// PromptRecommendationParams 表示提示词库推荐判定请求参数。
-export interface PromptRecommendationParams {
-  // providerId 表示本次推荐判定使用的 AI 提供商 ID。
-  providerId: number;
-  // model 表示本次推荐判定使用的模型标识。
-  model: string;
-  // message 表示用户当前尚未发送的 AI 输入框原文。
-  message: string;
-  // signal 表示用于取消推荐判定请求的浏览器 AbortSignal。
-  signal?: AbortSignal;
-}
-
-// PromptRecommendationData 表示提示词库推荐判定结果。
-export interface PromptRecommendationData {
-  // action 表示前端下一步动作，prompt_search 表示查询数据库提示词。
-  action: PromptRecommendationAction;
-  // matched 表示是否匹配到小说修改或润色相关意图。
-  matched: boolean;
-  // prompt_type 表示匹配到的提示词类型，不匹配时为空。
-  prompt_type: string;
-}
-
-// RecommendedPromptItem 表示推荐提示词列表中的单条提示词。
-export interface RecommendedPromptItem {
-  // id 表示提示词主键 ID。
-  id: number;
-  // prompt_type 表示提示词类型。
-  prompt_type: string;
-  // description 表示提示词简介。
-  description: string;
-  // content 表示提示词正文。
-  content: string;
-  // created_at 表示创建时间。
-  created_at: string;
-  // updated_at 表示更新时间。
-  updated_at: string;
-}
-
-// RecommendedPromptListData 表示提示词推荐列表响应数据。
-export interface RecommendedPromptListData {
-  // items 表示推荐提示词列表，包含提示词正文。
-  items: RecommendedPromptItem[];
-  // total 表示符合条件的提示词总数。
-  total: number;
-  // page_size 表示本次推荐查询数量。
-  page_size: number;
-}
-
-// RecommendedPromptListParams 表示查询推荐提示词列表时使用的参数。
-export interface RecommendedPromptListParams {
-  // promptType 表示需要推荐的提示词类型。
-  promptType: string;
-  // pageSize 表示推荐返回数量。
-  pageSize?: number;
-  // signal 表示用于取消推荐列表请求的浏览器 AbortSignal。
   signal?: AbortSignal;
 }
 
@@ -510,9 +445,9 @@ export interface AgentDefinition {
   enabled?: boolean | null;
   // share_chat_history 表示子 Agent 是否共享父 Agent 的完整聊天历史，未返回时按关闭处理。
   share_chat_history?: boolean | null;
-  // provider_id 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求提供商。
+  // provider_id 表示该 Agent 使用的 AI 提供商 ID，保存时必须大于 0。
   provider_id: number;
-  // model 表示该 Agent 自定义使用的模型标识，空值表示继承或使用提供商默认模型。
+  // model 表示该 Agent 使用的模型标识，保存时不能为空。
   model: string;
   // task 表示子 Agent 产生流式事件时返回给前端的任务标识。
   task: string;
@@ -1789,8 +1724,6 @@ export async function streamNovelAgentChat(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      provider_id: params.providerId,
-      model: params.model,
       message: params.message,
       novel_id: params.novelId,
       conversation_id: params.conversationId,
@@ -1816,76 +1749,6 @@ export async function streamNovelAgentChat(
   }
 
   await readNovelAgentStream(response.body, handlers);
-}
-
-// recommendPromptType 请求后端判断当前输入是否需要提示词库推荐。
-// 参数 params 表示推荐判定所需的提供商、模型和用户输入。
-export async function recommendPromptType(
-  params: PromptRecommendationParams,
-): Promise<PromptRecommendationData> {
-  const authData = readAuthData();
-  if (!authData) {
-    throw new UnauthorizedError("登录已过期，请重新登录");
-  }
-
-  const response = await fetch("/api/v1/ai/agents/prompt-recommendation", {
-    method: "POST",
-    headers: {
-      Authorization: formatAuthorizationHeader(authData),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      provider_id: params.providerId,
-      model: params.model,
-      message: params.message,
-    }),
-    signal: params.signal,
-  });
-  const payload = await parseApiResponse<PromptRecommendationData>(response);
-
-  if (response.status === 401) {
-    clearAuthData();
-    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
-  }
-  if (!response.ok || !payload?.data) {
-    throw new Error(payload?.message || "提示词推荐判定失败，请稍后再试");
-  }
-  return payload.data;
-}
-
-// fetchRecommendedPrompts 查询指定类型的推荐提示词列表。
-// 参数 params 表示推荐提示词列表查询参数。
-export async function fetchRecommendedPrompts(
-  params: RecommendedPromptListParams,
-): Promise<RecommendedPromptListData> {
-  const authData = readAuthData();
-  if (!authData) {
-    throw new UnauthorizedError("登录已过期，请重新登录");
-  }
-
-  const searchParams = new URLSearchParams({
-    prompt_type: params.promptType,
-    page_size: String(params.pageSize ?? 10),
-  });
-  const response = await fetch(
-    `/api/v1/ai/prompts/recommendations?${searchParams.toString()}`,
-    {
-      headers: {
-        Authorization: formatAuthorizationHeader(authData),
-      },
-      signal: params.signal,
-    },
-  );
-  const payload = await parseApiResponse<RecommendedPromptListData>(response);
-
-  if (response.status === 401) {
-    clearAuthData();
-    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
-  }
-  if (!response.ok || !payload?.data) {
-    throw new Error(payload?.message || "提示词推荐列表加载失败，请稍后再试");
-  }
-  return payload.data;
 }
 
 // fetchPromptTypes 查询配置文件中的提示词类型库。

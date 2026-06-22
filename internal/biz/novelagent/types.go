@@ -10,10 +10,6 @@ import (
 
 // ChatRequest 表示小说写作 Agent 流式对话请求。
 type ChatRequest struct {
-	// ProviderID 表示本次对话使用的 AI 提供商 ID。
-	ProviderID uint64 `json:"provider_id" binding:"required" example:"1"`
-	// Model 表示本次对话使用的模型标识。
-	Model string `json:"model" example:"gpt-5"`
 	// Message 表示用户输入的写作需求或问题。
 	Message string `json:"message" binding:"required" example:"帮我润色这一段，让语气更紧张"`
 	// NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
@@ -24,33 +20,6 @@ type ChatRequest struct {
 	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
 	// ChapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x。
 	ChapterNumber int `json:"chapter_number,omitempty" example:"3"`
-}
-
-const (
-	// PromptRecommendationActionSearch 表示前端需要按提示词类型查询数据库提示词。
-	PromptRecommendationActionSearch = "prompt_search"
-	// PromptRecommendationActionNone 表示当前用户输入不需要推荐提示词。
-	PromptRecommendationActionNone = "none"
-)
-
-// PromptRecommendationRequest 表示提示词库推荐判定请求。
-type PromptRecommendationRequest struct {
-	// ProviderID 表示本次推荐判定使用的 AI 提供商 ID。
-	ProviderID uint64 `json:"provider_id" binding:"required" example:"1"`
-	// Model 表示本次推荐判定使用的模型标识，空值时使用提供商默认模型。
-	Model string `json:"model" example:"gpt-5"`
-	// Message 表示用户当前尚未发送的 AI 输入框原文。
-	Message string `json:"message" binding:"required" example:"帮我把这一段润色得更有压迫感"`
-}
-
-// PromptRecommendationResponse 表示提示词库推荐判定结果。
-type PromptRecommendationResponse struct {
-	// Action 表示前端下一步动作，prompt_search 表示查询数据库提示词，none 表示无需推荐。
-	Action string `json:"action" example:"prompt_search"`
-	// Matched 表示是否匹配到小说修改或润色相关意图。
-	Matched bool `json:"matched" example:"true"`
-	// PromptType 表示匹配到的提示词类型，不匹配时为空。
-	PromptType string `json:"prompt_type" example:"润色"`
 }
 
 // MessageRole 表示 Agent 记忆消息角色。
@@ -242,11 +211,11 @@ type RuntimeRetryConfig struct {
 
 // RuntimeModelConfig 表示一次 Agent 运行中父子 Agent 使用的模型配置集合。
 type RuntimeModelConfig struct {
-	// Default 表示前端请求传入并完成默认模型兜底后的入口模型配置。
+	// Default 表示本轮 Agent 运行入口模型配置。
 	Default ModelConfig
-	// Supervisor 表示顶层 Agent 自定义模型配置，nil 表示继承 Default。
+	// Supervisor 表示顶层 Agent 模型配置，nil 表示使用 Default。
 	Supervisor *ModelConfig
-	// Children 表示启用子 Agent 的自定义模型配置，键为子 Agent 名称。
+	// Children 表示启用子 Agent 的模型配置，键为子 Agent 名称。
 	Children map[string]ModelConfig
 	// Retry 表示本次 Agent 运行中模型调用失败时的重试配置。
 	Retry RuntimeRetryConfig
@@ -316,14 +285,6 @@ type AgentConversationTitleInput struct {
 	Message string
 }
 
-// PromptRecommendationInput 表示推荐判定模型需要的用户输入和可选提示词类型。
-type PromptRecommendationInput struct {
-	// Message 表示用户当前输入框中的原始需求。
-	Message string
-	// PromptTypes 表示配置文件中允许匹配的提示词类型列表。
-	PromptTypes []string
-}
-
 // ConversationSummaryUpdate 表示需要写回 Agent 会话的滚动摘要更新。
 type ConversationSummaryUpdate struct {
 	// Summary 表示新的长期记忆摘要正文。
@@ -342,9 +303,6 @@ type AgentRuntime interface {
 	// Summarize 生成会话级 Agent 滚动摘要。
 	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
 	Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error)
-	// RecommendPromptType 判断当前用户输入是否需要查询提示词库推荐。
-	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示推荐判定所需的用户输入和提示词类型。
-	RecommendPromptType(ctx context.Context, cfg *appconfig.AppConfig, input PromptRecommendationInput) (PromptRecommendationResponse, error)
 	// GenerateConversationTitle 根据新会话第一轮用户输入生成会话标题。
 	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示标题生成输入。
 	GenerateConversationTitle(ctx context.Context, cfg *appconfig.AppConfig, input AgentConversationTitleInput) (string, error)
@@ -353,6 +311,6 @@ type AgentRuntime interface {
 // AgentRuntimeFactory 表示 Eino 多层 Agent 运行时工厂。
 type AgentRuntimeFactory interface {
 	// NewRuntime 按提供商协议创建小说写作 Agent 运行时。
-	// 参数 ctx 表示请求上下文；参数 cfg 表示一次运行中的入口模型和 Agent 自定义模型配置。
+	// 参数 ctx 表示请求上下文；参数 cfg 表示一次运行中的入口模型和 Agent 模型配置。
 	NewRuntime(ctx context.Context, cfg RuntimeModelConfig) (AgentRuntime, error)
 }

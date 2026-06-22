@@ -43,30 +43,20 @@ import {
   createChapter,
   deleteNovelAgentConversation,
   fetchChapterDetail,
-  fetchAIProviderModelsByProviderID,
   fetchNovelAgentConversationMessages,
   fetchNovelAgentConversations,
-  fetchAIProviders,
-  fetchRecommendedPrompts,
   fetchNextChapterNumber,
-  recommendPromptType,
   streamNovelAgentChat,
   updateChapter,
-  type AIProviderItem,
-  type AIProviderModelItem,
   type ChapterCreateParams,
   type ChapterDetailItem,
   type ChapterUpdateParams,
   type NovelAgentConversationItem,
   type NovelAgentMessageItem,
-  type RecommendedPromptItem,
 } from "./api";
 import { normalizeText } from "./novel-utils";
 
 const chapterEditorScrollbarHiddenClass = "chapter-editor-scrollbar-hidden";
-const chapterAiProviderPageSize = 100;
-const chapterAiPromptRecommendationDelayMs = 600;
-const chapterAiPromptRecommendationPageSize = 10;
 // chapterAiInputMaxHeight 表示 AI 输入框自动增高上限，约等于 6 行正文。
 const chapterAiInputMaxHeight = 22 * 6;
 const chapterAutoSaveIntervalMs = 5000;
@@ -116,16 +106,8 @@ interface ChapterFormValues {
 interface ChapterAiRetryPayload {
   // conversationId 表示重试时必须复用的 Agent 会话 ID，未保存的新会话为空。
   conversationId?: number;
-  // providerId 表示原始请求使用的 AI 提供商 ID。
-  providerId: number;
-  // modelId 表示原始请求使用的模型标识。
-  modelId: string;
   // message 表示原始请求发送给 AI 的用户原文。
   message: string;
-  // providerName 表示原始请求使用的 AI 提供商展示名。
-  providerName: string;
-  // modelName 表示原始请求使用的模型展示名。
-  modelName: string;
 }
 
 // ChapterAiMessage 表示章节 AI 对话在前端本地增强后的消息。
@@ -172,14 +154,6 @@ interface ChapterAiSavedChapterContext {
   chapterId: number;
   // chapterNumber 表示章节号，即“第 x 章”中的 x。
   chapterNumber: number;
-}
-
-// ChapterAiPromptRecommendationCache 表示章节 AI 输入推荐结果的本地缓存。
-interface ChapterAiPromptRecommendationCache {
-  // promptType 表示本次输入匹配到的提示词类型，未匹配时为空。
-  promptType: string;
-  // items 表示已查询到的推荐提示词列表。
-  items: RecommendedPromptItem[];
 }
 
 // ChapterAiPrefillMessage 表示一次从正文选区填入 AI 输入框的请求。
@@ -1124,30 +1098,14 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const [chats, setChats] = useState<ChapterAiMessage[]>(chapterAiAssistantMessages);
   const [conversations, setConversations] = useState<NovelAgentConversationItem[]>([]);
   const [selectedConversationID, setSelectedConversationID] = useState<number | null>(null);
-  const [providers, setProviders] = useState<AIProviderItem[]>([]);
-  const [models, setModels] = useState<AIProviderModelItem[]>([]);
-  const [selectedProviderID, setSelectedProviderID] = useState("");
-  const [selectedModelID, setSelectedModelID] = useState("");
   const [inputValue, setInputValue] = useState("");
-  const [providerLoading, setProviderLoading] = useState(true);
-  const [modelLoading, setModelLoading] = useState(false);
   const [conversationLoading, setConversationLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [conversationDeleting, setConversationDeleting] = useState(false);
   const [assistantSending, setAssistantSending] = useState(false);
-  const [promptRecommendationLoading, setPromptRecommendationLoading] =
-    useState(false);
-  const [promptRecommendationType, setPromptRecommendationType] = useState("");
-  const [promptRecommendations, setPromptRecommendations] = useState<
-    RecommendedPromptItem[]
-  >([]);
   const assistantInputRef = useRef<HTMLTextAreaElement | null>(null);
   const streamControllerRef = useRef<AbortController | null>(null);
   const selectedConversationIDRef = useRef<number | null>(null);
-  const promptRecommendationControllerRef = useRef<AbortController | null>(null);
-  const promptRecommendationCacheRef = useRef<
-    Map<string, ChapterAiPromptRecommendationCache>
-  >(new Map());
 
   const conversationSelectOptions = useMemo(
     // buildConversationSelectOptions 将 AI 会话列表转换为 Semi Select 选项。
@@ -1173,8 +1131,6 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     : conversations.length === 0
       ? "暂无会话记录"
       : "选择会话记录";
-  // promptRecommendationSuppressedInputRef 记录由推荐提示词插入产生、无需再次推荐的输入内容。
-  const promptRecommendationSuppressedInputRef = useRef<string | null>(null);
   const consumedPrefillMessageIDRef = useRef<number | null>(null);
   const onUnauthorized = props.onUnauthorized;
 
@@ -1184,33 +1140,6 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     },
     [selectedConversationID],
   );
-
-  const selectedProvider = useMemo(
-    function findSelectedProvider() {
-      return providers.find(function matchProvider(provider) {
-        return String(provider.id) === selectedProviderID;
-      });
-    },
-    [providers, selectedProviderID],
-  );
-  const selectedModel = useMemo(
-    function findSelectedModel() {
-      return models.find(function matchModel(model) {
-        return model.id === selectedModelID;
-      });
-    },
-    [models, selectedModelID],
-  );
-  const providerSelectPlaceholder = providerLoading
-    ? "加载中..."
-    : providers.length === 0
-      ? "暂无提供商"
-      : "选择提供商";
-  const modelSelectPlaceholder = modelLoading
-    ? "加载中..."
-    : models.length === 0
-      ? "暂无模型"
-      : "选择模型";
 
   useLayoutEffect(
     function syncAssistantInputHeight() {
@@ -1332,65 +1261,9 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   );
 
   useEffect(
-    function loadEnabledProviders() {
-      const controller = new AbortController();
-      setProviderLoading(true);
-
-      async function loadProviders() {
-        try {
-          const data = await fetchAIProviders({
-            page: 1,
-            pageSize: chapterAiProviderPageSize,
-            signal: controller.signal,
-          });
-          if (controller.signal.aborted) {
-            return;
-          }
-
-          const enabledProviders = data.items.filter(function onlyEnabled(provider) {
-            return provider.enabled;
-          });
-          setProviders(enabledProviders);
-          setSelectedProviderID(function keepExistingProvider(currentValue) {
-            if (
-              currentValue &&
-              enabledProviders.some(function matchProvider(provider) {
-                return String(provider.id) === currentValue;
-              })
-            ) {
-              return currentValue;
-            }
-            return enabledProviders[0] ? String(enabledProviders[0].id) : "";
-          });
-        } catch (error) {
-          if (controller.signal.aborted) {
-            return;
-          }
-          if (error instanceof UnauthorizedError) {
-            onUnauthorized();
-            return;
-          }
-          Toast.error(getErrorMessage(error, "AI 提供商加载失败，请稍后再试"));
-        } finally {
-          if (!controller.signal.aborted) {
-            setProviderLoading(false);
-          }
-        }
-      }
-
-      void loadProviders();
-      return function cancelProviderLoad() {
-        controller.abort();
-      };
-    },
-    [onUnauthorized],
-  );
-
-  useEffect(
     function cancelAssistantStreamOnUnmount() {
       return function cancelAssistantStream() {
         streamControllerRef.current?.abort();
-        promptRecommendationControllerRef.current?.abort();
       };
     },
     [],
@@ -1413,232 +1286,10 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     [inputValue, props.prefillMessage],
   );
 
-  useEffect(
-    function loadProviderModels() {
-      if (!selectedProviderID) {
-        setModels([]);
-        setSelectedModelID("");
-        return;
-      }
-
-      const controller = new AbortController();
-      const defaultModel = selectedProvider?.default_model?.trim() ?? "";
-      setModelLoading(true);
-      setModels([]);
-      setSelectedModelID("");
-
-      async function loadModels() {
-        try {
-          const data = await fetchAIProviderModelsByProviderID(
-            Number(selectedProviderID),
-            controller.signal,
-          );
-          if (controller.signal.aborted) {
-            return;
-          }
-
-          const nextModels = modelsWithDefaultModel(data.items, defaultModel);
-          setModels(nextModels);
-          setSelectedModelID(preferredModelID(nextModels, defaultModel));
-        } catch (error) {
-          if (controller.signal.aborted) {
-            return;
-          }
-          if (error instanceof UnauthorizedError) {
-            onUnauthorized();
-            return;
-          }
-          if (defaultModel) {
-            const fallbackModels = [defaultAIProviderModel(defaultModel)];
-            setModels(fallbackModels);
-            setSelectedModelID(defaultModel);
-            Toast.warning("AI 模型列表获取失败，已使用默认模型");
-            return;
-          }
-          Toast.error(getErrorMessage(error, "AI 模型列表获取失败，请稍后再试"));
-        } finally {
-          if (!controller.signal.aborted) {
-            setModelLoading(false);
-          }
-        }
-      }
-
-      void loadModels();
-      return function cancelModelLoad() {
-        controller.abort();
-      };
-    },
-    [onUnauthorized, selectedProvider?.default_model, selectedProviderID],
-  );
-
-  useEffect(
-    function recommendPromptsForAssistantInput() {
-      const rawInput = inputValue;
-      const normalizedInput = rawInput.trim();
-      if (
-        !normalizedInput ||
-        !selectedProviderID ||
-        !selectedModelID ||
-        assistantSending ||
-        modelLoading
-      ) {
-        promptRecommendationControllerRef.current?.abort();
-        setPromptRecommendationLoading(false);
-        setPromptRecommendationType("");
-        setPromptRecommendations([]);
-        if (!normalizedInput) {
-          promptRecommendationSuppressedInputRef.current = null;
-        }
-        return;
-      }
-
-      if (promptRecommendationSuppressedInputRef.current === normalizedInput) {
-        promptRecommendationControllerRef.current?.abort();
-        setPromptRecommendationLoading(false);
-        setPromptRecommendationType("");
-        setPromptRecommendations([]);
-        return;
-      }
-
-      const providerId = Number(selectedProviderID);
-      if (!Number.isFinite(providerId) || providerId <= 0) {
-        setPromptRecommendationLoading(false);
-        setPromptRecommendationType("");
-        setPromptRecommendations([]);
-        return;
-      }
-
-      const cacheKey = createPromptRecommendationCacheKey(
-        providerId,
-        selectedModelID,
-        normalizedInput,
-      );
-      const cachedRecommendation = promptRecommendationCacheRef.current.get(cacheKey);
-      if (cachedRecommendation) {
-        setPromptRecommendationLoading(false);
-        setPromptRecommendationType(cachedRecommendation.promptType);
-        setPromptRecommendations(cachedRecommendation.items);
-        return;
-      }
-
-      const controller = new AbortController();
-      promptRecommendationControllerRef.current?.abort();
-      promptRecommendationControllerRef.current = controller;
-      setPromptRecommendationLoading(true);
-
-      const timer = window.setTimeout(function requestPromptRecommendation() {
-        async function loadPromptRecommendation() {
-          try {
-            const recommendation = await recommendPromptType({
-              providerId,
-              model: selectedModelID,
-              message: rawInput,
-              signal: controller.signal,
-            });
-            if (controller.signal.aborted) {
-              return;
-            }
-            if (
-              recommendation.action !== "prompt_search" ||
-              !recommendation.matched ||
-              !recommendation.prompt_type
-            ) {
-              const emptyRecommendation = { promptType: "", items: [] };
-              promptRecommendationCacheRef.current.set(cacheKey, emptyRecommendation);
-              setPromptRecommendationType("");
-              setPromptRecommendations([]);
-              return;
-            }
-
-            const list = await fetchRecommendedPrompts({
-              promptType: recommendation.prompt_type,
-              pageSize: chapterAiPromptRecommendationPageSize,
-              signal: controller.signal,
-            });
-            if (controller.signal.aborted) {
-              return;
-            }
-
-            const nextRecommendation = {
-              promptType: recommendation.prompt_type,
-              items: list.items,
-            };
-            promptRecommendationCacheRef.current.set(cacheKey, nextRecommendation);
-            setPromptRecommendationType(nextRecommendation.promptType);
-            setPromptRecommendations(nextRecommendation.items);
-          } catch (error) {
-            if (controller.signal.aborted) {
-              return;
-            }
-            if (error instanceof UnauthorizedError) {
-              onUnauthorized();
-              return;
-            }
-            setPromptRecommendationType("");
-            setPromptRecommendations([]);
-          } finally {
-            if (promptRecommendationControllerRef.current === controller) {
-              promptRecommendationControllerRef.current = null;
-            }
-            if (!controller.signal.aborted) {
-              setPromptRecommendationLoading(false);
-            }
-          }
-        }
-
-        void loadPromptRecommendation();
-      }, chapterAiPromptRecommendationDelayMs);
-
-      return function cancelPromptRecommendation() {
-        window.clearTimeout(timer);
-        controller.abort();
-      };
-    },
-    [
-      assistantSending,
-      inputValue,
-      modelLoading,
-      onUnauthorized,
-      selectedModelID,
-      selectedProviderID,
-    ],
-  );
-
-  // handleProviderChange 切换当前用于查询模型的 AI 提供商。
-  // 参数 event 表示提供商选择框变更事件。
-  function handleProviderChange(event: ChangeEvent<HTMLSelectElement>) {
-    setSelectedProviderID(event.target.value);
-  }
-
-  // handleModelChange 切换当前对话选择的 AI 模型。
-  // 参数 event 表示模型选择框变更事件。
-  function handleModelChange(event: ChangeEvent<HTMLSelectElement>) {
-    setSelectedModelID(event.target.value);
-  }
-
   // handleAssistantInputChange 同步 AI 对话输入框内容。
   // 参数 event 表示输入框变更事件。
   function handleAssistantInputChange(event: ChangeEvent<HTMLTextAreaElement>) {
-    promptRecommendationSuppressedInputRef.current = null;
     setInputValue(event.target.value);
-  }
-
-  // handleApplyRecommendedPrompt 将推荐提示词正文追加到当前 AI 输入框。
-  // 参数 item 表示用户点击的推荐提示词。
-  function handleApplyRecommendedPrompt(item: RecommendedPromptItem) {
-    const separator = inputValue.trim()
-      ? inputValue.endsWith("\n")
-        ? "\n"
-        : "\n\n"
-      : "";
-    const nextInputValue = `${inputValue}${separator}${item.content}`;
-    promptRecommendationSuppressedInputRef.current = nextInputValue.trim();
-    promptRecommendationControllerRef.current?.abort();
-    promptRecommendationControllerRef.current = null;
-    setPromptRecommendationLoading(false);
-    setInputValue(nextInputValue);
-    setPromptRecommendationType("");
-    setPromptRecommendations([]);
   }
 
   // handleAssistantInputKeyDown 处理 AI 对话输入框键盘提交。
@@ -1755,22 +1406,6 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       Toast.info("AI 正在回复，请稍后再发送");
       return;
     }
-    if (providers.length === 0) {
-      Toast.warning("请先在设置中启用 AI 提供商");
-      return;
-    }
-    if (!selectedProviderID) {
-      Toast.warning("请选择 AI 提供商");
-      return;
-    }
-    if (modelLoading) {
-      Toast.info("模型列表正在加载");
-      return;
-    }
-    if (!selectedModelID) {
-      Toast.warning("请选择 AI 模型");
-      return;
-    }
     if (!normalizedInput) {
       Toast.warning("请输入要发送给 AI 的内容");
       return;
@@ -1795,19 +1430,13 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       return;
     }
 
-    const providerName = selectedProvider?.name ?? "当前提供商";
-    const modelName = formatAIModelName(selectedModel);
     const createdAt = Date.now();
     const pairID = createChapterAiPairID(createdAt);
     const userMessageID = createChapterAiMessageID("user", createdAt);
     const assistantMessageID = createChapterAiMessageID("assistant", createdAt);
     const retryPayload: ChapterAiRetryPayload = {
       conversationId: selectedConversationIDRef.current ?? undefined,
-      providerId: Number(selectedProviderID),
-      modelId: selectedModelID,
       message: normalizedInput,
-      providerName,
-      modelName,
     };
     setChats(function appendAssistantMessages(currentChats) {
       return [
@@ -1834,8 +1463,6 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       ];
     });
     setInputValue("");
-    setPromptRecommendationType("");
-    setPromptRecommendations([]);
 
     await runChapterAiStream({
       pairID,
@@ -1900,7 +1527,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   }
 
   // runChapterAiStream 执行章节 AI 流式请求并更新对应助手消息。
-  // 参数 request 表示本次流式请求所需的消息配对、章节和模型上下文。
+  // 参数 request 表示本次流式请求所需的消息配对和章节上下文。
   async function runChapterAiStream(request: ChapterAiStreamRequest) {
     const controller = new AbortController();
     streamControllerRef.current?.abort();
@@ -1998,8 +1625,6 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     try {
       await streamNovelAgentChat(
         {
-          providerId: request.retryPayload.providerId,
-          model: request.retryPayload.modelId,
           message: request.retryPayload.message,
           novelId: props.novelId,
           conversationId: request.retryPayload.conversationId,
@@ -2056,8 +1681,7 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
             }
             if (event.type === "error") {
               const baseErrorMessage =
-                event.message ||
-                `${request.retryPayload.providerName} / ${request.retryPayload.modelName} 生成失败，请稍后再试`;
+                event.message || "AI 写作助手生成失败，请稍后再试";
               const requestID = event.request_id?.trim();
               const errorMessage = requestID
                 ? `${baseErrorMessage}（请求ID：${requestID}）`
@@ -2460,77 +2084,6 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           />
         </div>
         <form className="chapter-ai-composer" onSubmit={handleAssistantSubmit}>
-          <div className="chapter-ai-model-picker">
-            <label className="chapter-ai-select-field">
-              <span>提供商</span>
-              <select
-                aria-label="AI 提供商"
-                disabled={providerLoading || providers.length === 0}
-                onChange={handleProviderChange}
-                value={selectedProviderID}
-              >
-                <option value="">{providerSelectPlaceholder}</option>
-                {providers.map(function renderProviderOption(provider) {
-                  return (
-                    <option key={provider.id} value={String(provider.id)}>
-                      {provider.name}
-                    </option>
-                  );
-                })}
-              </select>
-            </label>
-            <label className="chapter-ai-select-field">
-              <span>模型</span>
-              <select
-                aria-label="AI 模型"
-                disabled={!selectedProviderID || modelLoading || models.length === 0}
-                onChange={handleModelChange}
-                value={selectedModelID}
-              >
-                <option value="">{modelSelectPlaceholder}</option>
-                {models.map(function renderModelOption(model) {
-                  return (
-                    <option key={model.id} value={model.id}>
-                      {formatAIModelOption(model)}
-                    </option>
-                  );
-                })}
-              </select>
-            </label>
-          </div>
-          {promptRecommendationLoading || promptRecommendations.length > 0 ? (
-            <div className="chapter-ai-prompt-recommendations" aria-live="polite">
-              <div className="chapter-ai-prompt-recommendation-header">
-                <span>推荐提示词</span>
-                {promptRecommendationType ? <strong>{promptRecommendationType}</strong> : null}
-                {promptRecommendationLoading ? <em>匹配中...</em> : null}
-              </div>
-              {promptRecommendations.length > 0 ? (
-                <div className="chapter-ai-prompt-recommendation-list">
-                  {promptRecommendations.map(function renderPromptRecommendation(item) {
-                    return (
-                      <button
-                        className="chapter-ai-prompt-recommendation-item"
-                        key={item.id}
-                        onClick={function applyPromptRecommendation() {
-                          handleApplyRecommendedPrompt(item);
-                        }}
-                        type="button"
-                      >
-                        <span className="chapter-ai-prompt-recommendation-meta">
-                          {item.prompt_type}
-                        </span>
-                        <strong>{item.description || "未填写简介"}</strong>
-                        <span className="chapter-ai-prompt-recommendation-preview">
-                          {item.content}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
           <div className="chapter-ai-input-shell">
             <textarea
               ref={assistantInputRef}
@@ -2551,7 +2104,6 @@ function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
                     ? "chapter-ai-send chapter-ai-send-stop"
                     : "chapter-ai-send"
                 }
-                disabled={!assistantSending && modelLoading}
                 onClick={
                   assistantSending
                     ? handleCancelAssistantMessage
@@ -2619,16 +2171,6 @@ function createChapterAiRenderMessageID(
   contentLength: number,
 ): string {
   return `${messageID}-${status}-${contentLength}`;
-}
-
-// createPromptRecommendationCacheKey 创建提示词推荐本地缓存键。
-// 参数 providerId 表示 AI 提供商 ID；参数 modelId 表示模型标识；参数 input 表示用户输入框文本。
-function createPromptRecommendationCacheKey(
-  providerId: number,
-  modelId: string,
-  input: string,
-): string {
-  return `${providerId}::${modelId}::${input}`;
 }
 
 // syncChapterAiInputHeight 根据输入内容同步 AI 输入框高度。
@@ -2734,70 +2276,6 @@ function clampToViewport(value: number, min: number, max: number): number {
     return min;
   }
   return Math.min(Math.max(value, min), max);
-}
-
-// formatAIModelName 返回 AI 模型在对话提示中的展示名。
-// 参数 model 表示当前选择的 AI 模型，可以为空。
-function formatAIModelName(model?: AIProviderModelItem): string {
-  if (!model) {
-    return "当前模型";
-  }
-  return model.display_name || model.id;
-}
-
-// defaultAIProviderModel 根据手动填写的默认模型标识构造前端模型选项。
-// 参数 modelID 表示 AI 提供商配置的默认模型标识。
-function defaultAIProviderModel(modelID: string): AIProviderModelItem {
-  return {
-    id: modelID,
-    display_name: modelID,
-    owned_by: "",
-    created_at: "",
-    supported_generation_methods: [],
-  };
-}
-
-// modelsWithDefaultModel 合并官方模型列表和 AI 提供商默认模型。
-// 参数 items 表示模型列表接口返回的模型选项；参数 defaultModel 表示 AI 提供商配置的默认模型标识。
-function modelsWithDefaultModel(
-  items: AIProviderModelItem[],
-  defaultModel: string,
-): AIProviderModelItem[] {
-  const normalizedDefaultModel = defaultModel.trim();
-  if (!normalizedDefaultModel) {
-    return items;
-  }
-  const hasDefaultModel = items.some(function matchDefaultModel(model) {
-    return model.id === normalizedDefaultModel;
-  });
-  if (hasDefaultModel) {
-    return items;
-  }
-  return [defaultAIProviderModel(normalizedDefaultModel), ...items];
-}
-
-// preferredModelID 返回模型列表加载完成后应优先选中的模型标识。
-// 参数 items 表示可选模型列表；参数 defaultModel 表示 AI 提供商配置的默认模型标识。
-function preferredModelID(items: AIProviderModelItem[], defaultModel: string): string {
-  const normalizedDefaultModel = defaultModel.trim();
-  if (
-    normalizedDefaultModel &&
-    items.some(function matchDefaultModel(model) {
-      return model.id === normalizedDefaultModel;
-    })
-  ) {
-    return normalizedDefaultModel;
-  }
-  return items[0]?.id ?? "";
-}
-
-// formatAIModelOption 返回 AI 模型下拉选项展示文本。
-// 参数 model 表示需要渲染的 AI 模型。
-function formatAIModelOption(model: AIProviderModelItem): string {
-  if (!model.display_name || model.display_name === model.id) {
-    return model.id;
-  }
-  return `${model.display_name} (${model.id})`;
 }
 
 // ChapterEditorSkeleton 渲染章节编辑页加载中的占位内容。

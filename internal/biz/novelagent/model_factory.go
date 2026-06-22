@@ -2,7 +2,6 @@ package novelagent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -41,8 +40,6 @@ const summarySystemPrompt = "你是小说写作 Agent 的长期记忆摘要器�
 
 const conversationTitleSystemPrompt = "你是小说写作 AI 会话标题生成器。请根据用户开启会话时发送的第一句话，生成一个中文会话标题。标题必须不超过 50 个字，简洁具体，不要输出解释、引号、前缀、Markdown 或多行内容。"
 
-const promptRecommendationSystemPrompt = "你是小说提示词库推荐判定器。你的任务是判断用户当前输入是否属于小说正文修改、润色、扩写、缩写、风格调整、情绪强化、节奏调整、氛围调整、语言优化或类似写作修改需求，并从用户提供的提示词类型列表中选择最匹配的一项。你必须只输出 JSON，不要输出 Markdown、解释或额外文本。匹配时输出 {\"action\":\"prompt_search\",\"matched\":true,\"prompt_type\":\"类型名\"}；不匹配或无法确定时输出 {\"action\":\"none\",\"matched\":false,\"prompt_type\":\"\"}。prompt_type 必须严格来自可选类型列表。"
-
 // EinoAgentRuntimeFactory 表示基于 Eino ADK 的多层 Agent 运行时工厂。
 type EinoAgentRuntimeFactory struct {
 	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
@@ -62,7 +59,7 @@ func NewEinoAgentRuntimeFactory(chapterReader agenttools.ChapterReader, novelSum
 }
 
 // NewRuntime 按 AI 提供商协议创建 Eino 多层 Agent 运行时。
-// 参数 ctx 表示请求上下文；参数 cfg 表示入口模型和启用 Agent 自定义模型配置。
+// 参数 ctx 表示请求上下文；参数 cfg 表示入口模型和启用 Agent 模型配置。
 func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeModelConfig) (AgentRuntime, error) {
 	cfg = normalizeRuntimeModelConfig(cfg)
 	defaultPath, err := modelPathForConfig(cfg.Default)
@@ -256,7 +253,7 @@ func normalizeGeminiBaseURL(baseURL string) string {
 }
 
 // normalizeRuntimeModelConfig 标准化一次 Agent 运行中的所有模型配置。
-// 参数 cfg 表示入口模型和启用 Agent 自定义模型配置。
+// 参数 cfg 表示入口模型和启用 Agent 模型配置。
 func normalizeRuntimeModelConfig(cfg RuntimeModelConfig) RuntimeModelConfig {
 	cfg.Default = normalizeModelConfig(cfg.Default)
 	cfg.Retry = normalizeRuntimeRetryConfig(cfg.Retry)
@@ -351,13 +348,13 @@ func validateModelPath(label string, defaultPath string, cfg ModelConfig) error 
 
 // agentModelConfigRegistry 表示 Agent 名称到实际模型配置的查询表。
 type agentModelConfigRegistry struct {
-	// defaultConfig 表示继承前端请求的入口模型配置。
+	// defaultConfig 表示未配置自定义模型的 Agent 继承的入口模型配置。
 	defaultConfig ModelConfig
 	// supervisorConfigured 表示顶层 Agent 是否配置了自定义模型。
 	supervisorConfigured bool
 	// supervisorConfig 表示顶层 Agent 实际使用的模型配置。
 	supervisorConfig ModelConfig
-	// childConfigs 表示启用子 Agent 的自定义模型配置，未出现的子 Agent 继承入口模型。
+	// childConfigs 表示启用子 Agent 的模型配置，键为子 Agent 名称。
 	childConfigs map[string]ModelConfig
 }
 
@@ -474,24 +471,6 @@ func (r chatAgentRuntime) Summarize(ctx context.Context, cfg *appconfig.AppConfi
 	return normalizeSummaryContent(output.Content)
 }
 
-// RecommendPromptType 使用 schema.Message 模型判断当前输入是否需要提示词库推荐。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示推荐判定所需的用户输入和提示词类型。
-func (r chatAgentRuntime) RecommendPromptType(ctx context.Context, cfg *appconfig.AppConfig, input PromptRecommendationInput) (PromptRecommendationResponse, error) {
-	_ = cfg
-	messages := []*schema.Message{
-		schema.SystemMessage(promptRecommendationSystemPrompt),
-		schema.UserMessage(promptRecommendationUserPrompt(input)),
-	}
-	output, err := r.model.Generate(ctx, messages)
-	if err != nil {
-		return noPromptRecommendation(), err
-	}
-	if output == nil {
-		return noPromptRecommendation(), nil
-	}
-	return parsePromptRecommendation(output.Content, input.PromptTypes), nil
-}
-
 // GenerateConversationTitle 使用 schema.Message 模型生成新 Agent 会话标题。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示标题生成输入。
 func (r chatAgentRuntime) GenerateConversationTitle(ctx context.Context, cfg *appconfig.AppConfig, input AgentConversationTitleInput) (string, error) {
@@ -566,21 +545,6 @@ func (r agenticAgentRuntime) Summarize(ctx context.Context, cfg *appconfig.AppCo
 		return "", err
 	}
 	return normalizeSummaryContent(agenticMessageText(output))
-}
-
-// RecommendPromptType 使用 schema.AgenticMessage 模型判断当前输入是否需要提示词库推荐。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示推荐判定所需的用户输入和提示词类型。
-func (r agenticAgentRuntime) RecommendPromptType(ctx context.Context, cfg *appconfig.AppConfig, input PromptRecommendationInput) (PromptRecommendationResponse, error) {
-	_ = cfg
-	messages := []*schema.AgenticMessage{
-		schema.SystemAgenticMessage(promptRecommendationSystemPrompt),
-		schema.UserAgenticMessage(promptRecommendationUserPrompt(input)),
-	}
-	output, err := r.model.Generate(ctx, messages)
-	if err != nil {
-		return noPromptRecommendation(), err
-	}
-	return parsePromptRecommendation(agenticMessageText(output), input.PromptTypes), nil
 }
 
 // GenerateConversationTitle 使用 schema.AgenticMessage 模型生成新 Agent 会话标题。
@@ -757,100 +721,6 @@ func summaryMessageRoleLabel(role MessageRole) string {
 		return "助手"
 	default:
 		return "未知"
-	}
-}
-
-// promptRecommendationUserPrompt 生成提示词库推荐判定模型的用户消息。
-// 参数 input 表示推荐判定所需的用户输入和候选提示词类型。
-func promptRecommendationUserPrompt(input PromptRecommendationInput) string {
-	typesJSON, err := json.Marshal(input.PromptTypes)
-	if err != nil {
-		typesJSON = []byte("[]")
-	}
-	var builder strings.Builder
-	builder.WriteString("可选提示词类型：")
-	builder.Write(typesJSON)
-	builder.WriteString("\n\n用户当前输入：\n")
-	builder.WriteString(strings.TrimSpace(input.Message))
-	return builder.String()
-}
-
-// promptRecommendationPayload 表示模型推荐判定 JSON 的解析结构。
-type promptRecommendationPayload struct {
-	// Action 表示模型建议的前端动作。
-	Action string `json:"action"`
-	// Matched 表示模型是否认为用户输入匹配提示词推荐场景。
-	Matched bool `json:"matched"`
-	// PromptType 表示模型选择的提示词类型。
-	PromptType string `json:"prompt_type"`
-}
-
-// parsePromptRecommendation 解析并校验模型返回的提示词推荐判定结果。
-// 参数 content 表示模型原始输出；参数 promptTypes 表示允许返回的提示词类型列表。
-func parsePromptRecommendation(content string, promptTypes []string) PromptRecommendationResponse {
-	content = extractPromptRecommendationJSON(content)
-	if strings.TrimSpace(content) == "" {
-		return noPromptRecommendation()
-	}
-
-	var payload promptRecommendationPayload
-	if err := json.Unmarshal([]byte(content), &payload); err != nil {
-		return noPromptRecommendation()
-	}
-	action := strings.TrimSpace(payload.Action)
-	promptType := strings.TrimSpace(payload.PromptType)
-	if action != PromptRecommendationActionSearch || !payload.Matched || !promptRecommendationTypeAllowed(promptTypes, promptType) {
-		return noPromptRecommendation()
-	}
-	return PromptRecommendationResponse{
-		Action:     PromptRecommendationActionSearch,
-		Matched:    true,
-		PromptType: promptType,
-	}
-}
-
-// extractPromptRecommendationJSON 从模型输出中提取 JSON 对象文本。
-// 参数 content 表示模型原始输出。
-func extractPromptRecommendationJSON(content string) string {
-	content = strings.TrimSpace(content)
-	if strings.HasPrefix(content, "```") {
-		lines := strings.Split(content, "\n")
-		if len(lines) >= 2 {
-			lines = lines[1:]
-			if len(lines) > 0 && strings.HasPrefix(strings.TrimSpace(lines[len(lines)-1]), "```") {
-				lines = lines[:len(lines)-1]
-			}
-			content = strings.TrimSpace(strings.Join(lines, "\n"))
-		}
-	}
-	start := strings.Index(content, "{")
-	end := strings.LastIndex(content, "}")
-	if start >= 0 && end >= start {
-		return strings.TrimSpace(content[start : end+1])
-	}
-	return content
-}
-
-// promptRecommendationTypeAllowed 判断模型返回的提示词类型是否来自配置文件。
-// 参数 promptTypes 表示配置文件中的提示词类型列表；参数 promptType 表示模型返回的提示词类型。
-func promptRecommendationTypeAllowed(promptTypes []string, promptType string) bool {
-	if promptType == "" {
-		return false
-	}
-	for _, item := range promptTypes {
-		if strings.TrimSpace(item) == promptType {
-			return true
-		}
-	}
-	return false
-}
-
-// noPromptRecommendation 返回不推荐提示词库查询的统一响应。
-func noPromptRecommendation() PromptRecommendationResponse {
-	return PromptRecommendationResponse{
-		Action:     PromptRecommendationActionNone,
-		Matched:    false,
-		PromptType: "",
 	}
 }
 

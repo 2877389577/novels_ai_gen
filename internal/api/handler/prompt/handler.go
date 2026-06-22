@@ -87,16 +87,6 @@ type PromptListData struct {
 	PageSize int `json:"page_size" example:"20"`
 }
 
-// PromptRecommendationListData 表示 Swagger 文档中的提示词推荐列表数据。
-type PromptRecommendationListData struct {
-	// Items 表示推荐提示词列表，包含提示词正文。
-	Items []PromptData `json:"items"`
-	// Total 表示符合条件的提示词总数。
-	Total int64 `json:"total" example:"1"`
-	// PageSize 表示本次推荐查询数量。
-	PageSize int `json:"page_size" example:"10"`
-}
-
 // PromptDeleteData 表示 Swagger 文档中的删除提示词结果。
 type PromptDeleteData struct {
 	// Deleted 表示是否已经删除提示词。
@@ -149,18 +139,6 @@ type PromptListSuccessResponse struct {
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Data 表示提示词分页列表。
 	Data PromptListData `json:"data"`
-}
-
-// PromptRecommendationListSuccessResponse 表示提示词推荐列表接口 Swagger 成功响应结构。
-type PromptRecommendationListSuccessResponse struct {
-	// Code 表示业务响应码，成功固定为 0。
-	Code int `json:"code" example:"0"`
-	// Message 表示响应提示信息。
-	Message string `json:"message" example:"ok"`
-	// RequestID 表示本次请求的追踪标识。
-	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
-	// Data 表示提示词推荐列表。
-	Data PromptRecommendationListData `json:"data"`
 }
 
 // PromptDeleteSuccessResponse 表示删除提示词接口 Swagger 成功响应结构。
@@ -346,36 +324,6 @@ func (h *Handler) List(c *gin.Context) {
 	}
 
 	data, err := h.service.List(c.Request.Context(), req)
-	if err != nil {
-		writePromptError(c, err)
-		return
-	}
-	response.OK(c, data)
-}
-
-// ListRecommendations 处理提示词推荐列表查询请求。
-// 参数 c 表示 Gin 请求上下文。
-//
-// @Summary 查询提示词推荐列表
-// @Description 按提示词类型查询推荐提示词，列表项返回完整提示词正文。
-// @Tags ai-prompts
-// @Security Bearer
-// @Produce json
-// @Param prompt_type query string true "提示词类型"
-// @Param page_size query int false "推荐数量"
-// @Success 200 {object} PromptRecommendationListSuccessResponse "查询成功"
-// @Failure 400 {object} response.ErrorBody "请求参数错误"
-// @Failure 401 {object} response.ErrorBody "未登录或登录过期"
-// @Failure 500 {object} response.ErrorBody "服务器内部错误"
-// @Router /ai/prompts/recommendations [get]
-func (h *Handler) ListRecommendations(c *gin.Context) {
-	var req bizprompt.RecommendationListRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "请求参数错误")
-		return
-	}
-
-	data, err := h.service.ListRecommendations(c.Request.Context(), req)
 	if err != nil {
 		writePromptError(c, err)
 		return

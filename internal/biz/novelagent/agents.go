@@ -22,9 +22,9 @@ const (
 type runtimeAgentDefinition struct {
 	// name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
 	name string
-	// providerID 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求的提供商。
+	// providerID 表示该 Agent 使用的 AI 提供商 ID。
 	providerID uint64
-	// model 表示该 Agent 自定义使用的模型标识。
+	// model 表示该 Agent 使用的模型标识。
 	model string
 	// task 表示子 Agent 产生流式事件时返回给前端的任务标识。
 	task string
@@ -102,6 +102,9 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 	names := make(map[string]struct{}, len(agentCfg.Agent))
 	for index, childCfg := range agentCfg.Agent {
 		if !isChildAgentEnabled(childCfg) {
+			if _, err := normalizeAgentModelOverride(childCfg, "子 Agent"); err != nil {
+				return runtimeAgentConfig{}, fmt.Errorf("子 Agent 配置 %d 无效: %w", index+1, err)
+			}
 			if _, err := normalizeAgentTools(childCfg.Tools, tools); err != nil {
 				return runtimeAgentConfig{}, fmt.Errorf("子 Agent 配置 %d 无效: %w", index+1, err)
 			}
@@ -274,12 +277,15 @@ func normalizeChildAgent(def appconfig.AgentDefinition, registry map[string]runt
 	}, nil
 }
 
-// normalizeAgentModelOverride 标准化并校验 Agent 自定义模型字段。
+// normalizeAgentModelOverride 标准化并校验 Agent 模型字段。
 // 参数 def 表示配置文件中的 Agent 定义；参数 label 表示错误提示中的 Agent 类型。
 func normalizeAgentModelOverride(def appconfig.AgentDefinition, label string) (string, error) {
 	model := strings.TrimSpace(def.Model)
-	if model != "" && def.ProviderID == 0 {
-		return "", fmt.Errorf("%w: %s model 非空时 provider_id 不能为空", ErrAgentConfigInvalid, label)
+	if def.ProviderID == 0 {
+		return "", fmt.Errorf("%w: %s provider_id 不能为空", ErrAgentConfigInvalid, label)
+	}
+	if model == "" {
+		return "", fmt.Errorf("%w: %s model 不能为空", ErrAgentConfigInvalid, label)
 	}
 	return model, nil
 }

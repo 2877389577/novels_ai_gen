@@ -22,7 +22,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "使用已保存 AI 提供商配置创建 Eino 写作 Agent，并以 NDJSON 流式返回模型输出。",
+                "description": "使用 Agent 自定义模型配置创建 Eino 写作 Agent，并以 NDJSON 流式返回模型输出。",
                 "consumes": [
                     "application/json"
                 ],
@@ -49,63 +49,6 @@ const docTemplate = `{
                         "description": "NDJSON 流事件",
                         "schema": {
                             "$ref": "#/definitions/internal_api_handler_novelagent.StreamEvent"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "未登录或登录已过期",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/ai/agents/prompt-recommendation": {
-            "post": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "使用当前 AI 提供商和模型判断用户输入是否需要查询提示词库推荐；该请求不进入 Agent 记忆。",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ai-agents"
-                ],
-                "summary": "提示词库推荐判定",
-                "parameters": [
-                    {
-                        "description": "提示词库推荐判定请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_api_handler_novelagent.PromptRecommendationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "判定成功",
-                        "schema": {
-                            "$ref": "#/definitions/novelagent.PromptRecommendationSuccessResponse"
                         }
                     },
                     "400": {
@@ -458,64 +401,6 @@ const docTemplate = `{
                         "description": "创建成功",
                         "schema": {
                             "$ref": "#/definitions/prompt.PromptSuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "未登录或登录过期",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/ai/prompts/recommendations": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "按提示词类型查询推荐提示词，列表项返回完整提示词正文。",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ai-prompts"
-                ],
-                "summary": "查询提示词推荐列表",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "提示词类型",
-                        "name": "prompt_type",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "推荐数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "查询成功",
-                        "schema": {
-                            "$ref": "#/definitions/prompt.PromptRecommendationListSuccessResponse"
                         }
                     },
                     "400": {
@@ -6381,38 +6266,8 @@ const docTemplate = `{
                     "type": "string",
                     "example": "帮我润色这一段，让语气更紧张"
                 },
-                "model": {
-                    "description": "Model 表示本次对话使用的模型标识。",
-                    "type": "string",
-                    "example": "gpt-5"
-                },
                 "novel_id": {
                     "description": "NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "provider_id": {
-                    "description": "ProviderID 表示本次对话使用的 AI 提供商 ID。",
-                    "type": "integer",
-                    "example": 1
-                }
-            }
-        },
-        "internal_api_handler_novelagent.PromptRecommendationRequest": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "description": "Message 表示用户当前尚未发送的 AI 输入框原文。",
-                    "type": "string",
-                    "example": "帮我把这一段润色得更有压迫感"
-                },
-                "model": {
-                    "description": "Model 表示本次推荐判定使用的模型标识。",
-                    "type": "string",
-                    "example": "gpt-5"
-                },
-                "provider_id": {
-                    "description": "ProviderID 表示本次推荐判定使用的 AI 提供商 ID。",
                     "type": "integer",
                     "example": 1
                 }
@@ -6992,54 +6847,6 @@ const docTemplate = `{
                 }
             }
         },
-        "novelagent.PromptRecommendationData": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "description": "Action 表示前端下一步动作，prompt_search 表示查询数据库提示词，none 表示无需推荐。",
-                    "type": "string",
-                    "example": "prompt_search"
-                },
-                "matched": {
-                    "description": "Matched 表示是否匹配到小说修改或润色相关意图。",
-                    "type": "boolean",
-                    "example": true
-                },
-                "prompt_type": {
-                    "description": "PromptType 表示匹配到的提示词类型，不匹配时为空。",
-                    "type": "string",
-                    "example": "润色"
-                }
-            }
-        },
-        "novelagent.PromptRecommendationSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示提示词库推荐判定结果。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/novelagent.PromptRecommendationData"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
         "noveloutline.DeleteData": {
             "type": "object",
             "properties": {
@@ -7405,56 +7212,6 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/prompt.PromptListData"
-                        }
-                    ]
-                },
-                "message": {
-                    "description": "Message 表示响应提示信息。",
-                    "type": "string",
-                    "example": "ok"
-                },
-                "request_id": {
-                    "description": "RequestID 表示本次请求的追踪标识。",
-                    "type": "string",
-                    "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
-                }
-            }
-        },
-        "prompt.PromptRecommendationListData": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "description": "Items 表示推荐提示词列表，包含提示词正文。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/prompt.PromptData"
-                    }
-                },
-                "page_size": {
-                    "description": "PageSize 表示本次推荐查询数量。",
-                    "type": "integer",
-                    "example": 10
-                },
-                "total": {
-                    "description": "Total 表示符合条件的提示词总数。",
-                    "type": "integer",
-                    "example": 1
-                }
-            }
-        },
-        "prompt.PromptRecommendationListSuccessResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code 表示业务响应码，成功固定为 0。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "data": {
-                    "description": "Data 表示提示词推荐列表。",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/prompt.PromptRecommendationListData"
                         }
                     ]
                 },
