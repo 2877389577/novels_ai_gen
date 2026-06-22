@@ -212,7 +212,6 @@ func (s *Service) Delete(ctx context.Context, novelID uint64, chapterID uint64) 
 // 参数 req 表示创建章节请求参数。
 func normalizeCreateRequest(req CreateRequest) CreateRequest {
 	req.Title = strings.TrimSpace(req.Title)
-	req.Content = strings.TrimSpace(req.Content)
 	return req
 }
 
@@ -220,7 +219,6 @@ func normalizeCreateRequest(req CreateRequest) CreateRequest {
 // 参数 req 表示更新章节请求参数。
 func normalizeUpdateRequest(req UpdateRequest) UpdateRequest {
 	req.Title = strings.TrimSpace(req.Title)
-	req.Content = strings.TrimSpace(req.Content)
 	return req
 }
 
