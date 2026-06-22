@@ -127,11 +127,9 @@ interface AgentSupervisorFormState {
   maxIterations: string;
   // toolNames 表示顶层 Agent 已选择的普通工具名称列表。
   toolNames: string[];
-  // customModelEnabled 表示顶层 Agent 是否启用自定义模型。
-  customModelEnabled: boolean;
-  // providerId 表示顶层 Agent 自定义模型使用的 AI 提供商 ID 文本。
+  // providerId 表示顶层 Agent 使用的 AI 提供商 ID 文本。
   providerId: string;
-  // model 表示顶层 Agent 自定义模型标识，空值时使用提供商默认模型。
+  // model 表示顶层 Agent 使用的模型标识。
   model: string;
 }
 
@@ -155,11 +153,9 @@ interface AgentChildFormState {
   maxIterations: string;
   // toolNames 表示该子 Agent 已选择的普通工具名称列表。
   toolNames: string[];
-  // customModelEnabled 表示该子 Agent 是否启用自定义模型。
-  customModelEnabled: boolean;
-  // providerId 表示该子 Agent 自定义模型使用的 AI 提供商 ID 文本。
+  // providerId 表示该子 Agent 使用的 AI 提供商 ID 文本。
   providerId: string;
-  // model 表示该子 Agent 自定义模型标识，空值时使用提供商默认模型。
+  // model 表示该子 Agent 使用的模型标识。
   model: string;
   // parametersText 表示子 Agent 工具参数 JSON 文本。
   parametersText: string;
@@ -243,7 +239,6 @@ const defaultAgentSettingsFormState: AgentSettingsFormState = {
     instruction: "",
     maxIterations: "8",
     toolNames: [],
-    customModelEnabled: false,
     providerId: "",
     model: "",
   },
@@ -1108,7 +1103,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
   );
 
   const loadModelProviders = useCallback(
-    // loadModelProviders 读取可用于 Agent 自定义模型选择的 AI 提供商列表。
+    // loadModelProviders 读取可用于 Agent 模型选择的 AI 提供商列表。
     // 参数 signal 表示用于取消请求的浏览器 AbortSignal。
     async function loadModelProviders(signal?: AbortSignal) {
       try {
@@ -1283,31 +1278,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
-  // handleSupervisorCustomModelChange 处理顶层 Agent 自定义模型启用状态变化。
-  // 参数 event 表示复选框变化事件。
-  function handleSupervisorCustomModelChange(event: ChangeEvent<HTMLInputElement>) {
-    const enabled = event.target.checked;
-    const providerId =
-      enabled && !form.supervisor.providerId
-        ? String(modelProviders[0]?.id ?? "")
-        : form.supervisor.providerId;
-    setForm(function updateSupervisorCustomModel(current) {
-      return {
-        ...current,
-        supervisor: {
-          ...current.supervisor,
-          customModelEnabled: enabled,
-          providerId: enabled ? providerId : "",
-          model: enabled ? current.supervisor.model : "",
-        },
-      };
-    });
-    if (enabled && providerId) {
-      void loadAgentModelOptions(providerId);
-    }
-  }
-
-  // handleSupervisorModelProviderChange 处理顶层 Agent 自定义模型提供商变化。
+  // handleSupervisorModelProviderChange 处理顶层 Agent 模型提供商变化。
   // 参数 event 表示下拉框变化事件。
   function handleSupervisorModelProviderChange(
     event: ChangeEvent<HTMLSelectElement>,
@@ -1326,7 +1297,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     void loadAgentModelOptions(providerId);
   }
 
-  // handleSupervisorModelChange 处理顶层 Agent 自定义模型变化。
+  // handleSupervisorModelChange 处理顶层 Agent 模型变化。
   // 参数 event 表示下拉框变化事件。
   function handleSupervisorModelChange(event: ChangeEvent<HTMLSelectElement>) {
     const model = event.target.value;
@@ -1380,28 +1351,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
-  // handleChildCustomModelChange 处理子 Agent 自定义模型启用状态变化。
-  // 参数 index 表示子 Agent 在表单列表中的位置；参数 enabled 表示是否启用自定义模型。
-  function handleChildCustomModelChange(index: number, enabled: boolean) {
-    const child = form.children[index];
-    const providerId =
-      enabled && !child?.providerId
-        ? String(modelProviders[0]?.id ?? "")
-        : child?.providerId ?? "";
-    updateChildForm(index, function updateChildCustomModel(child) {
-      return {
-        ...child,
-        customModelEnabled: enabled,
-        providerId: enabled ? providerId : "",
-        model: enabled ? child.model : "",
-      };
-    });
-    if (enabled && providerId) {
-      void loadAgentModelOptions(providerId);
-    }
-  }
-
-  // handleChildModelProviderChange 处理子 Agent 自定义模型提供商变化。
+  // handleChildModelProviderChange 处理子 Agent 模型提供商变化。
   // 参数 index 表示子 Agent 在表单列表中的位置；参数 providerId 表示新的 AI 提供商 ID 文本。
   function handleChildModelProviderChange(index: number, providerId: string) {
     updateChildForm(index, function updateChildModelProvider(child) {
@@ -1410,7 +1360,7 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     void loadAgentModelOptions(providerId);
   }
 
-  // handleChildModelChange 处理子 Agent 自定义模型变化。
+  // handleChildModelChange 处理子 Agent 模型变化。
   // 参数 index 表示子 Agent 在表单列表中的位置；参数 model 表示新的模型标识。
   function handleChildModelChange(index: number, model: string) {
     updateChildForm(index, function updateChildModel(child) {
@@ -1843,69 +1793,54 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                     </label>
                   );
                 })}
-                <label className="agent-settings-tool-toggle">
-                  <input
-                    type="checkbox"
-                    checked={form.supervisor.customModelEnabled}
-                    disabled={loading || saving}
-                    onChange={handleSupervisorCustomModelChange}
-                  />
-                  <span>自定义模型</span>
-                </label>
-                {form.supervisor.customModelEnabled ? (
-                  <>
-                    <label className="ai-provider-field">
-                      <span>模型提供商</span>
-                      <select
-                        value={form.supervisor.providerId}
-                        disabled={loading || saving || modelProviders.length === 0}
-                        onChange={handleSupervisorModelProviderChange}
-                      >
-                        <option value="">选择提供商</option>
-                        {modelProviders.map(function renderAgentProviderOption(
-                          provider,
-                        ) {
-                          return (
-                            <option key={provider.id} value={String(provider.id)}>
-                              {formatAgentProviderOption(provider)}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                    <label className="ai-provider-field">
-                      <span>模型</span>
-                      <select
-                        value={form.supervisor.model}
-                        disabled={
-                          loading || saving || !form.supervisor.providerId
-                        }
-                        onFocus={function handleSupervisorModelSelectFocus() {
-                          handleAgentModelSelectFocus(form.supervisor.providerId);
-                        }}
-                        onChange={handleSupervisorModelChange}
-                      >
-                        <option value="">
-                          {modelLoadingByProvider[form.supervisor.providerId]
-                            ? "正在加载模型..."
-                            : "使用提供商默认模型"}
+                <label className="ai-provider-field">
+                  <span>模型提供商</span>
+                  <select
+                    value={form.supervisor.providerId}
+                    disabled={loading || saving || modelProviders.length === 0}
+                    onChange={handleSupervisorModelProviderChange}
+                  >
+                    <option value="">选择提供商</option>
+                    {modelProviders.map(function renderAgentProviderOption(
+                      provider,
+                    ) {
+                      return (
+                        <option key={provider.id} value={String(provider.id)}>
+                          {formatAgentProviderOption(provider)}
                         </option>
-                        {agentModelOptionsForProvider(
-                          form.supervisor.providerId,
-                          form.supervisor.model,
-                          modelProviders,
-                          modelOptionsByProvider,
-                        ).map(function renderSupervisorModelOption(model) {
-                          return (
-                            <option key={model.id} value={model.id}>
-                              {formatAgentModelOption(model)}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                  </>
-                ) : null}
+                      );
+                    })}
+                  </select>
+                </label>
+                <label className="ai-provider-field">
+                  <span>模型</span>
+                  <select
+                    value={form.supervisor.model}
+                    disabled={loading || saving || !form.supervisor.providerId}
+                    onFocus={function handleSupervisorModelSelectFocus() {
+                      handleAgentModelSelectFocus(form.supervisor.providerId);
+                    }}
+                    onChange={handleSupervisorModelChange}
+                  >
+                    <option value="">
+                      {modelLoadingByProvider[form.supervisor.providerId]
+                        ? "正在加载模型..."
+                        : "选择模型"}
+                    </option>
+                    {agentModelOptionsForProvider(
+                      form.supervisor.providerId,
+                      form.supervisor.model,
+                      modelProviders,
+                      modelOptionsByProvider,
+                    ).map(function renderSupervisorModelOption(model) {
+                      return (
+                        <option key={model.id} value={model.id}>
+                          {formatAgentModelOption(model)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
                 <label className="ai-provider-field ai-provider-field-wide">
                   <span>Description</span>
                   <input
@@ -2081,82 +2016,64 @@ function AgentSettingsPanel(props: AgentSettingsPanelProps) {
                     </label>
                   );
                 })}
-                <label className="agent-settings-tool-toggle">
-                  <input
-                    type="checkbox"
-                    checked={editingChild.customModelEnabled}
-                    disabled={saving}
-                    onChange={function handleChildCustomModelToggle(event) {
-                      handleChildCustomModelChange(
+                <label className="ai-provider-field">
+                  <span>模型提供商</span>
+                  <select
+                    value={editingChild.providerId}
+                    disabled={saving || modelProviders.length === 0}
+                    onChange={function handleChildProviderSelect(event) {
+                      handleChildModelProviderChange(
                         editingChildIndex,
-                        event.target.checked,
+                        event.target.value,
                       );
                     }}
-                  />
-                  <span>自定义模型</span>
-                </label>
-                {editingChild.customModelEnabled ? (
-                  <>
-                    <label className="ai-provider-field">
-                      <span>模型提供商</span>
-                      <select
-                        value={editingChild.providerId}
-                        disabled={saving || modelProviders.length === 0}
-                        onChange={function handleChildProviderSelect(event) {
-                          handleChildModelProviderChange(
-                            editingChildIndex,
-                            event.target.value,
-                          );
-                        }}
-                      >
-                        <option value="">选择提供商</option>
-                        {modelProviders.map(function renderChildProviderOption(
-                          provider,
-                        ) {
-                          return (
-                            <option key={provider.id} value={String(provider.id)}>
-                              {formatAgentProviderOption(provider)}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                    <label className="ai-provider-field">
-                      <span>模型</span>
-                      <select
-                        value={editingChild.model}
-                        disabled={saving || !editingChild.providerId}
-                        onFocus={function handleChildModelSelectFocus() {
-                          handleAgentModelSelectFocus(editingChild.providerId);
-                        }}
-                        onChange={function handleChildModelSelect(event) {
-                          handleChildModelChange(
-                            editingChildIndex,
-                            event.target.value,
-                          );
-                        }}
-                      >
-                        <option value="">
-                          {modelLoadingByProvider[editingChild.providerId]
-                            ? "正在加载模型..."
-                            : "使用提供商默认模型"}
+                  >
+                    <option value="">选择提供商</option>
+                    {modelProviders.map(function renderChildProviderOption(
+                      provider,
+                    ) {
+                      return (
+                        <option key={provider.id} value={String(provider.id)}>
+                          {formatAgentProviderOption(provider)}
                         </option>
-                        {agentModelOptionsForProvider(
-                          editingChild.providerId,
-                          editingChild.model,
-                          modelProviders,
-                          modelOptionsByProvider,
-                        ).map(function renderChildModelOption(model) {
-                          return (
-                            <option key={model.id} value={model.id}>
-                              {formatAgentModelOption(model)}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </label>
-                  </>
-                ) : null}
+                      );
+                    })}
+                  </select>
+                </label>
+                <label className="ai-provider-field">
+                  <span>模型</span>
+                  <select
+                    value={editingChild.model}
+                    disabled={saving || !editingChild.providerId}
+                    onFocus={function handleChildModelSelectFocus() {
+                      handleAgentModelSelectFocus(editingChild.providerId);
+                    }}
+                    onChange={function handleChildModelSelect(event) {
+                      handleChildModelChange(
+                        editingChildIndex,
+                        event.target.value,
+                      );
+                    }}
+                  >
+                    <option value="">
+                      {modelLoadingByProvider[editingChild.providerId]
+                        ? "正在加载模型..."
+                        : "选择模型"}
+                    </option>
+                    {agentModelOptionsForProvider(
+                      editingChild.providerId,
+                      editingChild.model,
+                      modelProviders,
+                      modelOptionsByProvider,
+                    ).map(function renderChildModelOption(model) {
+                      return (
+                        <option key={model.id} value={model.id}>
+                          {formatAgentModelOption(model)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
                 <label className="ai-provider-field ai-provider-field-wide">
                   <span>Description</span>
                   <input
@@ -3040,7 +2957,6 @@ function createDefaultAgentChildFormState(): AgentChildFormState {
     instruction: "",
     maxIterations: "6",
     toolNames: [],
-    customModelEnabled: false,
     providerId: "",
     model: "",
     parametersText: "{}",
@@ -3114,7 +3030,6 @@ function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormState {
       instruction: agent.supervisor?.instruction ?? "",
       maxIterations: String(agent.supervisor?.max_iterations ?? 8),
       toolNames: normalizeAgentToolNames(agent.supervisor?.tools ?? []),
-      customModelEnabled: Number(agent.supervisor?.provider_id ?? 0) > 0,
       providerId:
         Number(agent.supervisor?.provider_id ?? 0) > 0
           ? String(agent.supervisor?.provider_id ?? "")
@@ -3141,7 +3056,6 @@ function agentDefinitionToChildFormState(
     instruction: definition.instruction ?? "",
     maxIterations: String(definition.max_iterations ?? 6),
     toolNames: normalizeAgentToolNames(definition.tools ?? []),
-    customModelEnabled: Number(definition.provider_id ?? 0) > 0,
     providerId:
       Number(definition.provider_id ?? 0) > 0
         ? String(definition.provider_id ?? "")
@@ -3226,7 +3140,6 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     return { agent: null, error: "顶层 Agent instruction 不能为空" };
   }
   const supervisorModel = parseAgentCustomModel(
-    form.supervisor.customModelEnabled,
     form.supervisor.providerId,
     form.supervisor.model,
     "顶层 Agent",
@@ -3287,18 +3200,11 @@ function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     if (child.enabled && (parameters.error || !parameters.value)) {
       return { agent: null, error: parameters.error };
     }
-    const childModel = child.enabled
-      ? parseAgentCustomModel(
-          child.customModelEnabled,
-          child.providerId,
-          child.model,
-          `第 ${index + 1} 个子 Agent`,
-        )
-      : parseDisabledAgentCustomModel(
-          child.customModelEnabled,
-          child.providerId,
-          child.model,
-        );
+    const childModel = parseAgentCustomModel(
+      child.providerId,
+      child.model,
+      `第 ${index + 1} 个子 Agent`,
+    );
     if (childModel.error) {
       return { agent: null, error: childModel.error };
     }
@@ -3415,41 +3321,24 @@ function normalizeSelectedAgentTools(
   return { value: result, error: "" };
 }
 
-// parseAgentCustomModel 将启用 Agent 的自定义模型表单字段转换为后端字段。
-// 参数 enabled 表示是否启用自定义模型；参数 providerId 表示提供商 ID 文本；参数 model 表示模型标识文本；参数 label 表示错误提示使用的 Agent 名称。
+// parseAgentCustomModel 将 Agent 模型表单字段转换为后端字段。
+// 参数 providerId 表示提供商 ID 文本；参数 model 表示模型标识文本；参数 label 表示错误提示使用的 Agent 名称。
 function parseAgentCustomModel(
-  enabled: boolean,
   providerId: string,
   model: string,
   label: string,
 ): { providerId: number; model: string; error: string } {
-  if (!enabled) {
-    return { providerId: 0, model: "", error: "" };
-  }
   const normalizedProviderID = providerId.trim();
   if (!/^[1-9]\d*$/.test(normalizedProviderID)) {
-    return { providerId: 0, model: "", error: `${label} 自定义模型必须选择提供商` };
+    return { providerId: 0, model: "", error: `${label} 必须选择模型提供商` };
+  }
+  const normalizedModel = model.trim();
+  if (!normalizedModel) {
+    return { providerId: 0, model: "", error: `${label} 必须选择模型` };
   }
   return {
     providerId: Number.parseInt(normalizedProviderID, 10),
-    model: model.trim(),
-    error: "",
-  };
-}
-
-// parseDisabledAgentCustomModel 将禁用子 Agent 的自定义模型草稿转换为后端字段。
-// 参数 enabled 表示是否启用自定义模型；参数 providerId 表示提供商 ID 文本；参数 model 表示模型标识文本。
-function parseDisabledAgentCustomModel(
-  enabled: boolean,
-  providerId: string,
-  model: string,
-): { providerId: number; model: string; error: string } {
-  if (!enabled || !/^[1-9]\d*$/.test(providerId.trim())) {
-    return { providerId: 0, model: "", error: "" };
-  }
-  return {
-    providerId: Number.parseInt(providerId.trim(), 10),
-    model: model.trim(),
+    model: normalizedModel,
     error: "",
   };
 }

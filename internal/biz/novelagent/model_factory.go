@@ -59,7 +59,7 @@ func NewEinoAgentRuntimeFactory(chapterReader agenttools.ChapterReader, novelSum
 }
 
 // NewRuntime 按 AI 提供商协议创建 Eino 多层 Agent 运行时。
-// 参数 ctx 表示请求上下文；参数 cfg 表示入口模型和启用 Agent 自定义模型配置。
+// 参数 ctx 表示请求上下文；参数 cfg 表示入口模型和启用 Agent 模型配置。
 func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeModelConfig) (AgentRuntime, error) {
 	cfg = normalizeRuntimeModelConfig(cfg)
 	defaultPath, err := modelPathForConfig(cfg.Default)
@@ -253,7 +253,7 @@ func normalizeGeminiBaseURL(baseURL string) string {
 }
 
 // normalizeRuntimeModelConfig 标准化一次 Agent 运行中的所有模型配置。
-// 参数 cfg 表示入口模型和启用 Agent 自定义模型配置。
+// 参数 cfg 表示入口模型和启用 Agent 模型配置。
 func normalizeRuntimeModelConfig(cfg RuntimeModelConfig) RuntimeModelConfig {
 	cfg.Default = normalizeModelConfig(cfg.Default)
 	cfg.Retry = normalizeRuntimeRetryConfig(cfg.Retry)
@@ -354,7 +354,7 @@ type agentModelConfigRegistry struct {
 	supervisorConfigured bool
 	// supervisorConfig 表示顶层 Agent 实际使用的模型配置。
 	supervisorConfig ModelConfig
-	// childConfigs 表示启用子 Agent 的自定义模型配置，未出现的子 Agent 继承入口模型。
+	// childConfigs 表示启用子 Agent 的模型配置，键为子 Agent 名称。
 	childConfigs map[string]ModelConfig
 }
 

@@ -211,11 +211,11 @@ type RuntimeRetryConfig struct {
 
 // RuntimeModelConfig 表示一次 Agent 运行中父子 Agent 使用的模型配置集合。
 type RuntimeModelConfig struct {
-	// Default 表示本轮 Agent 运行入口模型配置，未配置自定义模型的 Agent 会继承它。
+	// Default 表示本轮 Agent 运行入口模型配置。
 	Default ModelConfig
-	// Supervisor 表示顶层 Agent 自定义模型配置，nil 表示继承 Default。
+	// Supervisor 表示顶层 Agent 模型配置，nil 表示使用 Default。
 	Supervisor *ModelConfig
-	// Children 表示启用子 Agent 的自定义模型配置，键为子 Agent 名称。
+	// Children 表示启用子 Agent 的模型配置，键为子 Agent 名称。
 	Children map[string]ModelConfig
 	// Retry 表示本次 Agent 运行中模型调用失败时的重试配置。
 	Retry RuntimeRetryConfig
@@ -311,6 +311,6 @@ type AgentRuntime interface {
 // AgentRuntimeFactory 表示 Eino 多层 Agent 运行时工厂。
 type AgentRuntimeFactory interface {
 	// NewRuntime 按提供商协议创建小说写作 Agent 运行时。
-	// 参数 ctx 表示请求上下文；参数 cfg 表示一次运行中的入口模型和 Agent 自定义模型配置。
+	// 参数 ctx 表示请求上下文；参数 cfg 表示一次运行中的入口模型和 Agent 模型配置。
 	NewRuntime(ctx context.Context, cfg RuntimeModelConfig) (AgentRuntime, error)
 }

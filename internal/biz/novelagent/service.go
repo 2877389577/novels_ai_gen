@@ -338,7 +338,7 @@ func (s *Service) providerCredential(ctx context.Context, id uint64) (*bizaiprov
 	return provider, apiKey, nil
 }
 
-// runtimeModelConfig 解析本轮 Agent 运行需要使用的入口模型和父子 Agent 自定义模型。
+// runtimeModelConfig 解析本轮 Agent 运行需要使用的入口模型和父子 Agent 模型。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照。
 func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConfig) (RuntimeModelConfig, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
@@ -346,7 +346,7 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 		return RuntimeModelConfig{}, err
 	}
 	if agentCfg.supervisor.providerID == 0 {
-		return RuntimeModelConfig{}, fmt.Errorf("%w: 顶层 Agent 必须配置自定义模型提供商", ErrAgentConfigInvalid)
+		return RuntimeModelConfig{}, fmt.Errorf("%w: 顶层 Agent 必须配置模型提供商", ErrAgentConfigInvalid)
 	}
 	defaultConfig, err := s.agentModelOverrideConfig(
 		ctx,
@@ -378,8 +378,8 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 	return runtimeConfig, nil
 }
 
-// agentModelOverrideConfig 读取单个 Agent 自定义模型对应的提供商凭据并补齐默认模型。
-// 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示自定义模型提供商 ID；参数 model 表示配置文件中的模型标识。
+// agentModelOverrideConfig 读取单个 Agent 模型对应的提供商凭据。
+// 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示模型提供商 ID；参数 model 表示配置文件中的模型标识。
 func (s *Service) agentModelOverrideConfig(
 	ctx context.Context,
 	label string,
@@ -388,11 +388,11 @@ func (s *Service) agentModelOverrideConfig(
 ) (ModelConfig, error) {
 	provider, apiKey, err := s.providerCredential(ctx, providerID)
 	if err != nil {
-		return ModelConfig{}, fmt.Errorf("%w: %s 自定义模型提供商 %d 不可用: %v", ErrAgentConfigInvalid, label, providerID, err)
+		return ModelConfig{}, fmt.Errorf("%w: %s 模型提供商 %d 不可用: %v", ErrAgentConfigInvalid, label, providerID, err)
 	}
-	model = modelForAgentConfig(model, provider.DefaultModel)
+	model = strings.TrimSpace(model)
 	if strings.TrimSpace(model) == "" {
-		return ModelConfig{}, fmt.Errorf("%w: %s 自定义模型为空且提供商未配置默认模型", ErrAgentConfigInvalid, label)
+		return ModelConfig{}, fmt.Errorf("%w: %s 模型不能为空", ErrAgentConfigInvalid, label)
 	}
 	return ModelConfig{
 		ProviderID:   provider.ID,
@@ -402,16 +402,6 @@ func (s *Service) agentModelOverrideConfig(
 		BaseURL:      provider.BaseURL,
 		Model:        model,
 	}, nil
-}
-
-// modelForAgentConfig 返回 Agent 配置最终使用的模型标识。
-// 参数 customModel 表示 Agent 自定义模型标识；参数 defaultModel 表示 AI 提供商配置的默认模型标识。
-func modelForAgentConfig(customModel string, defaultModel string) string {
-	customModel = strings.TrimSpace(customModel)
-	if customModel != "" {
-		return customModel
-	}
-	return strings.TrimSpace(defaultModel)
 }
 
 // currentConfig 返回当前运行配置快照。
@@ -830,7 +820,7 @@ func friendlyError(err error) string {
 		return ""
 	}
 	if errors.Is(err, ErrAgentNotConfigured) || errors.Is(err, ErrAgentConfigInvalid) {
-		return "AI 写作智能体配置错误，请检查自定义模型配置"
+		return "AI 写作智能体配置错误，请检查模型配置"
 	}
 	if strings.TrimSpace(err.Error()) == "" {
 		return "AI 生成失败，请稍后再试"
