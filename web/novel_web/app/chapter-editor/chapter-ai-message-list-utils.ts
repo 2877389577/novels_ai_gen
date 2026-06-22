@@ -1,8 +1,8 @@
 import type { ChapterAiMessage } from "./types";
 import {
+  createChapterAiLoadingMessageID,
   createChapterAiRenderMessageID,
   createChapterAiReplyMessageID,
-  createChapterAiThinkingMessageID,
 } from "./chapter-ai-utils";
 
 // bindChapterAiPairConversation 将本地一轮消息绑定到后端会话 ID。
@@ -66,7 +66,7 @@ export function resetChapterAiRequestForRetryInList(
       }];
     }
     if (chat.role === "assistant") {
-      if (chat.chapterAiThinking) {
+      if (chat.chapterAiLoading) {
         return [];
       }
       if (assistantReset) {
@@ -86,16 +86,16 @@ export function resetChapterAiRequestForRetryInList(
   });
 }
 
-// appendChapterAiThinkingMessageToList 追加当前 AI 请求仍在进行中的本地提示气泡。
+// appendChapterAiLoadingMessageToList 追加当前 AI 请求仍在进行中的本地加载占位消息。
 // 参数 chats 表示当前章节 AI 消息列表；参数 pairID 表示当前用户消息和助手消息共用的配对 ID；参数 conversationID 表示当前会话 ID。
-export function appendChapterAiThinkingMessageToList(
+export function appendChapterAiLoadingMessageToList(
   chats: ChapterAiMessage[],
   pairID: string,
   conversationID: number | undefined,
 ): ChapterAiMessage[] {
   if (
-    chats.some(function hasThinkingMessage(chat) {
-      return chat.chapterAiPairID === pairID && chat.chapterAiThinking;
+    chats.some(function hasLoadingMessage(chat) {
+      return chat.chapterAiPairID === pairID && chat.chapterAiLoading;
     })
   ) {
     return chats;
@@ -103,25 +103,25 @@ export function appendChapterAiThinkingMessageToList(
   return [
     ...chats,
     {
-      id: createChapterAiThinkingMessageID(pairID),
+      id: createChapterAiLoadingMessageID(pairID),
       chapterAiConversationID: conversationID,
       chapterAiPairID: pairID,
-      chapterAiThinking: true,
+      chapterAiLoading: true,
       role: "assistant",
-      content: "正在思考中...",
+      content: "",
       status: "in_progress",
     },
   ];
 }
 
-// removeChapterAiThinkingMessageFromList 移除当前 AI 请求的本地进行中提示气泡。
+// removeChapterAiLoadingMessageFromList 移除当前 AI 请求的本地加载占位消息。
 // 参数 chats 表示当前章节 AI 消息列表；参数 pairID 表示当前用户消息和助手消息共用的配对 ID。
-export function removeChapterAiThinkingMessageFromList(
+export function removeChapterAiLoadingMessageFromList(
   chats: ChapterAiMessage[],
   pairID: string,
 ): ChapterAiMessage[] {
   return chats.filter(function keepMessage(chat) {
-    return !(chat.chapterAiPairID === pairID && chat.chapterAiThinking);
+    return !(chat.chapterAiPairID === pairID && chat.chapterAiLoading);
   });
 }
 
@@ -156,18 +156,18 @@ export function appendAssistantReplyMessageToList(
     content: "",
     status: "in_progress",
   };
-  const thinkingMessageIndex = chats.findIndex(
-    function findThinkingMessage(chat) {
-      return chat.chapterAiPairID === pairID && chat.chapterAiThinking;
+  const loadingMessageIndex = chats.findIndex(
+    function findLoadingMessage(chat) {
+      return chat.chapterAiPairID === pairID && chat.chapterAiLoading;
     },
   );
-  if (thinkingMessageIndex < 0) {
+  if (loadingMessageIndex < 0) {
     return [...chats, replyMessage];
   }
   return [
-    ...chats.slice(0, thinkingMessageIndex),
+    ...chats.slice(0, loadingMessageIndex),
     replyMessage,
-    ...chats.slice(thinkingMessageIndex),
+    ...chats.slice(loadingMessageIndex),
   ];
 }
 

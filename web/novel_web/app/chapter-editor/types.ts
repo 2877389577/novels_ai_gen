@@ -30,8 +30,8 @@ export interface ChapterAiMessage extends Message {
   chapterAiRetryable?: boolean;
   // chapterAiRetryPayload 表示该用户消息重试时复用的原始发送参数。
   chapterAiRetryPayload?: ChapterAiRetryPayload;
-  // chapterAiThinking 表示该消息是前端本地生成的 Agent 进行中提示气泡。
-  chapterAiThinking?: boolean;
+  // chapterAiLoading 表示该消息是前端本地生成的临时加载占位消息。
+  chapterAiLoading?: boolean;
 }
 
 // ChapterAiStreamRequest 表示一次章节 AI 流式请求所需的本地上下文。
