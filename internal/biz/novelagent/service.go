@@ -122,27 +122,12 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		return fmt.Errorf("Agent 流事件写出器不能为空")
 	}
 
-	provider, apiKey, err := s.providerCredential(ctx, req.ProviderID)
-	if err != nil {
-		return err
-	}
-	req.Model = modelForChatRequest(req.Model, provider.DefaultModel)
-	if strings.TrimSpace(req.Model) == "" {
-		return ErrModelRequired
-	}
-
 	cfg := s.currentConfig()
-	modelConfig, err := s.runtimeModelConfig(ctx, cfg, ModelConfig{
-		ProviderID:   provider.ID,
-		ProviderType: provider.ProviderType,
-		APIType:      provider.APIType,
-		APIKey:       apiKey,
-		BaseURL:      provider.BaseURL,
-		Model:        req.Model,
-	})
+	modelConfig, err := s.runtimeModelConfig(ctx, cfg)
 	if err != nil {
 		return err
 	}
+	entryConfig := modelConfig.Default
 	memory, err := s.memoryForRun(ctx, cfg, req.NovelID, req.ConversationID)
 	if err != nil {
 		return err
@@ -152,11 +137,11 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	if err != nil {
 		slog.ErrorContext(ctx, "小说写作 Agent 创建运行时失败",
 			"error", err,
-			"provider_id", req.ProviderID,
-			"provider_type", provider.ProviderType,
-			"api_type", provider.APIType,
-			"model", req.Model,
-			"base_url_configured", strings.TrimSpace(provider.BaseURL) != "",
+			"provider_id", entryConfig.ProviderID,
+			"provider_type", entryConfig.ProviderType,
+			"api_type", entryConfig.APIType,
+			"model", entryConfig.Model,
+			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
 		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
 	}
@@ -181,11 +166,11 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		}
 		slog.ErrorContext(ctx, "小说写作 Agent 执行失败",
 			"error", err,
-			"provider_id", req.ProviderID,
-			"provider_type", provider.ProviderType,
-			"api_type", provider.APIType,
-			"model", req.Model,
-			"base_url_configured", strings.TrimSpace(provider.BaseURL) != "",
+			"provider_id", entryConfig.ProviderID,
+			"provider_type", entryConfig.ProviderType,
+			"api_type", entryConfig.APIType,
+			"model", entryConfig.Model,
+			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: friendlyError(err)})
 		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
@@ -193,15 +178,15 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	if IsCanceledError(ctx, nil) {
 		return nil
 	}
-	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, provider.ID)
+	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, entryConfig)
 	if err != nil {
 		if IsCanceledError(ctx, err) {
 			return nil
 		}
 		slog.ErrorContext(ctx, "小说写作 Agent 记忆保存失败",
 			"error", err,
-			"provider_id", req.ProviderID,
-			"model", req.Model,
+			"provider_id", entryConfig.ProviderID,
+			"model", entryConfig.Model,
 			"novel_id", req.NovelID,
 			"chapter_id", req.ChapterID,
 			"chapter_number", req.ChapterNumber,
@@ -316,9 +301,6 @@ func (s *Service) DeleteConversation(ctx context.Context, novelID uint64, conver
 // ValidateChatRequest 校验小说写作 Agent 流式对话请求。
 // 参数 req 表示流式对话请求。
 func ValidateChatRequest(req ChatRequest) error {
-	if req.ProviderID == 0 {
-		return ErrProviderIDRequired
-	}
 	if strings.TrimSpace(req.Message) == "" {
 		return ErrMessageRequired
 	}
@@ -357,9 +339,21 @@ func (s *Service) providerCredential(ctx context.Context, id uint64) (*bizaiprov
 }
 
 // runtimeModelConfig 解析本轮 Agent 运行需要使用的入口模型和父子 Agent 自定义模型。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 defaultConfig 表示前端请求继承来源模型配置。
-func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConfig, defaultConfig ModelConfig) (RuntimeModelConfig, error) {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照。
+func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConfig) (RuntimeModelConfig, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
+	if err != nil {
+		return RuntimeModelConfig{}, err
+	}
+	if agentCfg.supervisor.providerID == 0 {
+		return RuntimeModelConfig{}, fmt.Errorf("%w: 顶层 Agent 必须配置自定义模型提供商", ErrAgentConfigInvalid)
+	}
+	defaultConfig, err := s.agentModelOverrideConfig(
+		ctx,
+		"顶层 Agent",
+		agentCfg.supervisor.providerID,
+		agentCfg.supervisor.model,
+	)
 	if err != nil {
 		return RuntimeModelConfig{}, err
 	}
@@ -368,14 +362,6 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 		Default: defaultConfig,
 		Retry:   agentCfg.retry,
 	}
-	if agentCfg.supervisor.providerID != 0 {
-		supervisorConfig, err := s.agentModelOverrideConfig(ctx, "顶层 Agent", agentCfg.supervisor.providerID, agentCfg.supervisor.model)
-		if err != nil {
-			return RuntimeModelConfig{}, err
-		}
-		runtimeConfig.Supervisor = &supervisorConfig
-	}
-
 	for _, child := range agentCfg.children {
 		if child.providerID == 0 {
 			continue
@@ -394,12 +380,17 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 
 // agentModelOverrideConfig 读取单个 Agent 自定义模型对应的提供商凭据并补齐默认模型。
 // 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示自定义模型提供商 ID；参数 model 表示配置文件中的模型标识。
-func (s *Service) agentModelOverrideConfig(ctx context.Context, label string, providerID uint64, model string) (ModelConfig, error) {
+func (s *Service) agentModelOverrideConfig(
+	ctx context.Context,
+	label string,
+	providerID uint64,
+	model string,
+) (ModelConfig, error) {
 	provider, apiKey, err := s.providerCredential(ctx, providerID)
 	if err != nil {
 		return ModelConfig{}, fmt.Errorf("%w: %s 自定义模型提供商 %d 不可用: %v", ErrAgentConfigInvalid, label, providerID, err)
 	}
-	model = modelForChatRequest(model, provider.DefaultModel)
+	model = modelForAgentConfig(model, provider.DefaultModel)
 	if strings.TrimSpace(model) == "" {
 		return ModelConfig{}, fmt.Errorf("%w: %s 自定义模型为空且提供商未配置默认模型", ErrAgentConfigInvalid, label)
 	}
@@ -413,12 +404,12 @@ func (s *Service) agentModelOverrideConfig(ctx context.Context, label string, pr
 	}, nil
 }
 
-// modelForChatRequest 返回本轮 Agent 对话最终使用的模型标识。
-// 参数 requestedModel 表示请求体传入的模型标识；参数 defaultModel 表示 AI 提供商配置的默认模型标识。
-func modelForChatRequest(requestedModel string, defaultModel string) string {
-	requestedModel = strings.TrimSpace(requestedModel)
-	if requestedModel != "" {
-		return requestedModel
+// modelForAgentConfig 返回 Agent 配置最终使用的模型标识。
+// 参数 customModel 表示 Agent 自定义模型标识；参数 defaultModel 表示 AI 提供商配置的默认模型标识。
+func modelForAgentConfig(customModel string, defaultModel string) string {
+	customModel = strings.TrimSpace(customModel)
+	if customModel != "" {
+		return customModel
 	}
 	return strings.TrimSpace(defaultModel)
 }
@@ -460,8 +451,16 @@ func (s *Service) memoryForRun(ctx context.Context, cfg *appconfig.AppConfig, no
 }
 
 // saveSuccessfulTurn 将成功完成的一轮用户消息和助手回复写入会话级 Agent 记忆。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 runtime 表示本轮使用的 Agent 运行时；参数 req 表示本轮聊天请求；参数 result 表示 Agent 最终生成结果；参数 entryProviderID 表示用户入口请求使用的 AI 提供商 ID。
-func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConfig, runtime AgentRuntime, req ChatRequest, result AgentResult, entryProviderID uint64) (savedTurnInfo, error) {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 runtime 表示本轮使用的 Agent 运行时；参数 req 表示本轮聊天请求。
+// 参数 result 表示 Agent 最终生成结果；参数 entryConfig 表示本轮入口模型配置。
+func (s *Service) saveSuccessfulTurn(
+	ctx context.Context,
+	cfg *appconfig.AppConfig,
+	runtime AgentRuntime,
+	req ChatRequest,
+	result AgentResult,
+	entryConfig ModelConfig,
+) (savedTurnInfo, error) {
 	if req.NovelID == 0 {
 		return savedTurnInfo{}, nil
 	}
@@ -484,11 +483,11 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConf
 	}
 	assistantProviderID := result.ProviderID
 	if assistantProviderID == 0 {
-		assistantProviderID = entryProviderID
+		assistantProviderID = entryConfig.ProviderID
 	}
 	assistantModel := strings.TrimSpace(result.Model)
 	if assistantModel == "" {
-		assistantModel = req.Model
+		assistantModel = entryConfig.Model
 	}
 	requestID := requestid.FromContext(ctx)
 	messages := []MessageRecord{
@@ -498,8 +497,8 @@ func (s *Service) saveSuccessfulTurn(ctx context.Context, cfg *appconfig.AppConf
 			ChapterID:      chapterID,
 			Role:           MessageRoleUser,
 			Content:        req.Message,
-			ProviderID:     entryProviderID,
-			Model:          req.Model,
+			ProviderID:     entryConfig.ProviderID,
+			Model:          entryConfig.Model,
 			RequestID:      requestID,
 		},
 	}
@@ -820,7 +819,6 @@ func messageResponses(messages []MessageRecord) []MessageResponse {
 // normalizeChatRequest 标准化小说写作 Agent 请求。
 // 参数 req 表示原始流式对话请求。
 func normalizeChatRequest(req ChatRequest) ChatRequest {
-	req.Model = strings.TrimSpace(req.Model)
 	req.Message = strings.TrimSpace(req.Message)
 	return req
 }

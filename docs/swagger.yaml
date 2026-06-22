@@ -1481,16 +1481,8 @@ definitions:
         description: Message 表示用户输入的写作需求或问题。
         example: 帮我润色这一段，让语气更紧张
         type: string
-      model:
-        description: Model 表示本次对话使用的模型标识。
-        example: gpt-5
-        type: string
       novel_id:
         description: NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
-        example: 1
-        type: integer
-      provider_id:
-        description: ProviderID 表示本次对话使用的 AI 提供商 ID。
         example: 1
         type: integer
     required:
@@ -2579,7 +2571,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: 使用已保存 AI 提供商配置创建 Eino 写作 Agent，并以 NDJSON 流式返回模型输出。
+      description: 使用 Agent 自定义模型配置创建 Eino 写作 Agent，并以 NDJSON 流式返回模型输出。
       parameters:
       - description: 小说写作 Agent 流式对话请求
         in: body

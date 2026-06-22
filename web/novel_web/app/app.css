@@ -9215,64 +9215,15 @@ html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-user
 }
 
 .chapter-ai-composer {
-  display: grid;
+  display: block;
   flex: 0 0 auto;
-  grid-template-columns: minmax(150px, 180px) minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
   border-top: 1px solid color-mix(in srgb, var(--color-outline-variant) 48%, transparent);
   padding: 14px 16px 16px;
   background: color-mix(in srgb, var(--color-surface-container-low) 54%, var(--color-paper));
 }
 
-.chapter-ai-model-picker {
-  display: grid;
-  grid-row: auto;
-  min-width: 0;
-  gap: 8px;
-}
-
-.chapter-ai-select-field {
-  display: grid;
-  min-width: 0;
-  gap: 5px;
-}
-
-.chapter-ai-select-field span {
-  color: var(--color-on-surface-variant);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 16px;
-}
-
-.chapter-ai-select-field select {
-  width: 100%;
-  min-width: 0;
-  height: 36px;
-  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 76%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--color-paper) 92%, var(--color-surface));
-  color: var(--color-on-surface);
-  font: inherit;
-  font-size: 13px;
-  line-height: 18px;
-  padding: 0 10px;
-}
-
-.chapter-ai-select-field select:focus {
-  border-color: var(--color-primary);
-  outline: 3px solid color-mix(in srgb, var(--color-primary-container) 46%, transparent);
-}
-
-.chapter-ai-select-field select:disabled {
-  color: color-mix(in srgb, var(--color-on-surface-variant) 64%, transparent);
-  cursor: not-allowed;
-}
-
 .chapter-ai-input-shell {
   display: flex;
-  grid-column: 2;
-  align-self: center;
   min-width: 0;
   min-height: 46px;
   align-items: center;
@@ -10058,17 +10009,10 @@ html[data-theme="dark"] .chapter-ai-input-shell:focus-within {
   }
 
   .chapter-ai-composer {
-    grid-template-columns: minmax(0, 1fr);
     padding: 12px 14px 14px;
   }
 
-  .chapter-ai-model-picker {
-    grid-row: auto;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .chapter-ai-input-shell {
-    grid-column: 1;
     min-height: 46px;
     padding: 6px 8px 6px 16px;
   }

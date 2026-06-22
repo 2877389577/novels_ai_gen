@@ -203,10 +203,6 @@ export interface NovelAgentDeleteConversationData {
 
 // NovelAgentChatParams 表示小说写作 Agent 流式对话请求参数。
 export interface NovelAgentChatParams {
-  // providerId 表示本次对话使用的 AI 提供商 ID。
-  providerId: number;
-  // model 表示本次对话使用的模型标识。
-  model: string;
   // message 表示用户输入的写作需求或问题。
   message: string;
   // novelId 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
@@ -449,9 +445,9 @@ export interface AgentDefinition {
   enabled?: boolean | null;
   // share_chat_history 表示子 Agent 是否共享父 Agent 的完整聊天历史，未返回时按关闭处理。
   share_chat_history?: boolean | null;
-  // provider_id 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求提供商。
+  // provider_id 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承入口模型提供商。
   provider_id: number;
-  // model 表示该 Agent 自定义使用的模型标识，空值表示继承或使用提供商默认模型。
+  // model 表示该 Agent 自定义使用的模型标识，空值表示继承入口模型或使用提供商默认模型。
   model: string;
   // task 表示子 Agent 产生流式事件时返回给前端的任务标识。
   task: string;
@@ -1728,8 +1724,6 @@ export async function streamNovelAgentChat(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      provider_id: params.providerId,
-      model: params.model,
       message: params.message,
       novel_id: params.novelId,
       conversation_id: params.conversationId,

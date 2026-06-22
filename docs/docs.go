@@ -22,7 +22,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "使用已保存 AI 提供商配置创建 Eino 写作 Agent，并以 NDJSON 流式返回模型输出。",
+                "description": "使用 Agent 自定义模型配置创建 Eino 写作 Agent，并以 NDJSON 流式返回模型输出。",
                 "consumes": [
                     "application/json"
                 ],
@@ -6266,18 +6266,8 @@ const docTemplate = `{
                     "type": "string",
                     "example": "帮我润色这一段，让语气更紧张"
                 },
-                "model": {
-                    "description": "Model 表示本次对话使用的模型标识。",
-                    "type": "string",
-                    "example": "gpt-5"
-                },
                 "novel_id": {
                     "description": "NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "provider_id": {
-                    "description": "ProviderID 表示本次对话使用的 AI 提供商 ID。",
                     "type": "integer",
                     "example": 1
                 }

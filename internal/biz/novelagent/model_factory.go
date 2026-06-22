@@ -348,7 +348,7 @@ func validateModelPath(label string, defaultPath string, cfg ModelConfig) error 
 
 // agentModelConfigRegistry 表示 Agent 名称到实际模型配置的查询表。
 type agentModelConfigRegistry struct {
-	// defaultConfig 表示继承前端请求的入口模型配置。
+	// defaultConfig 表示未配置自定义模型的 Agent 继承的入口模型配置。
 	defaultConfig ModelConfig
 	// supervisorConfigured 表示顶层 Agent 是否配置了自定义模型。
 	supervisorConfigured bool

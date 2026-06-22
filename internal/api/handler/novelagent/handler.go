@@ -20,10 +20,6 @@ type Handler struct {
 
 // ChatRequest 表示小说写作 Agent 流式对话请求。
 type ChatRequest struct {
-	// ProviderID 表示本次对话使用的 AI 提供商 ID。
-	ProviderID uint64 `json:"provider_id" example:"1"`
-	// Model 表示本次对话使用的模型标识。
-	Model string `json:"model" example:"gpt-5"`
 	// Message 表示用户输入的写作需求或问题。
 	Message string `json:"message" example:"帮我润色这一段，让语气更紧张"`
 	// NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
@@ -288,7 +284,7 @@ func (h *Handler) ListMessages(c *gin.Context) {
 // 参数 c 表示 Gin 请求上下文。
 //
 // @Summary 小说写作 Agent 流式对话
-// @Description 使用已保存 AI 提供商配置创建 Eino 写作 Agent，并以 NDJSON 流式返回模型输出。
+// @Description 使用 Agent 自定义模型配置创建 Eino 写作 Agent，并以 NDJSON 流式返回模型输出。
 // @Tags ai-agents
 // @Accept json
 // @Produce json
@@ -362,10 +358,6 @@ func (w *ndjsonWriter) WriteEvent(event biznovelagent.StreamEvent) error {
 // 参数 err 表示业务层返回的错误。
 func agentErrorMessage(err error) string {
 	switch {
-	case errors.Is(err, biznovelagent.ErrProviderIDRequired):
-		return "请选择 AI 提供商"
-	case errors.Is(err, biznovelagent.ErrModelRequired):
-		return "请选择 AI 模型"
 	case errors.Is(err, biznovelagent.ErrMessageRequired):
 		return "请输入要发送给 AI 的内容"
 	case errors.Is(err, biznovelagent.ErrNovelIDRequired):
@@ -419,9 +411,7 @@ func parseNovelConversationID(c *gin.Context) (uint64, uint64, bool) {
 // 参数 c 表示 Gin 请求上下文；参数 err 表示业务层返回的错误。
 func writeAgentError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, biznovelagent.ErrProviderIDRequired),
-		errors.Is(err, biznovelagent.ErrModelRequired),
-		errors.Is(err, biznovelagent.ErrMessageRequired),
+	case errors.Is(err, biznovelagent.ErrMessageRequired),
 		errors.Is(err, biznovelagent.ErrNovelIDRequired),
 		errors.Is(err, biznovelagent.ErrChapterNumberInvalid),
 		errors.Is(err, biznovelagent.ErrProviderDisabled):

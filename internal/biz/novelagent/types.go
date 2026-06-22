@@ -10,10 +10,6 @@ import (
 
 // ChatRequest 表示小说写作 Agent 流式对话请求。
 type ChatRequest struct {
-	// ProviderID 表示本次对话使用的 AI 提供商 ID。
-	ProviderID uint64 `json:"provider_id" binding:"required" example:"1"`
-	// Model 表示本次对话使用的模型标识。
-	Model string `json:"model" example:"gpt-5"`
 	// Message 表示用户输入的写作需求或问题。
 	Message string `json:"message" binding:"required" example:"帮我润色这一段，让语气更紧张"`
 	// NovelID 表示当前请求关联的小说 ID，正式 AI 对话必须传入。
@@ -215,7 +211,7 @@ type RuntimeRetryConfig struct {
 
 // RuntimeModelConfig 表示一次 Agent 运行中父子 Agent 使用的模型配置集合。
 type RuntimeModelConfig struct {
-	// Default 表示前端请求传入并完成默认模型兜底后的入口模型配置。
+	// Default 表示本轮 Agent 运行入口模型配置，未配置自定义模型的 Agent 会继承它。
 	Default ModelConfig
 	// Supervisor 表示顶层 Agent 自定义模型配置，nil 表示继承 Default。
 	Supervisor *ModelConfig

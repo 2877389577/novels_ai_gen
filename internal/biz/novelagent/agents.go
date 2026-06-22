@@ -22,9 +22,9 @@ const (
 type runtimeAgentDefinition struct {
 	// name 表示 Eino ADK Agent 名称，子 Agent 会同时作为 tool 名称。
 	name string
-	// providerID 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承本次请求的提供商。
+	// providerID 表示该 Agent 自定义使用的 AI 提供商 ID，0 表示继承入口模型提供商。
 	providerID uint64
-	// model 表示该 Agent 自定义使用的模型标识。
+	// model 表示该 Agent 自定义使用的模型标识，空值表示继承入口模型或使用自定义提供商默认模型。
 	model string
 	// task 表示子 Agent 产生流式事件时返回给前端的任务标识。
 	task string

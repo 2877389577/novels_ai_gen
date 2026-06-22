@@ -3,10 +3,6 @@ package novelagent
 import "errors"
 
 var (
-	// ErrProviderIDRequired 表示 AI 提供商 ID 不能为空。
-	ErrProviderIDRequired = errors.New("novel agent provider id required")
-	// ErrModelRequired 表示 AI 模型不能为空。
-	ErrModelRequired = errors.New("novel agent model required")
 	// ErrMessageRequired 表示用户消息不能为空。
 	ErrMessageRequired = errors.New("novel agent message required")
 	// ErrNovelIDRequired 表示小说 ID 不能为空。
