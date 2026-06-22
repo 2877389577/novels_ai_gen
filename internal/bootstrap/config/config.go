@@ -125,6 +125,8 @@ type AgentDefinition struct {
 	ProviderID uint64 `mapstructure:"provider_id" json:"provider_id" yaml:"provider_id"`
 	// Model 表示该 Agent 使用的模型标识，保存时不能为空。
 	Model string `mapstructure:"model" json:"model" yaml:"model"`
+	// ReasoningEffort 表示 GPT 类模型使用的推理强度，可选值为 low、medium、high，空值由运行时默认处理。
+	ReasoningEffort string `mapstructure:"reasoning_effort" json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
 	// Task 表示子 Agent 产生流式事件时返回给前端的任务标识，顶层 Agent 可留空。
 	Task string `mapstructure:"task" json:"task" yaml:"task,omitempty"`
 	// Description 表示 Agent 能力描述，供顶层 Agent 判断是否调用该子 Agent。

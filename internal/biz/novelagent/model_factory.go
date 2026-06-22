@@ -2,6 +2,7 @@ package novelagent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
+	"github.com/cloudwego/eino/schema/openai"
 	"google.golang.org/genai"
 
 	agenttools "novels_ai_gen/internal/biz/novelagent/tools"
@@ -33,7 +35,7 @@ const (
 	modelPathChat      = "chat"
 	modelPathAgentic   = "agentic"
 	defaultMaxTokens   = 4096
-	defaultTimeout     = 120 * time.Second
+	defaultTimeout     = 300 * time.Second
 )
 
 const summarySystemPrompt = "你是小说写作 Agent 的长期记忆摘要器。请把旧摘要和新增对话整理成一份紧凑、准确、可持续更新的中文摘要，保留用户偏好、小说设定、角色关系、写作要求、已经确认的修改方向和重要上下文。不要输出寒暄、标题或 Markdown 代码块，只输出摘要正文。"
@@ -133,12 +135,22 @@ func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeMod
 // 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
 func (f *EinoAgentRuntimeFactory) newChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseChatModel, error) {
 	_ = f
-	model, err := einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
+	modelConfig := &einoopenai.ChatModelConfig{
 		APIKey:  cfg.APIKey,
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
 		Timeout: defaultTimeout,
-	})
+	}
+
+	reasoningEffort, ok, err := chatModelReasoningEffort(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		modelConfig.ReasoningEffort = reasoningEffort
+	}
+
+	model, err := einoopenai.NewChatModel(ctx, modelConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +306,34 @@ func normalizeModelConfig(cfg ModelConfig) ModelConfig {
 	cfg.APIType = strings.ToLower(strings.TrimSpace(cfg.APIType))
 	cfg.BaseURL = strings.TrimSpace(cfg.BaseURL)
 	cfg.Model = strings.TrimSpace(cfg.Model)
+	cfg.ReasoningEffort = strings.ToLower(strings.TrimSpace(cfg.ReasoningEffort))
 	return cfg
+}
+
+// chatModelReasoningEffort 返回 ChatModel 应使用的 GPT 推理强度。
+// 参数 cfg 表示模型创建配置。
+func chatModelReasoningEffort(cfg ModelConfig) (einoopenai.ReasoningEffortLevel, bool, error) {
+	if !isGPTModel(cfg.Model) {
+		return "", false, nil
+	}
+
+	effort := strings.ToLower(strings.TrimSpace(cfg.ReasoningEffort))
+	if effort == "" {
+		return einoopenai.ReasoningEffortLevel(openai.ReasoningEffortHigh), true, nil
+	}
+
+	switch openai.ReasoningEffort(effort) {
+	case openai.ReasoningEffortLow, openai.ReasoningEffortMedium, openai.ReasoningEffortHigh:
+		return einoopenai.ReasoningEffortLevel(effort), true, nil
+	default:
+		return "", false, fmt.Errorf("%w: reasoning_effort 仅支持 low、medium、high", ErrAgentConfigInvalid)
+	}
+}
+
+// isGPTModel 判断模型名称是否属于 GPT 类模型。
+// 参数 model 表示模型标识。
+func isGPTModel(model string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(model)), "gpt")
 }
 
 // modelPathForConfig 判断模型配置使用的 Eino 消息路径。
@@ -764,6 +803,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 			Instruction:      instructionWithRequestContext(child.instruction, req),
 			Model:            childModel,
 			ToolsConfig:      childToolsConfig(childTools),
+			Handlers:         safeToolErrorHandlers[*schema.Message](),
 			MaxIterations:    child.maxIterations,
 			ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 		})
@@ -791,6 +831,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
+		Handlers:         safeToolErrorHandlers[*schema.Message](),
 		MaxIterations:    cfg.supervisor.maxIterations,
 		ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 	})
@@ -829,6 +870,7 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 			Instruction:      instructionWithRequestContext(child.instruction, req),
 			Model:            childModel,
 			ToolsConfig:      childToolsConfig(childTools),
+			Handlers:         safeToolErrorHandlers[*schema.AgenticMessage](),
 			MaxIterations:    child.maxIterations,
 			ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 		})
@@ -856,9 +898,115 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
+		Handlers:         safeToolErrorHandlers[*schema.AgenticMessage](),
 		MaxIterations:    cfg.supervisor.maxIterations,
 		ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 	})
+}
+
+// toolErrorResult 表示返回给模型的工具错误结果。
+type toolErrorResult struct {
+	// OK 表示工具是否成功执行。
+	OK bool `json:"ok"`
+	// Tool 表示执行失败的工具名称。
+	Tool string `json:"tool,omitempty"`
+	// CallID 表示本次工具调用 ID。
+	CallID string `json:"call_id,omitempty"`
+	// Error 表示工具返回的原始错误文本。
+	Error string `json:"error"`
+	// Message 表示模型可直接理解的中文错误说明。
+	Message string `json:"message"`
+}
+
+// safeToolErrorHandler 将普通工具错误转换为模型可读的工具结果。
+type safeToolErrorHandler[M adk.MessageType] struct {
+	// TypedBaseChatModelAgentMiddleware 表示 Eino ADK 默认空实现。
+	*adk.TypedBaseChatModelAgentMiddleware[M]
+}
+
+// safeToolErrorHandlers 创建 Agent 使用的工具错误处理器列表。
+func safeToolErrorHandlers[M adk.MessageType]() []adk.TypedChatModelAgentMiddleware[M] {
+	return []adk.TypedChatModelAgentMiddleware[M]{newSafeToolErrorHandler[M]()}
+}
+
+// newSafeToolErrorHandler 创建单个工具错误处理器。
+func newSafeToolErrorHandler[M adk.MessageType]() adk.TypedChatModelAgentMiddleware[M] {
+	return &safeToolErrorHandler[M]{
+		TypedBaseChatModelAgentMiddleware: &adk.TypedBaseChatModelAgentMiddleware[M]{},
+	}
+}
+
+// WrapInvokableToolCall 包装普通工具调用，将可恢复错误转换为工具结果。
+// 参数 ctx 表示包装发生时的上下文；参数 endpoint 表示原始工具调用入口；参数 toolCtx 表示工具调用元信息。
+func (h *safeToolErrorHandler[M]) WrapInvokableToolCall(ctx context.Context, endpoint adk.InvokableToolCallEndpoint, toolCtx *adk.ToolContext) (adk.InvokableToolCallEndpoint, error) {
+	return func(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+		result, err := endpoint(ctx, argumentsInJSON, opts...)
+		if err == nil {
+			return result, nil
+		}
+		if shouldPropagateToolError(err) {
+			return result, err
+		}
+		return toolErrorResultJSON(toolCtx, err), nil
+	}, nil
+}
+
+// WrapStreamableToolCall 包装流式工具启动调用，将可恢复启动错误转换为单帧工具结果流。
+// 参数 ctx 表示包装发生时的上下文；参数 endpoint 表示原始流式工具调用入口；参数 toolCtx 表示工具调用元信息。
+func (h *safeToolErrorHandler[M]) WrapStreamableToolCall(ctx context.Context, endpoint adk.StreamableToolCallEndpoint, toolCtx *adk.ToolContext) (adk.StreamableToolCallEndpoint, error) {
+	return func(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (*schema.StreamReader[string], error) {
+		result, err := endpoint(ctx, argumentsInJSON, opts...)
+		if err == nil {
+			return result, nil
+		}
+		if shouldPropagateToolError(err) {
+			return nil, err
+		}
+		return schema.StreamReaderFromArray([]string{toolErrorResultJSON(toolCtx, err)}), nil
+	}, nil
+}
+
+// shouldPropagateToolError 判断工具错误是否必须继续向外传播。
+// 参数 err 表示工具调用返回的错误。
+func shouldPropagateToolError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if _, ok := compose.IsInterruptRerunError(err); ok {
+		return true
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, adk.ErrStreamCanceled) {
+		return true
+	}
+	var cancelErr *adk.CancelError
+	return errors.As(err, &cancelErr)
+}
+
+// toolErrorResultJSON 将工具错误序列化为模型可读的 JSON 字符串。
+// 参数 toolCtx 表示工具调用元信息；参数 err 表示工具调用返回的错误。
+func toolErrorResultJSON(toolCtx *adk.ToolContext, err error) string {
+	toolName := ""
+	callID := ""
+	if toolCtx != nil {
+		toolName = toolCtx.Name
+		callID = toolCtx.CallID
+	}
+	message := fmt.Sprintf("工具 %s 执行失败：%s", toolName, err.Error())
+	if toolName == "" {
+		message = fmt.Sprintf("工具执行失败：%s", err.Error())
+	}
+	result := toolErrorResult{
+		OK:      false,
+		Tool:    toolName,
+		CallID:  callID,
+		Error:   err.Error(),
+		Message: message,
+	}
+	data, marshalErr := json.Marshal(result)
+	if marshalErr != nil {
+		return fmt.Sprintf(`{"ok":false,"error":%q,"message":%q}`, err.Error(), message)
+	}
+	return string(data)
 }
 
 // childAgentToolOptions 根据子 Agent 配置生成父 Agent 包装子 Agent 时使用的 ADK tool 选项。
@@ -891,7 +1039,7 @@ func chatModelRetryConfig(retry RuntimeRetryConfig) *adk.ModelRetryConfig {
 	}
 	return &adk.ModelRetryConfig{
 		MaxRetries:  retry.MaxRetries,
-		IsRetryAble: isRetryableModelError,
+		ShouldRetry: shouldRetryModelError[*schema.Message],
 		BackoffFunc: fixedRetryBackoff(retry.Backoff),
 	}
 }
@@ -904,8 +1052,19 @@ func agenticModelRetryConfig(retry RuntimeRetryConfig) *adk.TypedModelRetryConfi
 	}
 	return &adk.TypedModelRetryConfig[*schema.AgenticMessage]{
 		MaxRetries:  retry.MaxRetries,
-		IsRetryAble: isRetryableModelError,
+		ShouldRetry: shouldRetryModelError[*schema.AgenticMessage],
 		BackoffFunc: fixedRetryBackoff(retry.Backoff),
+	}
+}
+
+// shouldRetryModelError 根据 ADK 重试上下文判断本次模型调用是否需要重试。
+// 参数 ctx 表示当前请求上下文；参数 retryCtx 表示 ADK 传入的模型调用结果与重试上下文。
+func shouldRetryModelError[M adk.MessageType](ctx context.Context, retryCtx *adk.TypedRetryContext[M]) *adk.TypedRetryDecision[M] {
+	if retryCtx == nil {
+		return &adk.TypedRetryDecision[M]{Retry: false}
+	}
+	return &adk.TypedRetryDecision[M]{
+		Retry: isRetryableModelError(ctx, retryCtx.Err),
 	}
 }
 

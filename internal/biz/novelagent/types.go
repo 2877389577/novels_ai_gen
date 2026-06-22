@@ -199,6 +199,8 @@ type ModelConfig struct {
 	BaseURL string
 	// Model 表示本次对话使用的模型标识。
 	Model string
+	// ReasoningEffort 表示 GPT 类模型使用的推理强度。
+	ReasoningEffort string
 }
 
 // RuntimeRetryConfig 表示一次 Agent 运行中的模型失败重试配置。
