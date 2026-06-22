@@ -18,6 +18,26 @@ type Repository struct {
 	db *gorm.DB
 }
 
+// directRelationshipCharacterRow 表示直接关系查询命中的角色基础字段。
+type directRelationshipCharacterRow struct {
+	// ID 表示命中角色的角色卡主键 ID。
+	ID uint64 `gorm:"column:id;comment:命中角色的角色卡主键ID"`
+	// Name 表示命中角色的姓名。
+	Name string `gorm:"column:name;comment:命中角色的姓名"`
+}
+
+// directRelationshipEdgeRow 表示直接关系查询得到的关系线精简字段。
+type directRelationshipEdgeRow struct {
+	// SourceCharacterID 表示本次查询命中的目标角色 ID。
+	SourceCharacterID uint64 `gorm:"column:source_character_id;comment:本次查询命中的目标角色ID"`
+	// RelatedCharacterID 表示与目标角色直接关联的另一端角色 ID。
+	RelatedCharacterID uint64 `gorm:"column:related_character_id;comment:与目标角色直接关联的另一端角色ID"`
+	// RelatedCharacterName 表示与目标角色直接关联的另一端角色姓名。
+	RelatedCharacterName string `gorm:"column:related_character_name;comment:与目标角色直接关联的另一端角色姓名"`
+	// Note 表示关系线备注。
+	Note string `gorm:"column:note;comment:关系线备注"`
+}
+
 // NewRepository 创建角色关系图数据仓储。
 // 参数 db 表示 GORM 数据库连接。
 func NewRepository(db *gorm.DB) *Repository {
@@ -127,6 +147,85 @@ func (r *Repository) ExistingCharacterIDs(ctx context.Context, novelID uint64, c
 		existingIDs[row.ID] = true
 	}
 	return existingIDs, nil
+}
+
+// QueryDirectRelationshipsByCharacterName 根据角色姓名查询关系图中的直接关联角色。
+// 参数 ctx 表示请求上下文；参数 novelID 表示所属小说 ID；参数 name 表示需要精确匹配的角色姓名。
+func (r *Repository) QueryDirectRelationshipsByCharacterName(ctx context.Context, novelID uint64, name string) ([]bizrelationship.CharacterDirectRelationships, error) {
+	db := r.db.WithContext(ctx)
+	if err := ensureNovelExists(db, novelID); err != nil {
+		return nil, err
+	}
+
+	var characters []directRelationshipCharacterRow
+	if err := db.
+		Model(&bizcharacter.Character{}).
+		Select("id, name").
+		Where("novel_id = ? AND name = ?", novelID, name).
+		Order("id ASC").
+		Find(&characters).Error; err != nil {
+		return nil, fmt.Errorf("查询角色卡记录失败: %w", err)
+	}
+	if len(characters) == 0 {
+		return []bizrelationship.CharacterDirectRelationships{}, nil
+	}
+
+	characterIDs := make([]uint64, 0, len(characters))
+	characterNameByID := make(map[uint64]string, len(characters))
+	for _, character := range characters {
+		characterIDs = append(characterIDs, character.ID)
+		characterNameByID[character.ID] = character.Name
+	}
+
+	var edges []directRelationshipEdgeRow
+	if err := db.Raw(`
+		SELECT
+			e.character_a_id AS source_character_id,
+			cb.id AS related_character_id,
+			cb.name AS related_character_name,
+			e.note AS note
+		FROM novel_relationship_graph_edges AS e
+		JOIN novel_characters AS cb ON cb.id = e.character_b_id AND cb.novel_id = e.novel_id
+		WHERE e.novel_id = ? AND e.character_a_id IN ?
+		UNION ALL
+		SELECT
+			e.character_b_id AS source_character_id,
+			ca.id AS related_character_id,
+			ca.name AS related_character_name,
+			e.note AS note
+		FROM novel_relationship_graph_edges AS e
+		JOIN novel_characters AS ca ON ca.id = e.character_a_id AND ca.novel_id = e.novel_id
+		WHERE e.novel_id = ? AND e.character_b_id IN ?
+		ORDER BY source_character_id ASC, related_character_id ASC
+	`, novelID, characterIDs, novelID, characterIDs).
+		Scan(&edges).Error; err != nil {
+		return nil, fmt.Errorf("查询角色关系图直接关系失败: %w", err)
+	}
+
+	results := make([]bizrelationship.CharacterDirectRelationships, 0, len(characters))
+	resultByID := make(map[uint64]int, len(characters))
+	for _, edge := range edges {
+		index, ok := resultByID[edge.SourceCharacterID]
+		if !ok {
+			sourceName, found := characterNameByID[edge.SourceCharacterID]
+			if !found {
+				continue
+			}
+			index = len(results)
+			resultByID[edge.SourceCharacterID] = index
+			results = append(results, bizrelationship.CharacterDirectRelationships{
+				ID:            edge.SourceCharacterID,
+				Name:          sourceName,
+				Relationships: []bizrelationship.DirectRelationship{},
+			})
+		}
+		results[index].Relationships = append(results[index].Relationships, bizrelationship.DirectRelationship{
+			ID:   edge.RelatedCharacterID,
+			Name: edge.RelatedCharacterName,
+			Note: edge.Note,
+		})
+	}
+	return results, nil
 }
 
 // ensureNovelExists 确认关系图所属小说存在。

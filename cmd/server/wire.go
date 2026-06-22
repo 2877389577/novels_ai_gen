@@ -75,6 +75,7 @@ func initializeApp(configFile string) (*server.App, func(), error) {
 		bizcharacter.NewService,
 		datarelationship.NewRepository,
 		wire.Bind(new(bizrelationship.Repository), new(*datarelationship.Repository)),
+		wire.Bind(new(agenttools.RelationshipGraphStore), new(*datarelationship.Repository)),
 		bizrelationship.NewService,
 		dataevent.NewRepository,
 		wire.Bind(new(bizevent.Repository), new(*dataevent.Repository)),

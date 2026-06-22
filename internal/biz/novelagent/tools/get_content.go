@@ -33,6 +33,8 @@ const (
 	ToolNameSearchCharactersByName = "search_characters_by_name"
 	// ToolNameSaveCharacter 表示新增或更新角色核心设定的 Agent 工具名称。
 	ToolNameSaveCharacter = "save_character"
+	// ToolNameQueryCharacterRelationships 表示查询角色关系图中直接关联角色的 Agent 工具名称。
+	ToolNameQueryCharacterRelationships = "query_character_relationships"
 )
 
 var (
