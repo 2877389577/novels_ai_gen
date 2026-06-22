@@ -9169,6 +9169,11 @@ html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-avatar {
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble {
   border-radius: 8px;
   color: var(--color-on-surface);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 18px;
+  line-height: 32px;
+  text-align: justify;
+  text-indent: 0;
   box-shadow: 0 6px 18px rgba(40, 52, 70, 0.08);
   overflow-wrap: anywhere;
 }
@@ -9176,16 +9181,55 @@ html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-avatar {
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble .semi-typography,
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble .semi-typography {
   color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  text-indent: 0;
 }
 
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble .semi-markdownRender-component-p,
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble .semi-markdownRender-component-p {
+  min-height: 32px;
+  margin: 0 0 14px;
+  font: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  text-indent: 0;
   white-space: pre-line;
 }
 
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-user.semi-ai-chat-dialogue-content-bubble .semi-markdownRender-component-p,
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble .semi-markdownRender-component-p {
   white-space: pre-wrap;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble .semi-markdownRender-component-p:last-child,
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble .semi-markdownRender-component-p:last-child {
+  margin-bottom: 0;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble :where(ul, ol),
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble :where(ul, ol) {
+  margin: 0 0 14px 1.25em;
+  padding: 0;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  text-indent: 0;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble :where(li),
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble :where(li) {
+  margin: 0 0 8px;
+  padding: 0;
+  font: inherit;
+  line-height: inherit;
+  text-indent: 0;
+}
+
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble :where(ul, ol, li):last-child,
+.chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble :where(ul, ol, li):last-child {
+  margin-bottom: 0;
 }
 
 .chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble:not(.semi-ai-chat-dialogue-content-user) {
@@ -9976,6 +10020,17 @@ html[data-theme="dark"] .chapter-ai-input-shell:focus-within {
   .chapter-content-editor > p,
   .chapter-content-editor > div,
   .chapter-content-paragraph {
+    min-height: 28px;
+  }
+
+  .chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble,
+  .chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble {
+    font-size: 16px;
+    line-height: 28px;
+  }
+
+  .chapter-ai-dialogue .semi-ai-chat-dialogue-content-bubble .semi-markdownRender-component-p,
+  .chapter-ai-dialogue .semi-ai-chat-dialogue-content-userBubble .semi-markdownRender-component-p {
     min-height: 28px;
   }
 
