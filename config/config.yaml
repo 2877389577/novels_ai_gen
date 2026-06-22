@@ -151,6 +151,9 @@ ai:
       - name: query_chapters
         description: |-
           按小说 ID 查询章节数据，可按章节 ID、章节号或章节号范围查询，并可通过 fields 只返回正文、总结等指定字段。
+          当你不知道当前小说具体有多少章时，必须先不传 chapter_id、chapter_number、start_chapter_number、end_chapter_number 调用一次本工具，获取轻量目录 catalog 和章节范围 chapter_scope。
+          查询正文前必须查看 chapter_scope.max_chapter_number，不要请求超过 max_chapter_number 的章节。
+          章节号范围查询单次最多返回 5 章；超过 5 章会自动裁剪，并通过 chapter_scope.clipped 提示你继续分批查询。
           像created_at、updated_at等字段，非必要不获取。
 
           **fields列表字段解释：**
@@ -169,6 +172,8 @@ ai:
           count: 本次查询命中的章节数量。
           fields: 本次实际返回的字段名列表。
           chapters: 查询到的章节数组。
+          chapter_scope: 当前小说实际章节范围和本次查询范围，包括 total_count、min_chapter_number、max_chapter_number、next_chapter_number、requested_start_chapter_number、requested_end_chapter_number、effective_start_chapter_number、effective_end_chapter_number、missing_chapter_numbers、out_of_range、clipped、message。
+          catalog: 不传章节选择器时返回的轻量章节目录，不包含 content 正文。
 
           chapters[] 内字段说明：
           id: 章节主键 ID。

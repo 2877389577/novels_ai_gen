@@ -50,6 +50,9 @@ type ChapterReader interface {
 	// QueryChapters 根据条件查询章节数据。
 	// 参数 ctx 表示请求上下文；参数 condition 表示章节查询条件。
 	QueryChapters(ctx context.Context, condition bizchapter.QueryChaptersCondition) ([]bizchapter.Chapter, error)
+	// QueryChapterCatalog 查询指定小说章节轻量目录和章节号边界信息。
+	// 参数 ctx 表示请求上下文；参数 condition 表示章节轻量目录查询条件。
+	QueryChapterCatalog(ctx context.Context, condition bizchapter.QueryChapterCatalogCondition) (bizchapter.QueryChapterCatalogResult, error)
 	// UpdateChapterSummary 只更新章节总结字段并返回更新后的章节。
 	// 参数 ctx 表示请求上下文；参数 condition 表示章节总结更新条件。
 	UpdateChapterSummary(ctx context.Context, condition bizchapter.UpdateChapterSummaryCondition) (*bizchapter.Chapter, error)

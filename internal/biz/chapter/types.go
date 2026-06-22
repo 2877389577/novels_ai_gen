@@ -87,6 +87,32 @@ type QueryChaptersCondition struct {
 	Fields []string
 }
 
+// QueryChapterCatalogCondition 表示章节轻量目录查询条件。
+type QueryChapterCatalogCondition struct {
+	// NovelID 表示所属小说 ID。
+	NovelID uint64
+}
+
+// ChapterRangeInfo 表示小说章节号边界信息。
+type ChapterRangeInfo struct {
+	// TotalCount 表示当前小说实际章节数量。
+	TotalCount int64 `json:"total_count" example:"3"`
+	// MinChapterNumber 表示当前小说最小章节号，没有章节时为 0。
+	MinChapterNumber int `json:"min_chapter_number" example:"1"`
+	// MaxChapterNumber 表示当前小说最大章节号，没有章节时为 0。
+	MaxChapterNumber int `json:"max_chapter_number" example:"3"`
+	// NextChapterNumber 表示当前小说下一章建议章节号。
+	NextChapterNumber int `json:"next_chapter_number" example:"4"`
+}
+
+// QueryChapterCatalogResult 表示章节轻量目录和章节号边界查询结果。
+type QueryChapterCatalogResult struct {
+	// Range 表示当前小说章节号边界信息。
+	Range ChapterRangeInfo `json:"range"`
+	// Chapters 表示当前小说章节轻量目录，不包含正文。
+	Chapters []Chapter `json:"chapters"`
+}
+
 // UpdateChapterSummaryCondition 表示章节总结更新条件。
 type UpdateChapterSummaryCondition struct {
 	// NovelID 表示所属小说 ID。
