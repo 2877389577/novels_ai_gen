@@ -8811,6 +8811,44 @@ html[data-theme="dark"] .chapter-editor-paper {
   -webkit-line-clamp: 4;
 }
 
+.agent-tool-approval-badge {
+  width: fit-content;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary-container) 42%, transparent);
+  color: var(--color-primary);
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 16px;
+}
+
+.agent-tool-approval-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 48%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-paper) 78%, transparent);
+  padding: 13px 14px;
+}
+
+.agent-tool-approval-field span {
+  display: block;
+  color: var(--color-on-surface);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 18px;
+}
+
+.agent-tool-approval-field p {
+  margin: 3px 0 0;
+  color: var(--color-on-surface-variant);
+  font-size: 13px;
+  line-height: 20px;
+}
+
 .agent-settings-textarea {
   width: 100%;
   resize: vertical;
@@ -9618,6 +9656,80 @@ html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-user
   border-color: color-mix(in srgb, #95ec69 46%, transparent);
   background: color-mix(in srgb, #2f8f2f 76%, var(--color-surface-container-high));
   color: #f1ffe9;
+}
+
+.chapter-ai-approval-panel {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  margin-top: 14px;
+  border: 1px solid color-mix(in srgb, #2563eb 34%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, #eff6ff 72%, var(--color-paper));
+  padding: 12px;
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  text-align: left;
+}
+
+.chapter-ai-approval-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.chapter-ai-approval-meta span {
+  color: color-mix(in srgb, #1d4ed8 76%, var(--color-on-surface));
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 16px;
+}
+
+.chapter-ai-approval-meta strong {
+  color: #16325c;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.chapter-ai-approval-args {
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, #60a5fa 24%, transparent);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #1f2a44;
+  padding: 9px 10px;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.chapter-ai-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+html[data-theme="dark"] .chapter-ai-approval-panel {
+  border-color: color-mix(in srgb, #60a5fa 40%, transparent);
+  background: color-mix(in srgb, #172554 46%, var(--color-surface-container-high));
+}
+
+html[data-theme="dark"] .chapter-ai-approval-meta span {
+  color: #bfdbfe;
+}
+
+html[data-theme="dark"] .chapter-ai-approval-meta strong {
+  color: #eaf2ff;
+}
+
+html[data-theme="dark"] .chapter-ai-approval-args {
+  border-color: color-mix(in srgb, #60a5fa 32%, transparent);
+  background: rgba(15, 23, 42, 0.62);
+  color: #dbeafe;
 }
 
 .chapter-ai-composer {

@@ -16,6 +16,41 @@ export interface ChapterAiRetryPayload {
   message: string;
 }
 
+// ChapterAiApprovalStatus 表示章节 AI 工具人工审核的前端提交状态。
+export type ChapterAiApprovalStatus = "waiting" | "submitting";
+
+// ChapterAiApprovalState 表示章节 AI 当前等待用户审核的工具调用信息。
+export interface ChapterAiApprovalState {
+  // checkpointId 表示后端恢复 Agent 执行所需的 checkpoint 标识。
+  checkpointId: string;
+  // interruptId 表示后端恢复 Agent 执行所需的中断点标识。
+  interruptId: string;
+  // toolName 表示等待人工审核的工具名称。
+  toolName?: string;
+  // toolArguments 表示等待人工审核的工具调用参数 JSON 字符串。
+  toolArguments?: string;
+  // message 表示后端返回的审批提示文案。
+  message?: string;
+  // status 表示用户是否正在提交批准或拒绝结果。
+  status: ChapterAiApprovalStatus;
+  // requestContext 表示恢复本轮 Agent 时复用的章节上下文。
+  requestContext: ChapterAiRequestContext;
+  // retryPayload 表示恢复本轮 Agent 时复用的原始用户请求。
+  retryPayload: ChapterAiRetryPayload;
+}
+
+// ChapterAiApprovalDecision 表示用户对一次工具人工审核的选择。
+export interface ChapterAiApprovalDecision {
+  // checkpointId 表示后端恢复 Agent 执行所需的 checkpoint 标识。
+  checkpointId: string;
+  // interruptId 表示后端恢复 Agent 执行所需的中断点标识。
+  interruptId: string;
+  // approved 表示用户是否允许执行该工具。
+  approved: boolean;
+  // existingContent 表示恢复流继续追加前已经展示在助手消息中的文本。
+  existingContent: string;
+}
+
 // ChapterAiMessage 表示章节 AI 对话在前端本地增强后的消息。
 export interface ChapterAiMessage extends Message {
   // chapterAiConversationID 表示消息所属 Agent 会话 ID，本地新会话草稿可为空。
@@ -32,6 +67,8 @@ export interface ChapterAiMessage extends Message {
   chapterAiRetryPayload?: ChapterAiRetryPayload;
   // chapterAiLoading 表示该消息是前端本地生成的临时加载占位消息。
   chapterAiLoading?: boolean;
+  // chapterAiApproval 表示该助手消息当前等待用户审核的工具调用信息。
+  chapterAiApproval?: ChapterAiApprovalState;
 }
 
 // ChapterAiRequestContext 表示发送 AI 请求前准备好的可选章节上下文。
@@ -52,6 +89,8 @@ export interface ChapterAiStreamRequest {
   requestContext: ChapterAiRequestContext;
   // retryPayload 表示本次请求使用的原始 AI 调用参数。
   retryPayload: ChapterAiRetryPayload;
+  // approvalDecision 表示本次流式请求是否用于恢复一次工具人工审核。
+  approvalDecision?: ChapterAiApprovalDecision;
 }
 
 // ChapterAiReplyDraft 表示一次流式请求中单段助手回复的本地草稿。

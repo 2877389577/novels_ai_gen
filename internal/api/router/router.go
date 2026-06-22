@@ -102,6 +102,7 @@ func NewRouter(authHandler *authhandler.Handler, novelHandler *novelhandler.Hand
 	protected.PUT("/ai/prompts/:id", promptHandler.Update)
 	protected.DELETE("/ai/prompts/:id", promptHandler.Delete)
 	protected.POST("/ai/agents/chat/stream", novelAgentHandler.StreamChat)
+	protected.POST("/ai/agents/chat/approval/resume", novelAgentHandler.ResumeToolApproval)
 	protected.POST("/uploads/images", uploadHandler.UploadImage)
 	protected.GET("/uploads/preview", uploadHandler.Preview)
 	protected.GET("/config/file", configHandler.GetFile)

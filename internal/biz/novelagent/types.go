@@ -22,6 +22,26 @@ type ChatRequest struct {
 	ChapterNumber int `json:"chapter_number,omitempty" example:"3"`
 }
 
+// ChatApprovalResumeRequest 表示人工审核后恢复 Agent 执行的请求。
+type ChatApprovalResumeRequest struct {
+	// NovelID 表示待恢复请求关联的小说 ID。
+	NovelID uint64 `json:"novel_id" binding:"required" example:"1"`
+	// ConversationID 表示待恢复请求所属 Agent 会话 ID，新会话恢复时可为空。
+	ConversationID uint64 `json:"conversation_id,omitempty" example:"1"`
+	// ChapterID 表示待恢复请求关联的章节 ID，普通对话可为空。
+	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
+	// ChapterNumber 表示待恢复请求关联的章节号，即“第 x 章”中的 x。
+	ChapterNumber int `json:"chapter_number,omitempty" example:"3"`
+	// CheckPointID 表示 Eino ADK 中断时保存的 checkpoint 标识。
+	CheckPointID string `json:"checkpoint_id" binding:"required" example:"agent-approval-abc123"`
+	// InterruptID 表示本次人工审核对应的中断点标识。
+	InterruptID string `json:"interrupt_id" binding:"required" example:"agent:supervisor;tool:get_content:call_1"`
+	// Approved 表示用户是否允许执行该工具。
+	Approved bool `json:"approved" example:"true"`
+	// Reason 表示用户拒绝或批准时填写的补充原因。
+	Reason string `json:"reason,omitempty" example:"这次允许读取章节内容"`
+}
+
 // MessageRole 表示 Agent 记忆消息角色。
 type MessageRole string
 
@@ -146,7 +166,7 @@ type DeleteConversationResponse struct {
 
 // StreamEvent 表示小说写作 Agent NDJSON 流事件。
 type StreamEvent struct {
-	// Type 表示事件类型，支持 meta、delta、done、error。
+	// Type 表示事件类型，支持 meta、delta、approval_required、done、error。
 	Type string `json:"type" example:"delta"`
 	// RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
@@ -166,6 +186,14 @@ type StreamEvent struct {
 	ConversationTitle string `json:"conversation_title,omitempty" example:"讨论第三章节奏"`
 	// Message 表示错误或状态说明。
 	Message string `json:"message,omitempty" example:"ok"`
+	// CheckPointID 表示等待人工审核时用于恢复 Agent 执行的 checkpoint 标识。
+	CheckPointID string `json:"checkpoint_id,omitempty" example:"agent-approval-abc123"`
+	// InterruptID 表示等待人工审核时需要恢复的中断点标识。
+	InterruptID string `json:"interrupt_id,omitempty" example:"agent:supervisor;tool:get_content:call_1"`
+	// ToolName 表示等待人工审核的工具名称。
+	ToolName string `json:"tool_name,omitempty" example:"get_content"`
+	// ToolArguments 表示等待人工审核的工具调用参数 JSON 字符串。
+	ToolArguments string `json:"tool_arguments,omitempty" example:"{\"chapter_number\":3}"`
 }
 
 // StreamReply 表示一次 Agent 请求中的单段可见助手回复。
@@ -287,6 +315,34 @@ type AgentConversationTitleInput struct {
 	Message string
 }
 
+// AgentCheckPointStore 表示 Agent 中断恢复所需的 checkpoint 存储。
+type AgentCheckPointStore interface {
+	// Get 读取指定 checkpoint 的序列化数据。
+	// 参数 ctx 表示请求上下文；参数 checkPointID 表示 checkpoint 标识。
+	Get(ctx context.Context, checkPointID string) ([]byte, bool, error)
+	// Set 写入指定 checkpoint 的序列化数据。
+	// 参数 ctx 表示请求上下文；参数 checkPointID 表示 checkpoint 标识；参数 checkPoint 表示 Eino 序列化后的 checkpoint 数据。
+	Set(ctx context.Context, checkPointID string, checkPoint []byte) error
+}
+
+// AgentRunControl 表示一次 Agent 运行中的中断恢复控制参数。
+type AgentRunControl struct {
+	// CheckPointID 表示本轮运行使用的 checkpoint 标识。
+	CheckPointID string
+	// InterruptID 表示恢复人工审核时需要定向恢复的中断点标识。
+	InterruptID string
+	// CheckPointStore 表示本轮运行使用的 checkpoint 存储。
+	CheckPointStore AgentCheckPointStore
+}
+
+// ToolApprovalResumeData 表示恢复工具人工审核中断时传入的用户决策。
+type ToolApprovalResumeData struct {
+	// Approved 表示用户是否允许执行工具。
+	Approved bool `json:"approved"`
+	// Reason 表示用户填写的补充原因。
+	Reason string `json:"reason,omitempty"`
+}
+
 // ModelTextInput 表示直接调用单个模型生成文本所需的提示词。
 type ModelTextInput struct {
 	// SystemPrompt 表示发送给模型的系统提示词。
@@ -315,8 +371,11 @@ type ConversationSummaryUpdate struct {
 // AgentRuntime 表示可执行小说写作多层 Agent 的运行时。
 type AgentRuntime interface {
 	// Stream 流式执行小说写作 Agent。
-	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 emit 表示文本增量回调。
-	Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, emit func(delta AgentDelta) error) (AgentResult, error)
+	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 control 表示 checkpoint 控制参数；参数 emit 表示文本增量回调。
+	Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, control AgentRunControl, emit func(delta AgentDelta) error) (AgentResult, error)
+	// Resume 从人工审核中断点恢复小说写作 Agent。
+	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示原始流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 control 表示 checkpoint 控制参数；参数 approval 表示用户审核决策；参数 emit 表示文本增量回调。
+	Resume(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, control AgentRunControl, approval ToolApprovalResumeData, emit func(delta AgentDelta) error) (AgentResult, error)
 	// Summarize 生成会话级 Agent 滚动摘要。
 	// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
 	Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error)

@@ -1,6 +1,6 @@
 import { Modal, Toast } from "@douyinfe/semi-ui-19";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import { UnauthorizedError, deleteNovelAgentConversation, fetchNovelAgentConversationMessages, fetchNovelAgentConversations, streamNovelAgentChat, type NovelAgentConversationItem } from "../api";
+import { UnauthorizedError, deleteNovelAgentConversation, fetchNovelAgentConversationMessages, fetchNovelAgentConversations, resumeNovelAgentChatApproval, streamNovelAgentChat, type NovelAgentConversationItem, type NovelAgentStreamApprovalRequiredEvent, type NovelAgentStreamEvent } from "../api";
 import { chapterAiAssistantMessages } from "./constants";
 import { ChapterAIContext } from "./chapter-ai-context";
 import { createChapterAiDialogueRenderConfig } from "./chapter-ai-dialogue-actions";
@@ -8,15 +8,18 @@ import {
   appendAssistantReplyMessageToList,
   appendChapterAiLoadingMessageToList,
   bindChapterAiPairConversation,
+  clearChapterAiApprovalInList,
   collapseAssistantRepliesToStatusInList,
   removeAssistantRepliesNotInList,
   removeChapterAiLoadingMessageFromList,
   resetChapterAiRequestForRetryInList,
+  setChapterAiApprovalInList,
   updateAssistantReplyMessageInList,
+  updateChapterAiApprovalStatusInList,
   updateChapterAiPairRetryableInList,
 } from "./chapter-ai-message-list-utils";
 import { ChapterAiAssistantShell } from "./chapter-ai-shell";
-import type { ChapterAiAssistantPanelProps, ChapterAiMessage, ChapterAiReplyDraft, ChapterAiRequestContext, ChapterAiRetryPayload, ChapterAiStreamRequest } from "./types";
+import type { ChapterAiApprovalState, ChapterAiApprovalStatus, ChapterAiAssistantPanelProps, ChapterAiMessage, ChapterAiReplyDraft, ChapterAiRequestContext, ChapterAiRetryPayload, ChapterAiStreamRequest } from "./types";
 import { createChapterAiMessageID, createChapterAiPairID, createChapterAiReplyMessageID, chapterAiMessageFromHistory, syncChapterAiInputHeight } from "./chapter-ai-utils";
 import { getErrorMessage } from "./content-editor-utils";
 
@@ -38,16 +41,10 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const conversationSelectOptions = useMemo(
     // buildConversationSelectOptions 将 AI 会话列表转换为 Semi Select 选项。
     function buildConversationSelectOptions() {
-      const titleCounts = new Map<string, number>();
-      for (const conversation of conversations) {
-        const title = conversation.title?.trim() || "未命名会话";
-        titleCounts.set(title, (titleCounts.get(title) ?? 0) + 1);
-      }
       return conversations.map(function mapConversationToOption(conversation) {
         const title = conversation.title?.trim() || "未命名会话";
-        const duplicateTitle = (titleCounts.get(title) ?? 0) > 1;
         return {
-          label: duplicateTitle ? `${title} #${conversation.id}` : title,
+          label: title,
           value: String(conversation.id),
         };
       });
@@ -462,6 +459,70 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     });
   }
 
+  // handleApproveToolApproval 批准当前助手消息等待中的工具调用。
+  // 参数 message 表示承载人工审核状态的助手消息。
+  function handleApproveToolApproval(message: ChapterAiMessage) {
+    void resumeChapterAiApproval(message, true);
+  }
+
+  // handleRejectToolApproval 拒绝当前助手消息等待中的工具调用。
+  // 参数 message 表示承载人工审核状态的助手消息。
+  function handleRejectToolApproval(message: ChapterAiMessage) {
+    void resumeChapterAiApproval(message, false);
+  }
+
+  // resumeChapterAiApproval 根据用户选择恢复当前等待人工审核的 Agent 流。
+  // 参数 message 表示承载人工审核状态的助手消息；参数 approved 表示用户是否批准工具执行。
+  async function resumeChapterAiApproval(
+    message: ChapterAiMessage,
+    approved: boolean,
+  ) {
+    if (assistantSending) {
+      Toast.info("AI 正在回复，请稍后再操作");
+      return;
+    }
+    const approval = message.chapterAiApproval;
+    if (!approval) {
+      Toast.warning("人工审核记录缺失，请重新发起 AI 请求");
+      return;
+    }
+    if (approval.status === "submitting") {
+      return;
+    }
+    const pairID = message.chapterAiPairID;
+    const assistantMessageID =
+      message.chapterAiSourceID ?? (typeof message.id === "string" ? message.id : "");
+    if (!pairID || !assistantMessageID) {
+      Toast.warning("人工审核消息缺少恢复信息");
+      return;
+    }
+
+    setAssistantSending(true);
+    updateChapterAiApprovalStatus(assistantMessageID, "submitting");
+    appendChapterAiLoadingMessage(pairID, approval.retryPayload.conversationId);
+    await runChapterAiStream({
+      pairID,
+      assistantMessageID,
+      requestContext: approval.requestContext,
+      retryPayload: approval.retryPayload,
+      approvalDecision: {
+        checkpointId: approval.checkpointId,
+        interruptId: approval.interruptId,
+        approved,
+        existingContent: getChapterAiApprovalExistingContent(message),
+      },
+    });
+  }
+
+  // getChapterAiApprovalExistingContent 读取恢复流继续追加前已经展示的助手文本。
+  // 参数 message 表示承载人工审核状态的助手消息。
+  function getChapterAiApprovalExistingContent(message: ChapterAiMessage): string {
+    return typeof message.content === "string" &&
+      message.content !== "等待工具人工审核。"
+      ? message.content
+      : "";
+  }
+
   // runChapterAiStream 执行章节 AI 流式请求并更新对应助手消息。
   // 参数 request 表示本次流式请求所需的消息配对和章节上下文。
   async function runChapterAiStream(request: ChapterAiStreamRequest) {
@@ -469,12 +530,14 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     streamControllerRef.current?.abort();
     streamControllerRef.current = controller;
 
-    let assistantContent = "";
+    const initialAssistantContent =
+      request.approvalDecision?.existingContent ?? "";
+    let assistantContent = initialAssistantContent;
     let handledFailure = false;
     const assistantReplies = new Map<number, ChapterAiReplyDraft>();
     assistantReplies.set(1, {
       messageID: createChapterAiReplyMessageID(request.assistantMessageID, 1),
-      content: "",
+      content: initialAssistantContent,
     });
 
     // normalizeReplyIndex 标准化后端返回的回复段序号。
@@ -558,80 +621,125 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       Toast.error(errorMessage);
     }
 
+    // handleApprovalRequiredEvent 将工具人工审核事件写入当前助手消息。
+    // 参数 event 表示后端返回的工具人工审核事件。
+    function handleApprovalRequiredEvent(
+      event: NovelAgentStreamApprovalRequiredEvent,
+    ) {
+      const approval: ChapterAiApprovalState = {
+        checkpointId: event.checkpoint_id,
+        interruptId: event.interrupt_id,
+        toolName: event.tool_name,
+        toolArguments: event.tool_arguments,
+        message: event.message,
+        status: "waiting",
+        requestContext: request.requestContext,
+        retryPayload: request.retryPayload,
+      };
+      removeChapterAiLoadingMessage(request.pairID);
+      updateChapterAiPairRetryable(request.pairID, false);
+      setChapterAiApproval(request.assistantMessageID, approval);
+    }
+
+    // handleNovelAgentStreamEvent 处理小说写作 Agent NDJSON 流事件。
+    // 参数 event 表示后端返回的单个流事件。
+    function handleNovelAgentStreamEvent(event: NovelAgentStreamEvent) {
+      if (handledFailure) {
+        return;
+      }
+      if (event.type === "approval_required") {
+        handleApprovalRequiredEvent(event);
+        return;
+      }
+      if (event.type === "delta") {
+        clearChapterAiApproval(request.assistantMessageID);
+        const replyIndex = normalizeReplyIndex(event.reply_index);
+        const draft = ensureAssistantReplyDraft(replyIndex);
+        draft.content += event.content ?? "";
+        assistantContent = Array.from(assistantReplies.keys())
+          .sort(function sortReplyIndex(left, right) {
+            return left - right;
+          })
+          .map(function mapReplyContent(index) {
+            return assistantReplies.get(index)?.content ?? "";
+          })
+          .join("");
+        updateAssistantReplyMessage(
+          request.assistantMessageID,
+          replyIndex,
+          draft.content,
+          "in_progress",
+        );
+        appendChapterAiLoadingMessage(
+          request.pairID,
+          request.retryPayload.conversationId,
+        );
+        return;
+      }
+      if (event.type === "done") {
+        clearChapterAiApproval(request.assistantMessageID);
+        assistantContent = event.content || assistantContent;
+        completeAssistantReplies(event.replies ?? []);
+        removeChapterAiLoadingMessage(request.pairID);
+        if (event.conversation_id && event.conversation_id > 0) {
+          const conversationTitle =
+            event.conversation_title?.trim() || "新会话";
+          setSelectedConversationID(event.conversation_id);
+          upsertChapterAiConversation({
+            id: event.conversation_id,
+            novel_id: props.novelId,
+            title: conversationTitle,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          updateChapterAiPairConversation(
+            request.pairID,
+            event.conversation_id,
+          );
+        }
+        updateChapterAiPairRetryable(request.pairID, false);
+        return;
+      }
+      if (event.type === "error") {
+        const baseErrorMessage =
+          event.message || "AI 写作助手生成失败，请稍后再试";
+        const requestID = event.request_id?.trim();
+        const errorMessage = requestID
+          ? `${baseErrorMessage}（请求ID：${requestID}）`
+          : baseErrorMessage;
+        handleChapterAiStreamFailure(errorMessage);
+      }
+    }
+
     try {
-      await streamNovelAgentChat(
-        {
-          message: request.retryPayload.message,
-          novelId: props.novelId,
-          conversationId: request.retryPayload.conversationId,
-          chapterId: request.requestContext.chapterId,
-          chapterNumber: request.requestContext.chapterNumber,
-          signal: controller.signal,
-        },
-        {
-          onEvent(event) {
-            if (handledFailure) {
-              return;
-            }
-            if (event.type === "delta") {
-              const replyIndex = normalizeReplyIndex(event.reply_index);
-              const draft = ensureAssistantReplyDraft(replyIndex);
-              draft.content += event.content ?? "";
-              assistantContent = Array.from(assistantReplies.keys())
-                .sort(function sortReplyIndex(left, right) {
-                  return left - right;
-                })
-                .map(function mapReplyContent(index) {
-                  return assistantReplies.get(index)?.content ?? "";
-                })
-                .join("");
-              updateAssistantReplyMessage(
-                request.assistantMessageID,
-                replyIndex,
-                draft.content,
-                "in_progress",
-              );
-              appendChapterAiLoadingMessage(
-                request.pairID,
-                request.retryPayload.conversationId,
-              );
-              return;
-            }
-            if (event.type === "done") {
-              assistantContent = event.content || assistantContent;
-              completeAssistantReplies(event.replies ?? []);
-              removeChapterAiLoadingMessage(request.pairID);
-              if (event.conversation_id && event.conversation_id > 0) {
-                const conversationTitle =
-                  event.conversation_title?.trim() || "新会话";
-                setSelectedConversationID(event.conversation_id);
-                upsertChapterAiConversation({
-                  id: event.conversation_id,
-                  novel_id: props.novelId,
-                  title: conversationTitle,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                });
-                updateChapterAiPairConversation(
-                  request.pairID,
-                  event.conversation_id,
-                );
-              }
-              updateChapterAiPairRetryable(request.pairID, false);
-              return;
-            }
-            if (event.type === "error") {
-              const baseErrorMessage =
-                event.message || "AI 写作助手生成失败，请稍后再试";
-              const requestID = event.request_id?.trim();
-              const errorMessage = requestID
-                ? `${baseErrorMessage}（请求ID：${requestID}）`
-                : baseErrorMessage;
-              handleChapterAiStreamFailure(errorMessage);
-            }
+      const approvalDecision = request.approvalDecision;
+      if (approvalDecision) {
+        await resumeNovelAgentChatApproval(
+          {
+            novelId: props.novelId,
+            conversationId: request.retryPayload.conversationId,
+            chapterId: request.requestContext.chapterId,
+            chapterNumber: request.requestContext.chapterNumber,
+            checkpointId: approvalDecision.checkpointId,
+            interruptId: approvalDecision.interruptId,
+            approved: approvalDecision.approved,
+            signal: controller.signal,
           },
-        },
-      );
+          { onEvent: handleNovelAgentStreamEvent },
+        );
+      } else {
+        await streamNovelAgentChat(
+          {
+            message: request.retryPayload.message,
+            novelId: props.novelId,
+            conversationId: request.retryPayload.conversationId,
+            chapterId: request.requestContext.chapterId,
+            chapterNumber: request.requestContext.chapterNumber,
+            signal: controller.signal,
+          },
+          { onEvent: handleNovelAgentStreamEvent },
+        );
+      }
     } catch (error) {
       if (handledFailure) {
         return;
@@ -708,6 +816,40 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         pairID,
         retryable,
       );
+    });
+  }
+
+  // setChapterAiApproval 将指定助手消息切换为等待工具人工审核状态。
+  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 approval 表示需要展示并用于恢复的审核状态。
+  function setChapterAiApproval(
+    sourceMessageID: string,
+    approval: ChapterAiApprovalState,
+  ) {
+    setChats(function setApproval(currentChats) {
+      return setChapterAiApprovalInList(currentChats, sourceMessageID, approval);
+    });
+  }
+
+  // updateChapterAiApprovalStatus 更新指定助手消息的工具人工审核提交状态。
+  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 status 表示新的人工审核提交状态。
+  function updateChapterAiApprovalStatus(
+    sourceMessageID: string,
+    status: ChapterAiApprovalStatus,
+  ) {
+    setChats(function updateApprovalStatus(currentChats) {
+      return updateChapterAiApprovalStatusInList(
+        currentChats,
+        sourceMessageID,
+        status,
+      );
+    });
+  }
+
+  // clearChapterAiApproval 清除指定助手消息上的工具人工审核状态。
+  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID。
+  function clearChapterAiApproval(sourceMessageID: string) {
+    setChats(function clearApproval(currentChats) {
+      return clearChapterAiApprovalInList(currentChats, sourceMessageID);
     });
   }
 
@@ -825,6 +967,8 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         function retryChapterAiMessage(message) {
           void handleRetryAssistantMessage(message);
         },
+        handleApproveToolApproval,
+        handleRejectToolApproval,
       );
     },
     [assistantSending, chats],

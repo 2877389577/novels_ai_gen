@@ -129,6 +129,22 @@ export interface NovelAgentStreamDoneEvent {
   message?: string;
 }
 
+// NovelAgentStreamApprovalRequiredEvent 表示小说写作 Agent 等待工具人工审核事件。
+export interface NovelAgentStreamApprovalRequiredEvent {
+  // type 表示小说写作 Agent 流事件类型。
+  type: "approval_required";
+  // checkpoint_id 表示恢复 Agent 执行所需的 checkpoint 标识。
+  checkpoint_id: string;
+  // interrupt_id 表示恢复 Agent 执行所需的中断点标识。
+  interrupt_id: string;
+  // tool_name 表示等待人工审核的工具名称。
+  tool_name?: string;
+  // tool_arguments 表示等待人工审核的工具调用参数 JSON 字符串。
+  tool_arguments?: string;
+  // message 表示可展示给用户的审核提示。
+  message?: string;
+}
+
 // NovelAgentStreamErrorEvent 表示小说写作 Agent 流开始后的错误事件。
 export interface NovelAgentStreamErrorEvent {
   // type 表示小说写作 Agent 流事件类型。
@@ -143,6 +159,7 @@ export interface NovelAgentStreamErrorEvent {
 export type NovelAgentStreamEvent =
   | NovelAgentStreamMetaEvent
   | NovelAgentStreamDeltaEvent
+  | NovelAgentStreamApprovalRequiredEvent
   | NovelAgentStreamDoneEvent
   | NovelAgentStreamErrorEvent;
 
@@ -214,6 +231,28 @@ export interface NovelAgentChatParams {
   // chapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x，普通对话可为空。
   chapterNumber?: number;
   // signal 表示用于取消 AI 流式请求的浏览器 AbortSignal。
+  signal?: AbortSignal;
+}
+
+// NovelAgentApprovalResumeParams 表示小说写作 Agent 工具人工审核恢复请求参数。
+export interface NovelAgentApprovalResumeParams {
+  // novelId 表示待恢复请求关联的小说 ID。
+  novelId: number;
+  // conversationId 表示待恢复请求所属 Agent 会话 ID，新会话恢复时可为空。
+  conversationId?: number;
+  // chapterId 表示待恢复请求关联的章节 ID，普通对话可为空。
+  chapterId?: number;
+  // chapterNumber 表示待恢复请求关联的章节号，普通对话可为空。
+  chapterNumber?: number;
+  // checkpointId 表示后端返回的 Eino ADK checkpoint 标识。
+  checkpointId: string;
+  // interruptId 表示本次人工审核对应的中断点标识。
+  interruptId: string;
+  // approved 表示用户是否允许执行该工具。
+  approved: boolean;
+  // reason 表示用户批准或拒绝时的补充原因。
+  reason?: string;
+  // signal 表示用于取消恢复流式请求的浏览器 AbortSignal。
   signal?: AbortSignal;
 }
 
@@ -435,6 +474,8 @@ export interface AgentToolConfig {
   name: string;
   // description 表示提供给模型的工具提示词或能力描述。
   description: string;
+  // require_approval 表示执行该工具前是否需要用户人工审核。
+  require_approval?: boolean;
 }
 
 // AgentDefinition 表示单个小说写作 Agent 的配置。
@@ -1876,6 +1917,76 @@ export async function streamNovelAgentChat(
   if (!response.ok) {
     const payload = await parseApiResponse<unknown>(response);
     throw new Error(payload?.message || "AI 写作助手连接失败，请稍后再试");
+  }
+
+  if (!response.body) {
+    throw new Error("当前浏览器不支持 AI 流式读取");
+  }
+
+  await readNovelAgentStream(response.body, handlers);
+}
+
+// resumeNovelAgentChatApproval 连接小说写作 Agent 工具人工审核恢复接口。
+// 参数 params 表示 Agent 工具人工审核恢复参数；参数 handlers 表示流事件回调集合。
+export async function resumeNovelAgentChatApproval(
+  params: NovelAgentApprovalResumeParams,
+  handlers: NovelAgentStreamHandlers,
+): Promise<void> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+  if (!Number.isSafeInteger(params.novelId) || params.novelId <= 0) {
+    throw new Error("当前小说信息缺失，请刷新后重试");
+  }
+  if (
+    params.chapterId !== undefined &&
+    (!Number.isSafeInteger(params.chapterId) || params.chapterId <= 0)
+  ) {
+    throw new Error("当前章节 ID 缺失，请刷新后重试");
+  }
+  if (
+    params.chapterNumber !== undefined &&
+    (!Number.isSafeInteger(params.chapterNumber) || params.chapterNumber <= 0)
+  ) {
+    throw new Error("当前章节号缺失，请刷新后重试");
+  }
+  if (!params.checkpointId.trim() || !params.interruptId.trim()) {
+    throw new Error("人工审核记录缺失，请重新发起 AI 请求");
+  }
+
+  const response = await fetch("/api/v1/ai/agents/chat/approval/resume", {
+    method: "POST",
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      novel_id: params.novelId,
+      conversation_id: params.conversationId,
+      checkpoint_id: params.checkpointId,
+      interrupt_id: params.interruptId,
+      approved: params.approved,
+      reason: params.reason?.trim() || undefined,
+      ...(params.chapterId !== undefined
+        ? { chapter_id: params.chapterId }
+        : {}),
+      ...(params.chapterNumber !== undefined
+        ? { chapter_number: params.chapterNumber }
+        : {}),
+    }),
+    signal: params.signal,
+  });
+
+  if (response.status === 401) {
+    const payload = await parseApiResponse<unknown>(response);
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok) {
+    const payload = await parseApiResponse<unknown>(response);
+    throw new Error(payload?.message || "AI 写作助手恢复失败，请稍后再试");
   }
 
   if (!response.body) {
@@ -3915,6 +4026,7 @@ function parseNovelAgentStreamEvent(line: string): NovelAgentStreamEvent | null 
     if (
       event.type === "meta" ||
       event.type === "delta" ||
+      event.type === "approval_required" ||
       event.type === "done" ||
       event.type === "error"
     ) {

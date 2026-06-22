@@ -557,8 +557,8 @@ type chatAgentRuntime struct {
 }
 
 // Stream 流式执行基于 schema.Message 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 emit 表示文本增量回调。
-func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 control 表示 checkpoint 控制参数；参数 emit 表示文本增量回调。
+func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, control AgentRunControl, emit func(delta AgentDelta) error) (AgentResult, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
@@ -572,8 +572,40 @@ func (r chatAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, 
 	runner := adk.NewTypedRunner(adk.TypedRunnerConfig[*schema.Message]{
 		Agent:           agent,
 		EnableStreaming: true,
+		CheckPointStore: control.CheckPointStore,
 	})
-	result, err := streamChatAgentEvents(runner.Run(ctx, chatRunMessages(req, memory)), agentCfg.taskByAgent, emit)
+	result, err := streamChatAgentEvents(runner.Run(ctx, chatRunMessages(req, memory), agentRunOptions(control)...), control.CheckPointID, agentCfg.taskByAgent, emit)
+	if err != nil {
+		return result, err
+	}
+	return applyResultModelInfo(result, agentCfg.supervisor.name, r.modelConfigs), nil
+}
+
+// Resume 从人工审核中断点恢复基于 schema.Message 的小说写作 Agent。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示原始流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 control 表示 checkpoint 控制参数；参数 approval 表示用户审核决策；参数 emit 表示文本增量回调。
+func (r chatAgentRuntime) Resume(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, control AgentRunControl, approval ToolApprovalResumeData, emit func(delta AgentDelta) error) (AgentResult, error) {
+	agentCfg, err := newAgentRuntimeConfig(cfg)
+	if err != nil {
+		return AgentResult{Task: taskDirect}, err
+	}
+
+	agent, err := newChatSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader, r.novelSummaryStore, r.novelOutlineStore, r.characterStore, r.relationshipGraphStore)
+	if err != nil {
+		return AgentResult{Task: taskDirect}, err
+	}
+
+	runner := adk.NewTypedRunner(adk.TypedRunnerConfig[*schema.Message]{
+		Agent:           agent,
+		EnableStreaming: true,
+		CheckPointStore: control.CheckPointStore,
+	})
+	iterator, err := runner.ResumeWithParams(ctx, control.CheckPointID, &adk.ResumeParams{
+		Targets: map[string]any{control.InterruptID: approval},
+	})
+	if err != nil {
+		return AgentResult{Task: taskDirect}, err
+	}
+	result, err := streamChatAgentEvents(iterator, control.CheckPointID, agentCfg.taskByAgent, emit)
 	if err != nil {
 		return result, err
 	}
@@ -638,8 +670,8 @@ type agenticAgentRuntime struct {
 }
 
 // Stream 流式执行基于 schema.AgenticMessage 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 emit 表示文本增量回调。
-func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 control 表示 checkpoint 控制参数；参数 emit 表示文本增量回调。
+func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, control AgentRunControl, emit func(delta AgentDelta) error) (AgentResult, error) {
 	agentCfg, err := newAgentRuntimeConfig(cfg)
 	if err != nil {
 		return AgentResult{Task: taskDirect}, err
@@ -653,8 +685,40 @@ func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfi
 	runner := adk.NewTypedRunner(adk.TypedRunnerConfig[*schema.AgenticMessage]{
 		Agent:           agent,
 		EnableStreaming: true,
+		CheckPointStore: control.CheckPointStore,
 	})
-	result, err := streamAgenticAgentEvents(runner.Run(ctx, agenticRunMessages(req, memory)), agentCfg.taskByAgent, emit)
+	result, err := streamAgenticAgentEvents(runner.Run(ctx, agenticRunMessages(req, memory), agentRunOptions(control)...), control.CheckPointID, agentCfg.taskByAgent, emit)
+	if err != nil {
+		return result, err
+	}
+	return applyResultModelInfo(result, agentCfg.supervisor.name, r.modelConfigs), nil
+}
+
+// Resume 从人工审核中断点恢复基于 schema.AgenticMessage 的小说写作 Agent。
+// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示原始流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 control 表示 checkpoint 控制参数；参数 approval 表示用户审核决策；参数 emit 表示文本增量回调。
+func (r agenticAgentRuntime) Resume(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, control AgentRunControl, approval ToolApprovalResumeData, emit func(delta AgentDelta) error) (AgentResult, error) {
+	agentCfg, err := newAgentRuntimeConfig(cfg)
+	if err != nil {
+		return AgentResult{Task: taskDirect}, err
+	}
+
+	agent, err := newAgenticSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader, r.novelSummaryStore, r.novelOutlineStore, r.characterStore, r.relationshipGraphStore)
+	if err != nil {
+		return AgentResult{Task: taskDirect}, err
+	}
+
+	runner := adk.NewTypedRunner(adk.TypedRunnerConfig[*schema.AgenticMessage]{
+		Agent:           agent,
+		EnableStreaming: true,
+		CheckPointStore: control.CheckPointStore,
+	})
+	iterator, err := runner.ResumeWithParams(ctx, control.CheckPointID, &adk.ResumeParams{
+		Targets: map[string]any{control.InterruptID: approval},
+	})
+	if err != nil {
+		return AgentResult{Task: taskDirect}, err
+	}
+	result, err := streamAgenticAgentEvents(iterator, control.CheckPointID, agentCfg.taskByAgent, emit)
 	if err != nil {
 		return result, err
 	}
@@ -734,6 +798,15 @@ func agenticRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Agen
 	}
 	messages = append(messages, schema.UserAgenticMessage(req.Message))
 	return messages
+}
+
+// agentRunOptions 构造 Agent Runner 运行选项。
+// 参数 control 表示本轮运行的 checkpoint 控制参数。
+func agentRunOptions(control AgentRunControl) []adk.AgentRunOption {
+	if strings.TrimSpace(control.CheckPointID) == "" || control.CheckPointStore == nil {
+		return nil
+	}
+	return []adk.AgentRunOption{adk.WithCheckPointID(control.CheckPointID)}
 }
 
 // assistantAgenticMessage 创建 AgenticMessage 路径使用的助手历史消息。
@@ -1197,72 +1270,115 @@ func configuredAgentTools(req ChatRequest, agent runtimeAgentDefinition, registr
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, getContentTool)
+			tools, err = appendConfiguredAgentTool(tools, getContentTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameQueryChapters:
 			queryChaptersTool, err := agenttools.NewQueryChaptersTool(chapterReader, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, queryChaptersTool)
+			tools, err = appendConfiguredAgentTool(tools, queryChaptersTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameUpdateChapterSummary:
 			updateSummaryTool, err := agenttools.NewUpdateChapterSummaryTool(chapterReader, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, updateSummaryTool)
+			tools, err = appendConfiguredAgentTool(tools, updateSummaryTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameQueryNovelSummary:
 			queryNovelSummaryTool, err := agenttools.NewQueryNovelSummaryTool(novelSummaryStore, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, queryNovelSummaryTool)
+			tools, err = appendConfiguredAgentTool(tools, queryNovelSummaryTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameUpdateNovelSummary:
 			updateNovelSummaryTool, err := agenttools.NewUpdateNovelSummaryTool(novelSummaryStore, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, updateNovelSummaryTool)
+			tools, err = appendConfiguredAgentTool(tools, updateNovelSummaryTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameQueryNovelOutline:
 			queryNovelOutlineTool, err := agenttools.NewQueryNovelOutlineTool(novelOutlineStore, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, queryNovelOutlineTool)
+			tools, err = appendConfiguredAgentTool(tools, queryNovelOutlineTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameUpdateNovelOutline:
 			updateNovelOutlineTool, err := agenttools.NewUpdateNovelOutlineTool(novelOutlineStore, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, updateNovelOutlineTool)
+			tools, err = appendConfiguredAgentTool(tools, updateNovelOutlineTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameListCharacters:
 			listCharactersTool, err := agenttools.NewListCharactersTool(characterStore, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, listCharactersTool)
+			tools, err = appendConfiguredAgentTool(tools, listCharactersTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameSearchCharactersByName:
 			searchCharactersTool, err := agenttools.NewSearchCharactersByNameTool(characterStore, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, searchCharactersTool)
+			tools, err = appendConfiguredAgentTool(tools, searchCharactersTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameSaveCharacter:
 			saveCharacterTool, err := agenttools.NewSaveCharacterTool(characterStore, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, saveCharacterTool)
+			tools, err = appendConfiguredAgentTool(tools, saveCharacterTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		case agenttools.ToolNameQueryCharacterRelationships:
 			queryRelationshipsTool, err := agenttools.NewQueryCharacterRelationshipsTool(relationshipGraphStore, req.NovelID, toolConfig.description)
 			if err != nil {
 				return nil, fmt.Errorf("创建 Agent %s 的工具 %s 失败: %w", agent.name, name, err)
 			}
-			tools = append(tools, queryRelationshipsTool)
+			tools, err = appendConfiguredAgentTool(tools, queryRelationshipsTool, toolConfig)
+			if err != nil {
+				return nil, err
+			}
 		default:
 			return nil, fmt.Errorf("%w: 未知 Agent tool %s", ErrAgentConfigInvalid, name)
 		}
 	}
 	return tools, nil
+}
+
+// appendConfiguredAgentTool 按工具配置包装后追加到工具列表。
+// 参数 tools 表示当前已经创建的工具列表；参数 baseTool 表示本次创建的原始工具；参数 toolConfig 表示工具运行时配置。
+func appendConfiguredAgentTool(tools []tool.BaseTool, baseTool tool.BaseTool, toolConfig runtimeAgentTool) ([]tool.BaseTool, error) {
+	wrappedTool, err := wrapToolApproval(baseTool, toolConfig)
+	if err != nil {
+		return nil, err
+	}
+	return append(tools, wrappedTool), nil
 }
 
 // childToolsConfig 创建子 Agent 自身使用的普通工具配置。
@@ -1277,8 +1393,8 @@ func childToolsConfig(tools []tool.BaseTool) adk.ToolsConfig {
 }
 
 // streamChatAgentEvents 将 schema.Message Agent 事件转换为统一文本结果。
-// 参数 iterator 表示 Eino ADK 事件迭代器；参数 taskByAgent 表示子 Agent 名称到任务标识的映射；参数 emit 表示文本增量回调。
-func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.Message]], taskByAgent map[string]string, emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 iterator 表示 Eino ADK 事件迭代器；参数 checkPointID 表示本轮运行使用的 checkpoint 标识；参数 taskByAgent 表示子 Agent 名称到任务标识的映射；参数 emit 表示文本增量回调。
+func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.Message]], checkPointID string, taskByAgent map[string]string, emit func(delta AgentDelta) error) (AgentResult, error) {
 	result := AgentResult{Task: taskDirect}
 	var full strings.Builder
 	nextReplyIndex := 0
@@ -1290,6 +1406,9 @@ func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*sch
 		}
 		if event.Err != nil {
 			return result, event.Err
+		}
+		if event.Action != nil && event.Action.Interrupted != nil {
+			return result, agentInterruptedErrorFromInfo(checkPointID, event.Action.Interrupted)
 		}
 		if event.Output == nil || event.Output.MessageOutput == nil {
 			continue
@@ -1310,8 +1429,8 @@ func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*sch
 }
 
 // streamAgenticAgentEvents 将 schema.AgenticMessage Agent 事件转换为统一文本结果。
-// 参数 iterator 表示 Eino ADK 事件迭代器；参数 taskByAgent 表示子 Agent 名称到任务标识的映射；参数 emit 表示文本增量回调。
-func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.AgenticMessage]], taskByAgent map[string]string, emit func(delta AgentDelta) error) (AgentResult, error) {
+// 参数 iterator 表示 Eino ADK 事件迭代器；参数 checkPointID 表示本轮运行使用的 checkpoint 标识；参数 taskByAgent 表示子 Agent 名称到任务标识的映射；参数 emit 表示文本增量回调。
+func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.AgenticMessage]], checkPointID string, taskByAgent map[string]string, emit func(delta AgentDelta) error) (AgentResult, error) {
 	result := AgentResult{Task: taskDirect}
 	var full strings.Builder
 	nextReplyIndex := 0
@@ -1323,6 +1442,9 @@ func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*
 		}
 		if event.Err != nil {
 			return result, event.Err
+		}
+		if event.Action != nil && event.Action.Interrupted != nil {
+			return result, agentInterruptedErrorFromInfo(checkPointID, event.Action.Interrupted)
 		}
 		if event.Output == nil || event.Output.MessageOutput == nil {
 			continue

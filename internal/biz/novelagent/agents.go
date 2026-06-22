@@ -50,6 +50,8 @@ type runtimeAgentTool struct {
 	name string
 	// description 表示提供给模型的工具提示词或能力描述。
 	description string
+	// requireApproval 表示执行该工具前是否需要用户人工审核。
+	requireApproval bool
 }
 
 // runtimeAgentConfig 表示一次请求使用的多层 Agent 运行时配置。
@@ -156,7 +158,7 @@ func normalizeAgentToolRegistry(values []appconfig.AgentToolConfig) (map[string]
 		if !isImplementedAgentTool(name) {
 			return nil, fmt.Errorf("%w: ai.agent.tools 包含未知工具 %s", ErrAgentConfigInvalid, name)
 		}
-		tools[name] = runtimeAgentTool{name: name, description: description}
+		tools[name] = runtimeAgentTool{name: name, description: description, requireApproval: value.RequireApproval}
 	}
 	return tools, nil
 }

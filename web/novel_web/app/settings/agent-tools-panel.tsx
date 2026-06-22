@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import Card from "@douyinfe/semi-ui-19/lib/es/card";
 import Modal from "@douyinfe/semi-ui-19/lib/es/modal";
+import Switch from "@douyinfe/semi-ui-19/lib/es/switch";
 import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
 import { fetchAgentConfig, updateAgentConfig, UnauthorizedError, type AgentConfigData, type AgentToolConfig } from "../api";
 import type { AgentToolsSettingsPanelProps } from "./types";
@@ -119,6 +120,22 @@ export function AgentToolsSettingsPanel(props: AgentToolsSettingsPanelProps) {
       return current.map(function updateToolDescription(toolConfig) {
         return toolConfig.name === toolName
           ? { ...toolConfig, description }
+          : toolConfig;
+      });
+    });
+  }
+
+  // handleToolRequireApprovalChange 切换当前工具执行前是否需要人工审核。
+  // 参数 checked 表示 Semi Switch 返回的开关状态。
+  function handleToolRequireApprovalChange(checked: boolean) {
+    const toolName = editingToolName;
+    if (!toolName) {
+      return;
+    }
+    setToolRegistry(function updateToolRegistry(current) {
+      return current.map(function updateToolApproval(toolConfig) {
+        return toolConfig.name === toolName
+          ? { ...toolConfig, require_approval: checked }
           : toolConfig;
       });
     });
@@ -281,6 +298,9 @@ export function AgentToolsSettingsPanel(props: AgentToolsSettingsPanelProps) {
           {!loading
             ? toolRegistry.map(function renderAgentToolCard(toolConfig) {
                 const description = toolConfig.description.trim() || "暂无描述";
+                const approvalText = toolConfig.require_approval
+                  ? "需要审核"
+                  : "直接执行";
                 return (
                   <div
                     className="agent-card-shell"
@@ -302,6 +322,9 @@ export function AgentToolsSettingsPanel(props: AgentToolsSettingsPanelProps) {
                     >
                       <div className="agent-preview-card-content">
                         <h3>{toolConfig.name}</h3>
+                        <span className="agent-tool-approval-badge">
+                          {approvalText}
+                        </span>
                         <p title={description}>{description}</p>
                       </div>
                     </Card>
@@ -344,6 +367,22 @@ export function AgentToolsSettingsPanel(props: AgentToolsSettingsPanelProps) {
                   onChange={handleToolDescriptionChange}
                 />
               </label>
+              <div className="agent-tool-approval-field">
+                <div>
+                  <span>人工审核</span>
+                  <p>
+                    {editingToolConfig.require_approval
+                      ? "执行前会等待用户批准"
+                      : "模型调用时直接执行"}
+                  </p>
+                </div>
+                <Switch
+                  aria-label="切换工具人工审核"
+                  checked={editingToolConfig.require_approval === true}
+                  disabled={saving}
+                  onChange={handleToolRequireApprovalChange}
+                />
+              </div>
             </div>
             <div className="ai-provider-form-actions">
               <button

@@ -25,4 +25,6 @@ var (
 	ErrAgentMemoryFailed = errors.New("novel agent memory failed")
 	// ErrConversationNotFound 表示 Agent 会话不存在或不属于当前小说。
 	ErrConversationNotFound = errors.New("novel agent conversation not found")
+	// ErrAgentApprovalNotFound 表示人工审核中断记录不存在或已经失效。
+	ErrAgentApprovalNotFound = errors.New("novel agent approval not found")
 )
