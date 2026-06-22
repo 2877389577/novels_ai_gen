@@ -8,7 +8,7 @@ import { ChapterAiAssistantPanel } from "./chapter-ai-panel";
 import { ChapterEditorContext } from "./editor-context";
 import { ChapterEditorError, ChapterEditorSkeleton } from "./editor-frame";
 import type { ChapterAiPrefillMessage, ChapterAiSavedChapterContext, ChapterEditorPageProps, ChapterEditorState, ChapterFormValues, ChapterSaveOptions, ChapterSaveSnapshot, ChapterSelectionAIAction } from "./types";
-import { countNonWhitespaceCharacters, ensureContentEditorHasParagraph, formatChapterNumber, getChapterSelectionAIAction, getContentEditorTailNode, getErrorMessage, insertPlainTextAtSelection, isChapterNumberConflictError, moveCaretToEnd, normalizeChapterCreateValues, normalizeChapterFormValues, readContentEditorText, renderContentEditorText, splitEditorTextLines, chapterToFormValues } from "./content-editor-utils";
+import { countNonWhitespaceCharacters, ensureContentEditorHasParagraph, formatChapterNumber, getChapterSelectionAIAction, getContentEditorTailNode, getErrorMessage, insertPlainTextAtSelection, isChapterNumberConflictError, moveCaretToEnd, normalizeChapterContentText, normalizeChapterCreateValues, normalizeChapterFormValues, readContentEditorText, renderContentEditorText, splitEditorTextLines, chapterToFormValues } from "./content-editor-utils";
 
 // ChapterEditorPage 渲染章节创建和编辑共用页面。
 // 参数 props 表示章节编辑页需要的外部参数和回调。
@@ -135,7 +135,7 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     lastSavedSnapshotRef.current = {
       chapterId: chapterID,
       title: normalizeText(values.title),
-      content: normalizeText(values.content),
+      content: normalizeChapterContentText(values.content),
     };
   }, []);
 
