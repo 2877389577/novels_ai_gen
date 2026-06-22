@@ -110,6 +110,7 @@ export function copyAgentToolConfig(toolConfig: AgentToolConfig): AgentToolConfi
   return {
     name: toolConfig.name ?? "",
     description: toolConfig.description ?? "",
+    require_approval: toolConfig.require_approval === true,
   };
 }
 
@@ -544,7 +545,11 @@ export function normalizeAgentToolRegistryForSave(
       return { value: null, error: `工具名称重复：${name}` };
     }
     seen.add(name);
-    result.push({ name, description });
+    result.push({
+      name,
+      description,
+      require_approval: toolConfig.require_approval === true,
+    });
   }
   return { value: result, error: "" };
 }

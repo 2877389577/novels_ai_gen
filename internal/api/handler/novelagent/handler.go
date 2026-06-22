@@ -32,9 +32,29 @@ type ChatRequest struct {
 	ChapterNumber int `json:"chapter_number,omitempty" example:"3"`
 }
 
+// ChatApprovalResumeRequest 表示人工审核后恢复 Agent 执行的请求。
+type ChatApprovalResumeRequest struct {
+	// NovelID 表示待恢复请求关联的小说 ID。
+	NovelID uint64 `json:"novel_id" binding:"required" example:"1"`
+	// ConversationID 表示待恢复请求所属 Agent 会话 ID，新会话恢复时可为空。
+	ConversationID uint64 `json:"conversation_id,omitempty" example:"1"`
+	// ChapterID 表示待恢复请求关联的章节 ID，普通对话可为空。
+	ChapterID uint64 `json:"chapter_id,omitempty" example:"1"`
+	// ChapterNumber 表示待恢复请求关联的章节号，即“第 x 章”中的 x。
+	ChapterNumber int `json:"chapter_number,omitempty" example:"3"`
+	// CheckPointID 表示 Eino ADK 中断时保存的 checkpoint 标识。
+	CheckPointID string `json:"checkpoint_id" binding:"required" example:"agent-approval-abc123"`
+	// InterruptID 表示本次人工审核对应的中断点标识。
+	InterruptID string `json:"interrupt_id" binding:"required" example:"agent:supervisor;tool:get_content:call_1"`
+	// Approved 表示用户是否允许执行该工具。
+	Approved bool `json:"approved" example:"true"`
+	// Reason 表示用户拒绝或批准时填写的补充原因。
+	Reason string `json:"reason,omitempty" example:"这次允许读取章节内容"`
+}
+
 // StreamEvent 表示小说写作 Agent NDJSON 流事件。
 type StreamEvent struct {
-	// Type 表示事件类型，支持 meta、delta、done、error。
+	// Type 表示事件类型，支持 meta、delta、approval_required、done、error。
 	Type string `json:"type" example:"delta"`
 	// RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
@@ -54,6 +74,14 @@ type StreamEvent struct {
 	ConversationTitle string `json:"conversation_title,omitempty" example:"讨论第三章节奏"`
 	// Message 表示错误或状态说明。
 	Message string `json:"message,omitempty" example:"ok"`
+	// CheckPointID 表示等待人工审核时用于恢复 Agent 执行的 checkpoint 标识。
+	CheckPointID string `json:"checkpoint_id,omitempty" example:"agent-approval-abc123"`
+	// InterruptID 表示等待人工审核时需要恢复的中断点标识。
+	InterruptID string `json:"interrupt_id,omitempty" example:"agent:supervisor;tool:get_content:call_1"`
+	// ToolName 表示等待人工审核的工具名称。
+	ToolName string `json:"tool_name,omitempty" example:"get_content"`
+	// ToolArguments 表示等待人工审核的工具调用参数 JSON 字符串。
+	ToolArguments string `json:"tool_arguments,omitempty" example:"{\"chapter_number\":3}"`
 }
 
 // StreamReply 表示 Swagger 文档中的单段 Agent 助手回复。
@@ -331,6 +359,58 @@ func (h *Handler) StreamChat(c *gin.Context) {
 	}
 }
 
+// ResumeToolApproval 处理小说写作 Agent 工具人工审核恢复请求。
+// 参数 c 表示 Gin 请求上下文。
+//
+// @Summary 恢复 AI Agent 工具人工审核
+// @Description 用户批准或拒绝工具执行后，从 Eino ADK checkpoint 恢复小说写作 Agent，并继续以 NDJSON 输出。
+// @Tags novel-agents
+// @Accept json
+// @Produce application/x-ndjson
+// @Security Bearer
+// @Param request body ChatApprovalResumeRequest true "人工审核恢复请求"
+// @Success 200 {object} StreamEvent "NDJSON 流事件"
+// @Failure 400 {object} response.ErrorBody "请求参数错误"
+// @Failure 401 {object} response.ErrorBody "未登录或登录已过期"
+// @Failure 404 {object} response.ErrorBody "人工审核记录不存在或已失效"
+// @Failure 500 {object} response.ErrorBody "服务器内部错误"
+// @Router /ai/agents/chat/approval/resume [post]
+func (h *Handler) ResumeToolApproval(c *gin.Context) {
+	var req biznovelagent.ChatApprovalResumeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "请求参数错误")
+		return
+	}
+	if err := biznovelagent.ValidateChatApprovalResumeRequest(req); err != nil {
+		writeAgentError(c, err)
+		return
+	}
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		response.Error(c, http.StatusInternalServerError, "当前运行环境不支持 AI 流式输出")
+		return
+	}
+
+	c.Header("Content-Type", "application/x-ndjson; charset=utf-8")
+	c.Status(http.StatusOK)
+
+	writer := &ndjsonWriter{
+		encoder: json.NewEncoder(c.Writer),
+		flusher: flusher,
+	}
+	if err := h.service.ResumeToolApproval(c.Request.Context(), req, writer); err != nil && !writer.hasError {
+		if biznovelagent.IsCanceledError(c.Request.Context(), err) {
+			return
+		}
+		_ = writer.WriteEvent(biznovelagent.StreamEvent{
+			Type:      "error",
+			RequestID: requestid.FromContext(c.Request.Context()),
+			Message:   agentErrorMessage(err),
+		})
+	}
+}
+
 // ndjsonWriter 表示基于 HTTP 响应的 NDJSON 流事件写出器。
 type ndjsonWriter struct {
 	// encoder 表示 JSON 行编码器。
@@ -374,6 +454,8 @@ func agentErrorMessage(err error) string {
 		return "AI 写作智能体配置错误"
 	case errors.Is(err, biznovelagent.ErrAgentMemoryFailed):
 		return "AI 记忆暂时不可用，请稍后再试"
+	case errors.Is(err, biznovelagent.ErrAgentApprovalNotFound):
+		return "人工审核记录不存在或已失效，请重新发起 AI 请求"
 	default:
 		return "AI 写作助手暂时不可用，请稍后再试"
 	}
@@ -419,6 +501,8 @@ func writeAgentError(c *gin.Context, err error) {
 	case errors.Is(err, biznovelagent.ErrChapterContextInvalid):
 		response.Error(c, http.StatusBadRequest, agentErrorMessage(err))
 	case errors.Is(err, biznovelagent.ErrConversationNotFound):
+		response.Error(c, http.StatusNotFound, agentErrorMessage(err))
+	case errors.Is(err, biznovelagent.ErrAgentApprovalNotFound):
 		response.Error(c, http.StatusNotFound, agentErrorMessage(err))
 	default:
 		response.Error(c, http.StatusInternalServerError, agentErrorMessage(err))

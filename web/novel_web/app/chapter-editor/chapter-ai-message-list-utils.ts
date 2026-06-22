@@ -1,4 +1,8 @@
-import type { ChapterAiMessage } from "./types";
+import type {
+  ChapterAiApprovalState,
+  ChapterAiApprovalStatus,
+  ChapterAiMessage,
+} from "./types";
 import {
   createChapterAiLoadingMessageID,
   createChapterAiRenderMessageID,
@@ -47,6 +51,76 @@ export function updateChapterAiPairRetryableInList(
   });
 }
 
+// setChapterAiApprovalInList 将指定助手消息更新为等待工具人工审核状态。
+// 参数 chats 表示当前章节 AI 消息列表；参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 approval 表示需要展示并用于恢复的审核状态。
+export function setChapterAiApprovalInList(
+  chats: ChapterAiMessage[],
+  sourceMessageID: string,
+  approval: ChapterAiApprovalState,
+): ChapterAiMessage[] {
+  return chats.map(function setChatApproval(chat) {
+    if (
+      chat.role !== "assistant" ||
+      chat.chapterAiSourceID !== sourceMessageID ||
+      (chat.chapterAiReplyIndex ?? 1) !== 1
+    ) {
+      return chat;
+    }
+    return {
+      ...chat,
+      content: chat.content || "等待工具人工审核。",
+      status: "in_progress",
+      chapterAiApproval: approval,
+    };
+  });
+}
+
+// updateChapterAiApprovalStatusInList 更新指定助手消息的工具人工审核提交状态。
+// 参数 chats 表示当前章节 AI 消息列表；参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 status 表示新的人工审核提交状态。
+export function updateChapterAiApprovalStatusInList(
+  chats: ChapterAiMessage[],
+  sourceMessageID: string,
+  status: ChapterAiApprovalStatus,
+): ChapterAiMessage[] {
+  return chats.map(function updateChatApprovalStatus(chat) {
+    if (
+      chat.role !== "assistant" ||
+      chat.chapterAiSourceID !== sourceMessageID ||
+      !chat.chapterAiApproval
+    ) {
+      return chat;
+    }
+    return {
+      ...chat,
+      chapterAiApproval: {
+        ...chat.chapterAiApproval,
+        status,
+      },
+    };
+  });
+}
+
+// clearChapterAiApprovalInList 清除指定助手消息上的工具人工审核状态。
+// 参数 chats 表示当前章节 AI 消息列表；参数 sourceMessageID 表示本次 AI 回复的基础消息 ID。
+export function clearChapterAiApprovalInList(
+  chats: ChapterAiMessage[],
+  sourceMessageID: string,
+): ChapterAiMessage[] {
+  return chats.map(function clearChatApproval(chat) {
+    if (
+      chat.role !== "assistant" ||
+      chat.chapterAiSourceID !== sourceMessageID ||
+      !chat.chapterAiApproval
+    ) {
+      return chat;
+    }
+    return {
+      ...chat,
+      chapterAiApproval: undefined,
+    };
+  });
+}
+
 // resetChapterAiRequestForRetryInList 重置指定配对的助手消息，使重试复用原对话位置。
 // 参数 chats 表示当前章节 AI 消息列表；参数 pairID 表示需要重试的消息配对 ID；参数 assistantMessageID 表示助手消息基础 ID。
 export function resetChapterAiRequestForRetryInList(
@@ -78,6 +152,7 @@ export function resetChapterAiRequestForRetryInList(
         id: assistantMessageID,
         chapterAiSourceID: assistantMessageID,
         chapterAiReplyIndex: 1,
+        chapterAiApproval: undefined,
         content: "",
         status: "in_progress",
       }];
@@ -198,6 +273,7 @@ export function updateAssistantReplyMessageInList(
           : createChapterAiRenderMessageID(messageID, status, content.length),
       chapterAiSourceID: sourceMessageID,
       chapterAiReplyIndex: replyIndex,
+      chapterAiApproval: undefined,
       content,
       status,
     };
@@ -233,6 +309,7 @@ export function collapseAssistantRepliesToStatusInList(
       ),
       chapterAiSourceID: sourceMessageID,
       chapterAiReplyIndex: 1,
+      chapterAiApproval: undefined,
       content,
       status,
     }];

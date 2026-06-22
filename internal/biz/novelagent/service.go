@@ -86,6 +86,8 @@ type Service struct {
 	runtimeFactory AgentRuntimeFactory
 	// memoryRepo 表示会话级 Agent 记忆仓储。
 	memoryRepo MemoryRepository
+	// approvalStore 表示人工审核 checkpoint 与待审核记录的内存存储。
+	approvalStore *agentApprovalStore
 }
 
 // savedTurnInfo 表示本轮成功入库后的会话信息。
@@ -108,7 +110,16 @@ func NewService(repo Repository, cipher Cipher, prompts PromptProvider, runtimeF
 		prompts:        prompts,
 		runtimeFactory: runtimeFactory,
 		memoryRepo:     memoryRepo,
+		approvalStore:  newAgentApprovalStore(),
 	}
+}
+
+// ensureApprovalStore 返回可用的人工审核内存存储。
+func (s *Service) ensureApprovalStore() *agentApprovalStore {
+	if s.approvalStore == nil {
+		s.approvalStore = newAgentApprovalStore()
+	}
+	return s.approvalStore
 }
 
 // StreamChat 执行小说写作 Agent 流式对话。
@@ -154,7 +165,13 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		return err
 	}
 
-	result, err := runtime.Stream(ctx, cfg, req, memory, func(delta AgentDelta) error {
+	checkPointID, err := newAgentCheckPointID()
+	if err != nil {
+		return err
+	}
+	approvalStore := s.ensureApprovalStore()
+	control := AgentRunControl{CheckPointID: checkPointID, CheckPointStore: approvalStore}
+	result, err := runtime.Stream(ctx, cfg, req, memory, control, func(delta AgentDelta) error {
 		if delta.Content == "" {
 			return nil
 		}
@@ -163,6 +180,11 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	if err != nil {
 		if IsCanceledError(ctx, err) {
 			return nil
+		}
+		var interrupted *AgentInterruptedError
+		if errors.As(err, &interrupted) {
+			approvalStore.SavePending(pendingApprovalFromInterrupt(req, interrupted))
+			return writer.WriteEvent(approvalRequiredStreamEvent(interrupted))
 		}
 		slog.ErrorContext(ctx, "小说写作 Agent 执行失败",
 			"error", err,
@@ -194,6 +216,117 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: "AI 记忆保存失败，本次回复未完成入库"})
 		return fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
+
+	return writer.WriteEvent(StreamEvent{
+		Type:              "done",
+		Task:              result.Task,
+		Content:           result.Content,
+		Replies:           streamRepliesForResult(result),
+		ConversationID:    savedTurn.ConversationID,
+		ConversationTitle: savedTurn.ConversationTitle,
+		Message:           "ok",
+	})
+}
+
+// ResumeToolApproval 根据用户人工审核结果恢复小说写作 Agent 流式对话。
+// 参数 ctx 表示请求上下文；参数 req 表示人工审核恢复请求；参数 writer 表示 NDJSON 事件写出器。
+func (s *Service) ResumeToolApproval(ctx context.Context, req ChatApprovalResumeRequest, writer EventWriter) error {
+	req = normalizeChatApprovalResumeRequest(req)
+	if err := ValidateChatApprovalResumeRequest(req); err != nil {
+		return err
+	}
+	if writer == nil {
+		return fmt.Errorf("Agent 流事件写出器不能为空")
+	}
+
+	approvalStore := s.ensureApprovalStore()
+	pendingApproval, ok := approvalStore.FindPending(req.CheckPointID, req.InterruptID)
+	if !ok || pendingApproval.Request.NovelID != req.NovelID {
+		return ErrAgentApprovalNotFound
+	}
+	originalReq := pendingApproval.Request
+	cfg := s.currentConfig()
+	modelConfig, err := s.runtimeModelConfig(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	entryConfig := modelConfig.Default
+	memory, err := s.memoryForRun(ctx, cfg, originalReq.NovelID, originalReq.ConversationID)
+	if err != nil {
+		return err
+	}
+
+	runtime, err := s.runtimeFactory.NewRuntime(ctx, modelConfig)
+	if err != nil {
+		slog.ErrorContext(ctx, "小说写作 Agent 创建恢复运行时失败",
+			"error", err,
+			"provider_id", entryConfig.ProviderID,
+			"provider_type", entryConfig.ProviderType,
+			"api_type", entryConfig.APIType,
+			"model", entryConfig.Model,
+			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
+		)
+		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
+	}
+
+	if err := writer.WriteEvent(StreamEvent{Type: "meta", Stage: "resumed", Message: "Agent 已根据人工审核继续处理"}); err != nil {
+		return err
+	}
+
+	control := AgentRunControl{
+		CheckPointID:    req.CheckPointID,
+		InterruptID:     req.InterruptID,
+		CheckPointStore: approvalStore,
+	}
+	approval := ToolApprovalResumeData{Approved: req.Approved, Reason: req.Reason}
+	result, err := runtime.Resume(ctx, cfg, originalReq, memory, control, approval, func(delta AgentDelta) error {
+		if delta.Content == "" {
+			return nil
+		}
+		return writer.WriteEvent(StreamEvent{Type: "delta", Task: delta.Task, ReplyIndex: delta.ReplyIndex, Content: delta.Content})
+	})
+	if err != nil {
+		if IsCanceledError(ctx, err) {
+			return nil
+		}
+		var interrupted *AgentInterruptedError
+		if errors.As(err, &interrupted) {
+			approvalStore.DeletePending(req.CheckPointID, req.InterruptID)
+			approvalStore.SavePending(pendingApprovalFromInterrupt(originalReq, interrupted))
+			return writer.WriteEvent(approvalRequiredStreamEvent(interrupted))
+		}
+		slog.ErrorContext(ctx, "小说写作 Agent 恢复执行失败",
+			"error", err,
+			"provider_id", entryConfig.ProviderID,
+			"provider_type", entryConfig.ProviderType,
+			"api_type", entryConfig.APIType,
+			"model", entryConfig.Model,
+			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
+		)
+		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: friendlyError(err)})
+		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
+	}
+	if IsCanceledError(ctx, nil) {
+		return nil
+	}
+	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, originalReq, result, entryConfig)
+	if err != nil {
+		if IsCanceledError(ctx, err) {
+			return nil
+		}
+		slog.ErrorContext(ctx, "小说写作 Agent 恢复后记忆保存失败",
+			"error", err,
+			"provider_id", entryConfig.ProviderID,
+			"model", entryConfig.Model,
+			"novel_id", originalReq.NovelID,
+			"chapter_id", originalReq.ChapterID,
+			"chapter_number", originalReq.ChapterNumber,
+		)
+		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: "AI 记忆保存失败，本次回复未完成入库"})
+		return fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+	}
+	approvalStore.DeletePending(req.CheckPointID, req.InterruptID)
+	_ = approvalStore.Delete(ctx, req.CheckPointID)
 
 	return writer.WriteEvent(StreamEvent{
 		Type:              "done",
@@ -309,6 +442,21 @@ func ValidateChatRequest(req ChatRequest) error {
 	}
 	if req.ChapterNumber < 0 {
 		return ErrChapterNumberInvalid
+	}
+	return nil
+}
+
+// ValidateChatApprovalResumeRequest 校验人工审核恢复请求。
+// 参数 req 表示人工审核恢复请求。
+func ValidateChatApprovalResumeRequest(req ChatApprovalResumeRequest) error {
+	if req.NovelID == 0 {
+		return ErrNovelIDRequired
+	}
+	if req.ChapterNumber < 0 {
+		return ErrChapterNumberInvalid
+	}
+	if strings.TrimSpace(req.CheckPointID) == "" || strings.TrimSpace(req.InterruptID) == "" {
+		return ErrAgentApprovalNotFound
 	}
 	return nil
 }
@@ -693,6 +841,38 @@ func streamRepliesForResult(result AgentResult) []StreamReply {
 	return items
 }
 
+// pendingApprovalFromInterrupt 将 Agent 中断错误转换为待审核记录。
+// 参数 req 表示触发中断的原始聊天请求；参数 interrupted 表示人工审核中断错误。
+func pendingApprovalFromInterrupt(req ChatRequest, interrupted *AgentInterruptedError) pendingToolApproval {
+	if interrupted == nil {
+		return pendingToolApproval{Request: req}
+	}
+	return pendingToolApproval{
+		CheckPointID:  interrupted.CheckPointID,
+		InterruptID:   interrupted.InterruptID,
+		ToolName:      interrupted.ToolName,
+		ToolArguments: interrupted.ToolArguments,
+		Message:       interrupted.Message,
+		Request:       req,
+	}
+}
+
+// approvalRequiredStreamEvent 将人工审核中断错误转换为前端流事件。
+// 参数 interrupted 表示人工审核中断错误。
+func approvalRequiredStreamEvent(interrupted *AgentInterruptedError) StreamEvent {
+	if interrupted == nil {
+		return StreamEvent{Type: "approval_required", Message: toolApprovalRequiredMessage}
+	}
+	return StreamEvent{
+		Type:          "approval_required",
+		CheckPointID:  interrupted.CheckPointID,
+		InterruptID:   interrupted.InterruptID,
+		ToolName:      interrupted.ToolName,
+		ToolArguments: interrupted.ToolArguments,
+		Message:       interrupted.Message,
+	}
+}
+
 // agentRepliesForSave 返回需要写入记忆表的分段助手回复列表。
 // 参数 result 表示 Agent 本轮运行的最终结果。
 func agentRepliesForSave(result AgentResult) []AgentReply {
@@ -819,6 +999,15 @@ func messageResponses(messages []MessageRecord) []MessageResponse {
 // 参数 req 表示原始流式对话请求。
 func normalizeChatRequest(req ChatRequest) ChatRequest {
 	req.Message = strings.TrimSpace(req.Message)
+	return req
+}
+
+// normalizeChatApprovalResumeRequest 标准化人工审核恢复请求。
+// 参数 req 表示原始人工审核恢复请求。
+func normalizeChatApprovalResumeRequest(req ChatApprovalResumeRequest) ChatApprovalResumeRequest {
+	req.CheckPointID = strings.TrimSpace(req.CheckPointID)
+	req.InterruptID = strings.TrimSpace(req.InterruptID)
+	req.Reason = strings.TrimSpace(req.Reason)
 	return req
 }
 

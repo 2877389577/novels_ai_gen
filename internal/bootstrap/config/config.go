@@ -107,6 +107,8 @@ type AgentToolConfig struct {
 	Name string `mapstructure:"name" json:"name" yaml:"name"`
 	// Description 表示提供给模型的工具提示词或能力描述。
 	Description string `mapstructure:"description" json:"description" yaml:"description"`
+	// RequireApproval 表示执行该工具前是否需要用户人工审核。
+	RequireApproval bool `mapstructure:"require_approval" json:"require_approval" yaml:"require_approval"`
 }
 
 // AgentMemoryConfig 表示小说写作 Agent 的持久记忆配置。
