@@ -200,7 +200,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	if IsCanceledError(ctx, nil) {
 		return nil
 	}
-	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, entryConfig)
+	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, entryConfig, nil)
 	if err != nil {
 		if IsCanceledError(ctx, err) {
 			return nil
@@ -309,7 +309,7 @@ func (s *Service) ResumeToolApproval(ctx context.Context, req ChatApprovalResume
 	if IsCanceledError(ctx, nil) {
 		return nil
 	}
-	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, originalReq, result, entryConfig)
+	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, originalReq, result, entryConfig, &pendingApproval)
 	if err != nil {
 		if IsCanceledError(ctx, err) {
 			return nil
@@ -597,9 +597,9 @@ func (s *Service) memoryForRun(ctx context.Context, cfg *appconfig.AppConfig, no
 	}, nil
 }
 
-// saveSuccessfulTurn 将成功完成的一轮用户消息和助手回复写入会话级 Agent 记忆。
+// saveSuccessfulTurn 将成功完成的一轮用户消息和 Agent 内部记忆事件写入会话级 Agent 记忆。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 runtime 表示本轮使用的 Agent 运行时；参数 req 表示本轮聊天请求。
-// 参数 result 表示 Agent 最终生成结果；参数 entryConfig 表示本轮入口模型配置。
+// 参数 result 表示 Agent 最终生成结果；参数 entryConfig 表示本轮入口模型配置；参数 pendingApproval 表示恢复人工审核时的原始待审核工具调用。
 func (s *Service) saveSuccessfulTurn(
 	ctx context.Context,
 	cfg *appconfig.AppConfig,
@@ -607,6 +607,7 @@ func (s *Service) saveSuccessfulTurn(
 	req ChatRequest,
 	result AgentResult,
 	entryConfig ModelConfig,
+	pendingApproval *pendingToolApproval,
 ) (savedTurnInfo, error) {
 	if req.NovelID == 0 {
 		return savedTurnInfo{}, nil
@@ -649,24 +650,25 @@ func (s *Service) saveSuccessfulTurn(
 			RequestID:      requestID,
 		},
 	}
-	for _, reply := range agentRepliesForSave(result) {
-		replyProviderID := reply.ProviderID
-		if replyProviderID == 0 {
-			replyProviderID = assistantProviderID
+	events := memoryEventsWithPendingApprovalCall(agentMemoryEventsForSave(result), pendingApproval)
+	for _, event := range events {
+		eventProviderID := event.ProviderID
+		if eventProviderID == 0 {
+			eventProviderID = assistantProviderID
 		}
-		replyModel := strings.TrimSpace(reply.Model)
-		if replyModel == "" {
-			replyModel = assistantModel
+		eventModel := strings.TrimSpace(event.Model)
+		if eventModel == "" {
+			eventModel = assistantModel
 		}
 		messages = append(messages, MessageRecord{
 			ConversationID: conversation.ID,
 			NovelID:        req.NovelID,
 			ChapterID:      chapterID,
-			Role:           MessageRoleAssistant,
-			Task:           reply.Task,
-			Content:        reply.Content,
-			ProviderID:     replyProviderID,
-			Model:          replyModel,
+			Role:           event.Role,
+			Task:           event.Task,
+			Content:        event.Content,
+			ProviderID:     eventProviderID,
+			Model:          eventModel,
 			RequestID:      requestID,
 		})
 	}
@@ -879,6 +881,139 @@ func agentRepliesForSave(result AgentResult) []AgentReply {
 	return normalizedAgentReplies(result)
 }
 
+// agentMemoryEventsForSave 返回需要写入记忆表的内部事件列表。
+// 参数 result 表示 Agent 本轮运行的最终结果。
+func agentMemoryEventsForSave(result AgentResult) []AgentMemoryEvent {
+	events := make([]AgentMemoryEvent, 0, len(result.MemoryEvents))
+	for _, event := range result.MemoryEvents {
+		if !isMemoryEventRoleForSave(event.Role) || strings.TrimSpace(event.Content) == "" {
+			continue
+		}
+		if strings.TrimSpace(event.Task) == "" {
+			event.Task = result.Task
+		}
+		if strings.TrimSpace(event.AgentName) == "" {
+			event.AgentName = result.AgentName
+		}
+		if event.ProviderID == 0 {
+			event.ProviderID = result.ProviderID
+		}
+		if strings.TrimSpace(event.Model) == "" {
+			event.Model = result.Model
+		}
+		events = append(events, event)
+	}
+	if len(events) > 0 {
+		return events
+	}
+
+	replies := agentRepliesForSave(result)
+	events = make([]AgentMemoryEvent, 0, len(replies))
+	for _, reply := range replies {
+		events = append(events, AgentMemoryEvent{
+			Role:       MessageRoleAssistant,
+			Task:       reply.Task,
+			Content:    reply.Content,
+			AgentName:  reply.AgentName,
+			ProviderID: reply.ProviderID,
+			Model:      reply.Model,
+		})
+	}
+	return events
+}
+
+// isMemoryEventRoleForSave 判断记忆事件角色是否允许入库。
+// 参数 role 表示 Agent 记忆消息角色。
+func isMemoryEventRoleForSave(role MessageRole) bool {
+	switch role {
+	case MessageRoleAssistant, MessageRoleFunctionCall, MessageRoleFunctionResult:
+		return true
+	default:
+		return false
+	}
+}
+
+// memoryEventsWithPendingApprovalCall 在审核恢复缺少原始工具调用时补齐 function_call 记忆。
+// 参数 events 表示本轮已经收集到的记忆事件；参数 pendingApproval 表示恢复人工审核时的原始待审核工具调用。
+func memoryEventsWithPendingApprovalCall(events []AgentMemoryEvent, pendingApproval *pendingToolApproval) []AgentMemoryEvent {
+	event, ok := pendingApprovalFunctionCallMemoryEvent(pendingApproval)
+	if !ok || hasFunctionCallMemoryEvent(events, event) {
+		return events
+	}
+	items := make([]AgentMemoryEvent, 0, len(events)+1)
+	items = append(items, event)
+	items = append(items, events...)
+	return items
+}
+
+// pendingApprovalFunctionCallMemoryEvent 将待审核记录转换为 function_call 记忆事件。
+// 参数 pendingApproval 表示恢复人工审核时的原始待审核工具调用。
+func pendingApprovalFunctionCallMemoryEvent(pendingApproval *pendingToolApproval) (AgentMemoryEvent, bool) {
+	if pendingApproval == nil {
+		return AgentMemoryEvent{}, false
+	}
+	call := agentFunctionToolCall{
+		ID:        strings.TrimSpace(pendingApproval.InterruptID),
+		Type:      "function",
+		Name:      strings.TrimSpace(pendingApproval.ToolName),
+		Arguments: pendingApproval.ToolArguments,
+	}
+	if strings.TrimSpace(call.ID) == "" && call.Name == "" && strings.TrimSpace(call.Arguments) == "" {
+		return AgentMemoryEvent{}, false
+	}
+	content, ok := encodeFunctionCallMemoryContent([]agentFunctionToolCall{call})
+	if !ok {
+		return AgentMemoryEvent{}, false
+	}
+	return AgentMemoryEvent{
+		Role:    MessageRoleFunctionCall,
+		Task:    taskDirect,
+		Content: content,
+	}, true
+}
+
+// hasFunctionCallMemoryEvent 判断事件列表中是否已经包含目标工具调用。
+// 参数 events 表示本轮已经收集到的记忆事件；参数 target 表示待匹配的 function_call 记忆事件。
+func hasFunctionCallMemoryEvent(events []AgentMemoryEvent, target AgentMemoryEvent) bool {
+	targetCalls, ok := decodeFunctionCallMemoryContent(target.Content)
+	if !ok || len(targetCalls) == 0 {
+		return false
+	}
+	for _, event := range events {
+		if event.Role != MessageRoleFunctionCall {
+			continue
+		}
+		calls, ok := decodeFunctionCallMemoryContent(event.Content)
+		if !ok {
+			continue
+		}
+		for _, call := range calls {
+			for _, targetCall := range targetCalls {
+				if sameFunctionToolCall(call, targetCall) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// sameFunctionToolCall 判断两个工具调用是否表示同一次调用。
+// 参数 call 表示已收集的工具调用；参数 target 表示待匹配的目标工具调用。
+func sameFunctionToolCall(call agentFunctionToolCall, target agentFunctionToolCall) bool {
+	callID := strings.TrimSpace(call.ID)
+	targetID := strings.TrimSpace(target.ID)
+	if callID != "" && targetID != "" && callID == targetID {
+		return true
+	}
+	callName := strings.TrimSpace(call.Name)
+	targetName := strings.TrimSpace(target.Name)
+	if callName == "" && targetName == "" && strings.TrimSpace(call.Arguments) == "" && strings.TrimSpace(target.Arguments) == "" {
+		return false
+	}
+	return callName == targetName && call.Arguments == target.Arguments
+}
+
 // memoryMessageLimit 返回最近对话轮数对应的消息条数上限。
 // 参数 cfg 表示当前配置快照。
 func memoryMessageLimit(cfg *appconfig.AppConfig) int {
@@ -981,6 +1116,9 @@ func messageResponses(messages []MessageRecord) []MessageResponse {
 
 	items := make([]MessageResponse, 0, len(messages))
 	for _, message := range messages {
+		if message.Role != MessageRoleUser && message.Role != MessageRoleAssistant {
+			continue
+		}
 		items = append(items, MessageResponse{
 			ID:             message.ID,
 			ConversationID: message.ConversationID,
