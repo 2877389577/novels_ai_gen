@@ -531,6 +531,16 @@ func applyResultModelInfo(result AgentResult, supervisorName string, registry ag
 		result.Replies[index].ProviderID = replyCfg.ProviderID
 		result.Replies[index].Model = replyCfg.Model
 	}
+	for index := range result.MemoryEvents {
+		eventAgentName := result.MemoryEvents[index].AgentName
+		if strings.TrimSpace(eventAgentName) == "" {
+			eventAgentName = result.AgentName
+			result.MemoryEvents[index].AgentName = eventAgentName
+		}
+		eventCfg := registry.configForAgent(eventAgentName, supervisorName)
+		result.MemoryEvents[index].ProviderID = eventCfg.ProviderID
+		result.MemoryEvents[index].Model = eventCfg.Model
+	}
 	return result
 }
 
@@ -771,6 +781,16 @@ func chatRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Message
 			messages = append(messages, schema.UserMessage(item.Content))
 		case MessageRoleAssistant:
 			messages = append(messages, schema.AssistantMessage(item.Content, nil))
+		case MessageRoleFunctionCall:
+			if calls, ok := decodeFunctionCallMemoryContent(item.Content); ok && len(calls) > 0 {
+				messages = append(messages, schema.AssistantMessage("", schemaToolCallsFromMemory(calls)))
+			}
+		case MessageRoleFunctionResult:
+			if results, ok := decodeFunctionResultMemoryContent(item.Content); ok && len(results) > 0 {
+				for _, result := range results {
+					messages = append(messages, schema.ToolMessage(result.Content, result.ID, schema.WithToolName(result.Name)))
+				}
+			}
 		}
 	}
 	messages = append(messages, schema.UserMessage(req.Message))
@@ -794,6 +814,14 @@ func agenticRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Agen
 			messages = append(messages, schema.UserAgenticMessage(item.Content))
 		case MessageRoleAssistant:
 			messages = append(messages, assistantAgenticMessage(item.Content))
+		case MessageRoleFunctionCall:
+			if calls, ok := decodeFunctionCallMemoryContent(item.Content); ok && len(calls) > 0 {
+				messages = append(messages, functionCallAgenticMessage(calls))
+			}
+		case MessageRoleFunctionResult:
+			if results, ok := decodeFunctionResultMemoryContent(item.Content); ok && len(results) > 0 {
+				messages = append(messages, functionResultAgenticMessage(results))
+			}
 		}
 	}
 	messages = append(messages, schema.UserAgenticMessage(req.Message))
@@ -818,6 +846,153 @@ func assistantAgenticMessage(content string) *schema.AgenticMessage {
 			schema.NewContentBlock(&schema.AssistantGenText{Text: content}),
 		},
 	}
+}
+
+// agentFunctionCallMemoryContent 表示 function_call 记忆消息的 JSON 正文。
+type agentFunctionCallMemoryContent struct {
+	// ToolCalls 表示本条助手消息中发起的函数工具调用列表。
+	ToolCalls []agentFunctionToolCall `json:"tool_calls"`
+}
+
+// agentFunctionResultMemoryContent 表示 function_result 记忆消息的 JSON 正文。
+type agentFunctionResultMemoryContent struct {
+	// ToolResults 表示本条工具消息中包含的函数工具结果列表。
+	ToolResults []agentFunctionToolResult `json:"tool_results"`
+}
+
+// agentFunctionToolCall 表示可写入记忆的函数工具调用。
+type agentFunctionToolCall struct {
+	// ID 表示模型生成的工具调用 ID。
+	ID string `json:"id,omitempty"`
+	// Type 表示工具调用类型，通常为 function。
+	Type string `json:"type,omitempty"`
+	// Name 表示被调用的工具名称。
+	Name string `json:"name,omitempty"`
+	// Arguments 表示工具调用参数 JSON 字符串。
+	Arguments string `json:"arguments,omitempty"`
+}
+
+// agentFunctionToolResult 表示可写入记忆的函数工具结果。
+type agentFunctionToolResult struct {
+	// ID 表示对应的工具调用 ID。
+	ID string `json:"id,omitempty"`
+	// Name 表示返回结果的工具名称。
+	Name string `json:"name,omitempty"`
+	// Content 表示工具返回给模型的文本结果。
+	Content string `json:"content"`
+}
+
+// encodeFunctionCallMemoryContent 将函数工具调用列表编码为记忆正文。
+// 参数 calls 表示需要写入记忆的函数工具调用列表。
+func encodeFunctionCallMemoryContent(calls []agentFunctionToolCall) (string, bool) {
+	if len(calls) == 0 {
+		return "", false
+	}
+	data, err := json.Marshal(agentFunctionCallMemoryContent{ToolCalls: calls})
+	if err != nil {
+		return "", false
+	}
+	return string(data), true
+}
+
+// encodeFunctionResultMemoryContent 将函数工具结果列表编码为记忆正文。
+// 参数 results 表示需要写入记忆的函数工具结果列表。
+func encodeFunctionResultMemoryContent(results []agentFunctionToolResult) (string, bool) {
+	if len(results) == 0 {
+		return "", false
+	}
+	data, err := json.Marshal(agentFunctionResultMemoryContent{ToolResults: results})
+	if err != nil {
+		return "", false
+	}
+	return string(data), true
+}
+
+// decodeFunctionCallMemoryContent 从记忆正文中解析函数工具调用列表。
+// 参数 content 表示数据库中保存的 function_call JSON 正文。
+func decodeFunctionCallMemoryContent(content string) ([]agentFunctionToolCall, bool) {
+	var payload agentFunctionCallMemoryContent
+	if err := json.Unmarshal([]byte(content), &payload); err != nil {
+		return nil, false
+	}
+	return payload.ToolCalls, len(payload.ToolCalls) > 0
+}
+
+// decodeFunctionResultMemoryContent 从记忆正文中解析函数工具结果列表。
+// 参数 content 表示数据库中保存的 function_result JSON 正文。
+func decodeFunctionResultMemoryContent(content string) ([]agentFunctionToolResult, bool) {
+	var payload agentFunctionResultMemoryContent
+	if err := json.Unmarshal([]byte(content), &payload); err != nil {
+		return nil, false
+	}
+	return payload.ToolResults, len(payload.ToolResults) > 0
+}
+
+// schemaToolCallsFromMemory 将记忆中的函数工具调用还原为 schema.ToolCall。
+// 参数 calls 表示从记忆正文解析出的函数工具调用列表。
+func schemaToolCallsFromMemory(calls []agentFunctionToolCall) []schema.ToolCall {
+	items := make([]schema.ToolCall, 0, len(calls))
+	for _, call := range calls {
+		name := strings.TrimSpace(call.Name)
+		arguments := call.Arguments
+		if strings.TrimSpace(call.ID) == "" && name == "" && strings.TrimSpace(arguments) == "" {
+			continue
+		}
+		callType := strings.TrimSpace(call.Type)
+		if callType == "" {
+			callType = "function"
+		}
+		items = append(items, schema.ToolCall{
+			ID:   strings.TrimSpace(call.ID),
+			Type: callType,
+			Function: schema.FunctionCall{
+				Name:      name,
+				Arguments: arguments,
+			},
+		})
+	}
+	return items
+}
+
+// functionCallAgenticMessage 将记忆中的函数工具调用还原为 AgenticMessage。
+// 参数 calls 表示从记忆正文解析出的函数工具调用列表。
+func functionCallAgenticMessage(calls []agentFunctionToolCall) *schema.AgenticMessage {
+	blocks := make([]*schema.ContentBlock, 0, len(calls))
+	for _, call := range calls {
+		name := strings.TrimSpace(call.Name)
+		arguments := call.Arguments
+		if strings.TrimSpace(call.ID) == "" && name == "" && strings.TrimSpace(arguments) == "" {
+			continue
+		}
+		blocks = append(blocks, schema.NewContentBlock(&schema.FunctionToolCall{
+			CallID:    strings.TrimSpace(call.ID),
+			Name:      name,
+			Arguments: arguments,
+		}))
+	}
+	return &schema.AgenticMessage{Role: schema.AgenticRoleTypeAssistant, ContentBlocks: blocks}
+}
+
+// functionResultAgenticMessage 将记忆中的函数工具结果还原为 AgenticMessage。
+// 参数 results 表示从记忆正文解析出的函数工具结果列表。
+func functionResultAgenticMessage(results []agentFunctionToolResult) *schema.AgenticMessage {
+	blocks := make([]*schema.ContentBlock, 0, len(results))
+	for _, result := range results {
+		if strings.TrimSpace(result.ID) == "" && strings.TrimSpace(result.Name) == "" && result.Content == "" {
+			continue
+		}
+		blocks = append(blocks, schema.NewContentBlock(&schema.FunctionToolResult{
+			CallID: strings.TrimSpace(result.ID),
+			Name:   strings.TrimSpace(result.Name),
+			Content: []*schema.FunctionToolResultContentBlock{
+				{
+					Type: schema.FunctionToolResultContentBlockTypeText,
+					Text: &schema.UserInputText{Text: result.Content},
+				},
+			},
+		}))
+	}
+	return &schema.AgenticMessage{Role: schema.AgenticRoleTypeUser, ContentBlocks: blocks}
 }
 
 // requestContextPrompt 生成仅用于本轮模型输入的请求上下文提示，不写入记忆。
@@ -919,6 +1094,10 @@ func summaryMessageRoleLabel(role MessageRole) string {
 		return "用户"
 	case MessageRoleAssistant:
 		return "助手"
+	case MessageRoleFunctionCall:
+		return "函数调用"
+	case MessageRoleFunctionResult:
+		return "工具结果"
 	default:
 		return "未知"
 	}
@@ -1472,14 +1651,21 @@ func emitChatMessageVariant(agentName string, task string, variant *adk.TypedMes
 			return nil
 		}
 		defer variant.MessageStream.Close()
+		chunks := make([]*schema.Message, 0, 8)
 		replyIndex := 0
 		for {
 			chunk, err := variant.MessageStream.Recv()
 			if errors.Is(err, io.EOF) {
+				if msg := concatChatMessageChunks(chunks); msg != nil {
+					appendChatMessageMemoryEvents(agentName, task, variant, msg, result)
+				}
 				return nil
 			}
 			if err != nil {
 				return err
+			}
+			if chunk != nil {
+				chunks = append(chunks, chunk)
 			}
 			if !isAssistantChatMessage(variant, chunk) {
 				continue
@@ -1493,10 +1679,13 @@ func emitChatMessageVariant(agentName string, task string, variant *adk.TypedMes
 		}
 	}
 
-	if !isAssistantChatMessage(variant, variant.Message) {
-		return nil
+	if isAssistantChatMessage(variant, variant.Message) {
+		if err := emitTextDelta(agentName, task, allocateAgentReplyIndex(nextReplyIndex), variant.Message.Content, full, result, emit); err != nil {
+			return err
+		}
 	}
-	return emitTextDelta(agentName, task, allocateAgentReplyIndex(nextReplyIndex), variant.Message.Content, full, result, emit)
+	appendChatMessageMemoryEvents(agentName, task, variant, variant.Message, result)
+	return nil
 }
 
 // emitAgenticMessageVariant 输出 schema.AgenticMessage 事件中的助手文本。
@@ -1507,14 +1696,21 @@ func emitAgenticMessageVariant(agentName string, task string, variant *adk.Typed
 			return nil
 		}
 		defer variant.MessageStream.Close()
+		chunks := make([]*schema.AgenticMessage, 0, 8)
 		replyIndex := 0
 		for {
 			chunk, err := variant.MessageStream.Recv()
 			if errors.Is(err, io.EOF) {
+				if msg := concatAgenticMessageChunks(chunks); msg != nil {
+					appendAgenticMessageMemoryEvents(agentName, task, variant, msg, result)
+				}
 				return nil
 			}
 			if err != nil {
 				return err
+			}
+			if chunk != nil {
+				chunks = append(chunks, chunk)
 			}
 			if !isAssistantAgenticMessage(variant, chunk) {
 				continue
@@ -1528,10 +1724,188 @@ func emitAgenticMessageVariant(agentName string, task string, variant *adk.Typed
 		}
 	}
 
-	if !isAssistantAgenticMessage(variant, variant.Message) {
+	if isAssistantAgenticMessage(variant, variant.Message) {
+		if err := emitTextDelta(agentName, task, allocateAgentReplyIndex(nextReplyIndex), agenticMessageText(variant.Message), full, result, emit); err != nil {
+			return err
+		}
+	}
+	appendAgenticMessageMemoryEvents(agentName, task, variant, variant.Message, result)
+	return nil
+}
+
+// concatChatMessageChunks 合并 schema.Message 流式片段，用于在流结束后提取完整工具事件。
+// 参数 chunks 表示同一条流式消息的所有片段。
+func concatChatMessageChunks(chunks []*schema.Message) *schema.Message {
+	if len(chunks) == 0 {
 		return nil
 	}
-	return emitTextDelta(agentName, task, allocateAgentReplyIndex(nextReplyIndex), agenticMessageText(variant.Message), full, result, emit)
+	if len(chunks) == 1 {
+		return chunks[0]
+	}
+	msg, err := schema.ConcatMessages(chunks)
+	if err != nil {
+		return nil
+	}
+	return msg
+}
+
+// concatAgenticMessageChunks 合并 schema.AgenticMessage 流式片段，用于在流结束后提取完整工具事件。
+// 参数 chunks 表示同一条流式 Agentic 消息的所有片段。
+func concatAgenticMessageChunks(chunks []*schema.AgenticMessage) *schema.AgenticMessage {
+	if len(chunks) == 0 {
+		return nil
+	}
+	if len(chunks) == 1 {
+		return chunks[0]
+	}
+	msg, err := schema.ConcatAgenticMessages(chunks)
+	if err != nil {
+		return nil
+	}
+	return msg
+}
+
+// appendChatMessageMemoryEvents 从 schema.Message 事件中提取需要入库的记忆事件。
+// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 msg 表示完整消息；参数 result 表示最终结果。
+func appendChatMessageMemoryEvents(agentName string, task string, variant *adk.TypedMessageVariant[*schema.Message], msg *schema.Message, result *AgentResult) {
+	if msg == nil || result == nil {
+		return
+	}
+	if isAssistantChatMessage(variant, msg) {
+		appendAgentMemoryEvent(result, AgentMemoryEvent{
+			Role:      MessageRoleAssistant,
+			Task:      task,
+			Content:   msg.Content,
+			AgentName: strings.TrimSpace(agentName),
+		})
+	}
+	if len(msg.ToolCalls) > 0 {
+		calls := make([]agentFunctionToolCall, 0, len(msg.ToolCalls))
+		for _, call := range msg.ToolCalls {
+			calls = append(calls, agentFunctionToolCall{
+				ID:        strings.TrimSpace(call.ID),
+				Type:      strings.TrimSpace(call.Type),
+				Name:      strings.TrimSpace(call.Function.Name),
+				Arguments: call.Function.Arguments,
+			})
+		}
+		if content, ok := encodeFunctionCallMemoryContent(calls); ok {
+			appendAgentMemoryEvent(result, AgentMemoryEvent{
+				Role:      MessageRoleFunctionCall,
+				Task:      task,
+				Content:   content,
+				AgentName: strings.TrimSpace(agentName),
+			})
+		}
+	}
+	if variant == nil {
+		return
+	}
+	if variant.Role == schema.Tool || msg.Role == schema.Tool {
+		name := strings.TrimSpace(msg.ToolName)
+		if name == "" {
+			name = strings.TrimSpace(variant.ToolName)
+		}
+		toolResult := agentFunctionToolResult{
+			ID:      strings.TrimSpace(msg.ToolCallID),
+			Name:    name,
+			Content: msg.Content,
+		}
+		if content, ok := encodeFunctionResultMemoryContent([]agentFunctionToolResult{toolResult}); ok {
+			appendAgentMemoryEvent(result, AgentMemoryEvent{
+				Role:      MessageRoleFunctionResult,
+				Task:      task,
+				Content:   content,
+				AgentName: strings.TrimSpace(agentName),
+			})
+		}
+	}
+}
+
+// appendAgenticMessageMemoryEvents 从 schema.AgenticMessage 事件中提取需要入库的记忆事件。
+// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 msg 表示完整消息；参数 result 表示最终结果。
+func appendAgenticMessageMemoryEvents(agentName string, task string, variant *adk.TypedMessageVariant[*schema.AgenticMessage], msg *schema.AgenticMessage, result *AgentResult) {
+	if msg == nil || result == nil {
+		return
+	}
+	if isAssistantAgenticMessage(variant, msg) {
+		appendAgentMemoryEvent(result, AgentMemoryEvent{
+			Role:      MessageRoleAssistant,
+			Task:      task,
+			Content:   agenticMessageText(msg),
+			AgentName: strings.TrimSpace(agentName),
+		})
+	}
+	calls := make([]agentFunctionToolCall, 0)
+	results := make([]agentFunctionToolResult, 0)
+	for _, block := range msg.ContentBlocks {
+		if block == nil {
+			continue
+		}
+		if block.FunctionToolCall != nil {
+			calls = append(calls, agentFunctionToolCall{
+				ID:        strings.TrimSpace(block.FunctionToolCall.CallID),
+				Type:      "function",
+				Name:      strings.TrimSpace(block.FunctionToolCall.Name),
+				Arguments: block.FunctionToolCall.Arguments,
+			})
+		}
+		if block.FunctionToolResult != nil {
+			results = append(results, agentFunctionToolResult{
+				ID:      strings.TrimSpace(block.FunctionToolResult.CallID),
+				Name:    strings.TrimSpace(block.FunctionToolResult.Name),
+				Content: functionToolResultContentText(block.FunctionToolResult.Content),
+			})
+		}
+	}
+	if content, ok := encodeFunctionCallMemoryContent(calls); ok {
+		appendAgentMemoryEvent(result, AgentMemoryEvent{
+			Role:      MessageRoleFunctionCall,
+			Task:      task,
+			Content:   content,
+			AgentName: strings.TrimSpace(agentName),
+		})
+	}
+	if content, ok := encodeFunctionResultMemoryContent(results); ok {
+		appendAgentMemoryEvent(result, AgentMemoryEvent{
+			Role:      MessageRoleFunctionResult,
+			Task:      task,
+			Content:   content,
+			AgentName: strings.TrimSpace(agentName),
+		})
+	}
+}
+
+// functionToolResultContentText 将 Agentic 工具结果内容块转换为可写入记忆的文本。
+// 参数 blocks 表示 Eino Agentic 工具结果的多模态内容块。
+func functionToolResultContentText(blocks []*schema.FunctionToolResultContentBlock) string {
+	if len(blocks) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	for _, block := range blocks {
+		if block == nil {
+			continue
+		}
+		if block.Type == schema.FunctionToolResultContentBlockTypeText && block.Text != nil {
+			builder.WriteString(block.Text.Text)
+			continue
+		}
+		builder.WriteString(block.String())
+	}
+	return builder.String()
+}
+
+// appendAgentMemoryEvent 将一个非空内部记忆事件追加到运行结果。
+// 参数 result 表示 Agent 最终结果；参数 event 表示需要追加的记忆事件。
+func appendAgentMemoryEvent(result *AgentResult, event AgentMemoryEvent) {
+	if result == nil || strings.TrimSpace(event.Content) == "" {
+		return
+	}
+	if strings.TrimSpace(event.Task) == "" {
+		event.Task = result.Task
+	}
+	result.MemoryEvents = append(result.MemoryEvents, event)
 }
 
 // isAssistantChatMessage 判断 schema.Message 是否为可展示的助手文本。

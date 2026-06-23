@@ -50,6 +50,10 @@ const (
 	MessageRoleUser MessageRole = "user"
 	// MessageRoleAssistant 表示 Agent 最终返回给用户的助手消息。
 	MessageRoleAssistant MessageRole = "assistant"
+	// MessageRoleFunctionCall 表示 Agent 发起的函数工具调用，仅用于内部记忆。
+	MessageRoleFunctionCall MessageRole = "function_call"
+	// MessageRoleFunctionResult 表示函数工具调用返回结果，仅用于内部记忆。
+	MessageRoleFunctionResult MessageRole = "function_result"
 )
 
 // Conversation 表示小说下的 Agent 会话数据库模型。
@@ -91,8 +95,8 @@ type MessageRecord struct {
 	NovelID uint64 `json:"novel_id" gorm:"column:novel_id;not null;index:idx_agent_messages_novel_created,priority:1;comment:消息所属小说ID" example:"1"`
 	// ChapterID 表示本轮消息关联的章节 ID，普通小说级对话可为空。
 	ChapterID *uint64 `json:"chapter_id,omitempty" gorm:"column:chapter_id;comment:本轮消息关联的章节ID，普通小说级对话可为空" example:"1"`
-	// Role 表示消息角色，仅保存 user 或 assistant。
-	Role MessageRole `json:"role" gorm:"column:role;type:varchar(32);not null;comment:消息角色，仅保存user或assistant" example:"user"`
+	// Role 表示消息角色，包含可展示消息和内部工具记忆消息。
+	Role MessageRole `json:"role" gorm:"column:role;type:varchar(32);not null;comment:消息角色，包含可展示消息和内部工具记忆消息" example:"user"`
 	// Task 表示产生助手消息的任务类型，用户消息为空。
 	Task string `json:"task,omitempty" gorm:"column:task;type:varchar(64);comment:产生助手消息的任务类型，用户消息为空" example:"polish"`
 	// Content 表示消息正文。
@@ -277,6 +281,22 @@ type AgentReply struct {
 	Model string
 }
 
+// AgentMemoryEvent 表示 Agent 运行过程中需要按顺序写入记忆的内部事件。
+type AgentMemoryEvent struct {
+	// Role 表示记忆事件角色，可为 assistant、function_call 或 function_result。
+	Role MessageRole
+	// Task 表示产生该事件的任务来源。
+	Task string
+	// Content 表示该事件写入记忆表的正文。
+	Content string
+	// AgentName 表示产生该事件的 Eino Agent 名称。
+	AgentName string
+	// ProviderID 表示产生该事件的实际 AI 提供商 ID。
+	ProviderID uint64
+	// Model 表示产生该事件的实际模型标识。
+	Model string
+}
+
 // AgentResult 表示 Agent 流式对话完成后的结果。
 type AgentResult struct {
 	// Task 表示最终产生回复的任务来源。
@@ -285,6 +305,8 @@ type AgentResult struct {
 	Content string
 	// Replies 表示本轮请求中按可见输出边界拆分后的助手回复。
 	Replies []AgentReply
+	// MemoryEvents 表示本轮请求中需要按顺序写入记忆的内部事件。
+	MemoryEvents []AgentMemoryEvent
 	// AgentName 表示最终产生回复的 Eino Agent 名称。
 	AgentName string
 	// ProviderID 表示最终产生回复的 AI 提供商 ID。
