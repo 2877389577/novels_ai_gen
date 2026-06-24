@@ -113,8 +113,12 @@ type AgentToolConfig struct {
 
 // AgentMemoryConfig 表示小说写作 Agent 的持久记忆配置。
 type AgentMemoryConfig struct {
-	// RecentRounds 表示每次请求注入模型上下文的最近对话轮数，小于等于 0 时使用业务默认值。
+	// RecentRounds 表示兼容旧配置的最近对话轮数，小于等于 0 时使用业务默认值；运行时上下文裁剪优先使用 Token 配置。
 	RecentRounds int `mapstructure:"recent_rounds" json:"recent_rounds" yaml:"recent_rounds"`
+	// ContextTokens 表示触发 Eino Summarization 中间件的上下文 Token 阈值，小于等于 0 时使用业务默认值。
+	ContextTokens int `mapstructure:"context_tokens" json:"context_tokens" yaml:"context_tokens"`
+	// RawHistoryTokens 表示长期摘要之外注入模型的最近原文历史 Token 预算，小于等于 0 时按 ContextTokens 的业务比例计算。
+	RawHistoryTokens int `mapstructure:"raw_history_tokens" json:"raw_history_tokens" yaml:"raw_history_tokens"`
 }
 
 // AgentRetryConfig 表示小说写作 Agent 调用上游模型失败时的重试配置。

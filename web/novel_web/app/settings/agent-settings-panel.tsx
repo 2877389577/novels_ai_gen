@@ -297,6 +297,22 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
     });
   }
 
+  // handleMemoryContextTokensChange 处理上下文压缩 Token 阈值字段变化。
+  // 参数 event 表示输入框变化事件。
+  function handleMemoryContextTokensChange(event: ChangeEvent<HTMLInputElement>) {
+    setForm(function updateMemoryContextTokens(current) {
+      return { ...current, memoryContextTokens: event.target.value };
+    });
+  }
+
+  // handleMemoryRawHistoryTokensChange 处理原文历史 Token 预算字段变化。
+  // 参数 event 表示输入框变化事件。
+  function handleMemoryRawHistoryTokensChange(event: ChangeEvent<HTMLInputElement>) {
+    setForm(function updateMemoryRawHistoryTokens(current) {
+      return { ...current, memoryRawHistoryTokens: event.target.value };
+    });
+  }
+
   // handleRetryMaxRetriesChange 处理模型失败最大重试次数字段变化。
   // 参数 event 表示输入框变化事件。
   function handleRetryMaxRetriesChange(event: ChangeEvent<HTMLInputElement>) {
@@ -655,6 +671,8 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           reload: handleReloadAgentClick,
           save: handleSaveAgentClick,
           changeMemoryRecentRounds: handleMemoryRecentRoundsChange,
+          changeMemoryContextTokens: handleMemoryContextTokensChange,
+          changeMemoryRawHistoryTokens: handleMemoryRawHistoryTokensChange,
           changeRetryMaxRetries: handleRetryMaxRetriesChange,
           changeRetryBackoffMS: handleRetryBackoffMSChange,
           openAgentEditor: handleOpenAgentEditor,

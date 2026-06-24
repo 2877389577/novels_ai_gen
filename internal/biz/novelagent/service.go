@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	defaultMemoryRecentRounds  = 10
 	defaultConversationTitle   = "新会话"
 	maxConversationTitleLength = 50
 )
@@ -46,11 +45,8 @@ type MemoryRepository interface {
 	// ListRecentMessagesByUserRounds 查询指定会话最近若干个用户轮次的 Agent 记忆消息，并按时间正序返回。
 	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 rounds 表示最多返回的最近用户消息轮次数量。
 	ListRecentMessagesByUserRounds(ctx context.Context, conversationID uint64, rounds int) ([]MessageRecord, error)
-	// CountMessagesAfterID 统计指定消息 ID 之后的 Agent 记忆消息数量。
-	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID。
-	CountMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64) (int64, error)
 	// ListMessagesAfterID 查询指定消息 ID 之后的 Agent 记忆消息，并按时间正序返回。
-	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID；参数 limit 表示最多返回的消息数量。
+	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID；参数 limit 表示最多返回的消息数量，小于等于 0 表示不限制。
 	ListMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64, limit int) ([]MessageRecord, error)
 	// AppendMessagesAndUpdateSummary 以事务追加 Agent 记忆消息并可选更新会话摘要。
 	// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 messages 表示需要写入的消息列表；参数 summary 表示需要写回的摘要更新，nil 表示不更新摘要。
@@ -587,13 +583,13 @@ func (s *Service) memoryForRun(ctx context.Context, cfg *appconfig.AppConfig, no
 		return AgentMemoryInput{}, ErrConversationNotFound
 	}
 
-	messages, err := s.memoryRepo.ListRecentMessagesByUserRounds(ctx, conversation.ID, memoryRecentRounds(cfg))
+	messages, err := s.memoryRepo.ListMessagesAfterID(ctx, conversation.ID, conversationSummaryMessageID(conversation), 0)
 	if err != nil {
 		return AgentMemoryInput{}, fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
 	}
 	return AgentMemoryInput{
 		Summary:  conversation.Summary,
-		Messages: messages,
+		Messages: selectRecentMessagesByTokenBudget(messages, memoryRawHistoryTokens(cfg)),
 	}, nil
 }
 
@@ -741,50 +737,37 @@ func (s *Service) summaryUpdateForTurn(ctx context.Context, cfg *appconfig.AppCo
 	if runtime == nil || conversation == nil || len(pendingMessages) == 0 {
 		return nil, nil
 	}
-	messageLimit := memoryMessageLimit(cfg)
-	if messageLimit <= 0 {
+	rawHistoryTokens := memoryRawHistoryTokens(cfg)
+	if rawHistoryTokens <= 0 {
 		return nil, nil
 	}
 
 	afterID := conversationSummaryMessageID(conversation)
-	unsummarizedCount, err := s.memoryRepo.CountMessagesAfterID(ctx, conversation.ID, afterID)
+	persistedMessages, err := s.memoryRepo.ListMessagesAfterID(ctx, conversation.ID, afterID, 0)
 	if err != nil {
 		return nil, err
 	}
-	summarizeCount := int(unsummarizedCount) + len(pendingMessages) - messageLimit
-	if summarizeCount <= 0 {
-		return nil, nil
-	}
-
-	messages, err := s.memoryRepo.ListMessagesAfterID(ctx, conversation.ID, afterID, summarizeCount)
-	if err != nil {
-		return nil, err
-	}
-	if len(messages) == 0 {
+	candidates := make([]MessageRecord, 0, len(persistedMessages)+len(pendingMessages))
+	candidates = append(candidates, persistedMessages...)
+	candidates = append(candidates, pendingMessages...)
+	summarizeMessages, _ := splitMessagesByTokenBudget(candidates, rawHistoryTokens)
+	summarizeMessages = persistedSummaryMessages(summarizeMessages)
+	if len(summarizeMessages) == 0 {
 		return nil, nil
 	}
 
 	summary, err := runtime.Summarize(ctx, cfg, AgentSummaryInput{
 		PreviousSummary: conversation.Summary,
-		Messages:        messages,
+		Messages:        summarizeMessages,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &ConversationSummaryUpdate{
 		Summary:          summary,
-		SummaryMessageID: messages[len(messages)-1].ID,
+		SummaryMessageID: summarizeMessages[len(summarizeMessages)-1].ID,
 		SummaryUpdatedAt: time.Now(),
 	}, nil
-}
-
-// memoryRecentRounds 返回配置生效后的最近对话轮数。
-// 参数 cfg 表示当前配置快照。
-func memoryRecentRounds(cfg *appconfig.AppConfig) int {
-	if cfg == nil || cfg.AI.Agent.Memory.RecentRounds <= 0 {
-		return defaultMemoryRecentRounds
-	}
-	return cfg.AI.Agent.Memory.RecentRounds
 }
 
 // normalizedAgentReplies 返回可展示和可保存的分段助手回复列表。
@@ -1014,12 +997,6 @@ func sameFunctionToolCall(call agentFunctionToolCall, target agentFunctionToolCa
 	return callName == targetName && call.Arguments == target.Arguments
 }
 
-// memoryMessageLimit 返回最近对话轮数对应的消息条数上限。
-// 参数 cfg 表示当前配置快照。
-func memoryMessageLimit(cfg *appconfig.AppConfig) int {
-	return memoryRecentRounds(cfg) * 2
-}
-
 // normalizedPromptTypes 返回配置文件中可用于推荐判定的提示词类型列表。
 // 参数 cfg 表示当前配置快照。
 func normalizedPromptTypes(cfg *appconfig.AppConfig) []string {
@@ -1085,6 +1062,19 @@ func conversationSummaryMessageID(conversation *Conversation) uint64 {
 		return 0
 	}
 	return *conversation.SummaryMessageID
+}
+
+// persistedSummaryMessages 返回可安全滚入持久摘要的已入库消息。
+// 参数 messages 表示预算外的旧消息列表。
+func persistedSummaryMessages(messages []MessageRecord) []MessageRecord {
+	items := make([]MessageRecord, 0, len(messages))
+	for _, message := range messages {
+		if message.ID == 0 {
+			continue
+		}
+		items = append(items, message)
+	}
+	return items
 }
 
 // conversationResponses 将数据库会话模型转换为前端响应结构。

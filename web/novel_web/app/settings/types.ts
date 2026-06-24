@@ -166,6 +166,10 @@ export interface AgentSettingsFormState {
   toolRegistry: AgentToolConfig[];
   // memoryRecentRounds 表示最近原始对话轮数配置文本。
   memoryRecentRounds: string;
+  // memoryContextTokens 表示触发上下文压缩的 Token 阈值文本。
+  memoryContextTokens: string;
+  // memoryRawHistoryTokens 表示长期摘要之外保留的原文历史 Token 预算文本。
+  memoryRawHistoryTokens: string;
   // retryMaxRetries 表示模型失败最大重试次数配置文本。
   retryMaxRetries: string;
   // retryBackoffMS 表示模型失败重试间隔毫秒数配置文本。

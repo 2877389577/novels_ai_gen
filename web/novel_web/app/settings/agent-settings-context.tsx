@@ -40,6 +40,10 @@ export interface AgentSettingsContextActions {
   save: () => void;
   // changeMemoryRecentRounds 表示更新最近对话轮数输入。
   changeMemoryRecentRounds: (event: ChangeEvent<HTMLInputElement>) => void;
+  // changeMemoryContextTokens 表示更新上下文压缩 Token 阈值输入。
+  changeMemoryContextTokens: (event: ChangeEvent<HTMLInputElement>) => void;
+  // changeMemoryRawHistoryTokens 表示更新原文历史 Token 预算输入。
+  changeMemoryRawHistoryTokens: (event: ChangeEvent<HTMLInputElement>) => void;
   // changeRetryMaxRetries 表示更新模型失败最大重试次数输入。
   changeRetryMaxRetries: (event: ChangeEvent<HTMLInputElement>) => void;
   // changeRetryBackoffMS 表示更新模型失败重试间隔输入。

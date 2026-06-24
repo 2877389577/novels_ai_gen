@@ -152,39 +152,22 @@ func (r *Repository) ListRecentMessagesByUserRounds(ctx context.Context, convers
 	return items, nil
 }
 
-// CountMessagesAfterID 统计指定消息 ID 之后的 Agent 记忆消息数量。
-// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID。
-func (r *Repository) CountMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64) (int64, error) {
-	var count int64
-	query := r.db.WithContext(ctx).Model(&biznovelagent.MessageRecord{}).
-		Where("conversation_id = ?", conversationID)
-	if afterID > 0 {
-		query = query.Where("id > ?", afterID)
-	}
-	if err := query.Count(&count).Error; err != nil {
-		return 0, fmt.Errorf("统计 Agent 记忆消息失败: %w", err)
-	}
-	return count, nil
-}
-
 // ListMessagesAfterID 查询指定消息 ID 之后的 Agent 记忆消息，并按时间正序返回。
-// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID；参数 limit 表示最多返回的消息数量。
+// 参数 ctx 表示请求上下文；参数 conversationID 表示 Agent 会话主键 ID；参数 afterID 表示已经纳入摘要的最新消息 ID；参数 limit 表示最多返回的消息数量，小于等于 0 表示不限制。
 func (r *Repository) ListMessagesAfterID(ctx context.Context, conversationID uint64, afterID uint64, limit int) ([]biznovelagent.MessageRecord, error) {
-	if limit <= 0 {
-		return []biznovelagent.MessageRecord{}, nil
-	}
-
 	var items []biznovelagent.MessageRecord
 	query := r.db.WithContext(ctx).
 		Where("conversation_id = ?", conversationID)
 	if afterID > 0 {
 		query = query.Where("id > ?", afterID)
 	}
-	if err := query.
+	query = query.
 		Order("created_at ASC").
-		Order("id ASC").
-		Limit(limit).
-		Find(&items).Error; err != nil {
+		Order("id ASC")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if err := query.Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("查询待摘要 Agent 记忆消息失败: %w", err)
 	}
 	return items, nil

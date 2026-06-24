@@ -64,8 +64,16 @@ type runtimeAgentConfig struct {
 	taskByAgent map[string]string
 	// retry 表示上游模型失败时的重试配置。
 	retry RuntimeRetryConfig
+	// memory 表示运行时上下文压缩配置。
+	memory RuntimeMemoryConfig
 	// tools 表示按工具名称索引的普通工具注册表。
 	tools map[string]runtimeAgentTool
+}
+
+// RuntimeMemoryConfig 表示运行时上下文压缩配置。
+type RuntimeMemoryConfig struct {
+	// ContextTokens 表示触发 Eino Summarization 中间件的上下文 Token 阈值。
+	ContextTokens int
 }
 
 // newAgentRuntimeConfig 根据应用配置生成运行时 Agent 配置。
@@ -135,7 +143,10 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 		children:    children,
 		taskByAgent: taskByAgent,
 		retry:       normalizeAgentRetry(agentCfg.Retry),
-		tools:       tools,
+		memory: RuntimeMemoryConfig{
+			ContextTokens: memoryContextTokensFromConfig(agentCfg.Memory),
+		},
+		tools: tools,
 	}, nil
 }
 
