@@ -456,8 +456,12 @@ export interface AgentParameterDefinition {
 
 // AgentMemoryConfig 表示小说写作 Agent 的持久记忆配置。
 export interface AgentMemoryConfig {
-  // recent_rounds 表示每次请求注入模型上下文的最近对话轮数。
+  // recent_rounds 表示兼容旧配置的最近对话轮数。
   recent_rounds: number;
+  // context_tokens 表示触发运行时上下文压缩的 Token 阈值。
+  context_tokens?: number;
+  // raw_history_tokens 表示长期摘要之外保留原文历史的 Token 预算。
+  raw_history_tokens?: number;
 }
 
 // AgentRetryConfig 表示小说写作 Agent 的模型失败重试配置。

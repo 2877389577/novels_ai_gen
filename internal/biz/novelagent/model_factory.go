@@ -15,6 +15,7 @@ import (
 	agenticopenai "github.com/cloudwego/eino-ext/components/model/agenticopenai"
 	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/adk/middlewares/summarization"
 	einomodel "github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
@@ -1136,13 +1137,17 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 		if configuredModel, ok := childModels[child.name]; ok {
 			childModel = configuredModel
 		}
+		childHandlers, err := chatAgentHandlers(ctx, childModel, cfg.memory)
+		if err != nil {
+			return nil, fmt.Errorf("创建子 Agent %s 上下文压缩中间件失败: %w", child.name, err)
+		}
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
 			Name:             child.name,
 			Description:      child.description,
 			Instruction:      instructionWithRequestContext(child.instruction, req),
 			Model:            childModel,
 			ToolsConfig:      childToolsConfig(childTools),
-			Handlers:         safeToolErrorHandlers[*schema.Message](),
+			Handlers:         childHandlers,
 			MaxIterations:    child.maxIterations,
 			ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 		})
@@ -1157,6 +1162,10 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 		returnDirectly[child.name] = true
 	}
 
+	supervisorHandlers, err := chatAgentHandlers(ctx, supervisorModel, cfg.memory)
+	if err != nil {
+		return nil, fmt.Errorf("创建顶层 Agent 上下文压缩中间件失败: %w", err)
+	}
 	return adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.Message]{
 		Name:        cfg.supervisor.name,
 		Description: cfg.supervisor.description,
@@ -1170,7 +1179,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
-		Handlers:         safeToolErrorHandlers[*schema.Message](),
+		Handlers:         supervisorHandlers,
 		MaxIterations:    cfg.supervisor.maxIterations,
 		ModelRetryConfig: chatModelRetryConfig(cfg.retry),
 	})
@@ -1203,13 +1212,17 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 		if configuredModel, ok := childModels[child.name]; ok {
 			childModel = configuredModel
 		}
+		childHandlers, err := agenticAgentHandlers(ctx, childModel, cfg.memory)
+		if err != nil {
+			return nil, fmt.Errorf("创建子 Agent %s 上下文压缩中间件失败: %w", child.name, err)
+		}
 		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
 			Name:             child.name,
 			Description:      child.description,
 			Instruction:      instructionWithRequestContext(child.instruction, req),
 			Model:            childModel,
 			ToolsConfig:      childToolsConfig(childTools),
-			Handlers:         safeToolErrorHandlers[*schema.AgenticMessage](),
+			Handlers:         childHandlers,
 			MaxIterations:    child.maxIterations,
 			ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 		})
@@ -1224,6 +1237,10 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 		returnDirectly[child.name] = true
 	}
 
+	supervisorHandlers, err := agenticAgentHandlers(ctx, supervisorModel, cfg.memory)
+	if err != nil {
+		return nil, fmt.Errorf("创建顶层 Agent 上下文压缩中间件失败: %w", err)
+	}
 	return adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
 		Name:        cfg.supervisor.name,
 		Description: cfg.supervisor.description,
@@ -1237,7 +1254,7 @@ func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.Agent
 			EmitInternalEvents: true,
 			ReturnDirectly:     returnDirectly,
 		},
-		Handlers:         safeToolErrorHandlers[*schema.AgenticMessage](),
+		Handlers:         supervisorHandlers,
 		MaxIterations:    cfg.supervisor.maxIterations,
 		ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
 	})
@@ -1357,6 +1374,42 @@ func childAgentToolOptions(child runtimeAgentDefinition) []adk.AgentToolOption {
 	return []adk.AgentToolOption{
 		adk.WithAgentInputSchema(schema.NewParamsOneOfByParams(child.parameters)),
 	}
+}
+
+// chatAgentHandlers 创建 schema.Message 路径 Agent 使用的中间件列表。
+// 参数 ctx 表示创建中间件的上下文；参数 model 表示摘要生成使用的模型；参数 memory 表示上下文压缩配置。
+func chatAgentHandlers(ctx context.Context, model einomodel.BaseChatModel, memory RuntimeMemoryConfig) ([]adk.TypedChatModelAgentMiddleware[*schema.Message], error) {
+	mw, err := summarization.New(ctx, &summarization.Config{
+		Model: model,
+		Trigger: &summarization.TriggerCondition{
+			ContextTokens: memory.ContextTokens,
+		},
+		TokenCounter: tokenCounterForMessages,
+	})
+	if err != nil {
+		return nil, err
+	}
+	handlers := []adk.TypedChatModelAgentMiddleware[*schema.Message]{mw}
+	handlers = append(handlers, safeToolErrorHandlers[*schema.Message]()...)
+	return handlers, nil
+}
+
+// agenticAgentHandlers 创建 schema.AgenticMessage 路径 Agent 使用的中间件列表。
+// 参数 ctx 表示创建中间件的上下文；参数 model 表示摘要生成使用的模型；参数 memory 表示上下文压缩配置。
+func agenticAgentHandlers(ctx context.Context, model einomodel.AgenticModel, memory RuntimeMemoryConfig) ([]adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage], error) {
+	mw, err := summarization.NewTyped(ctx, &summarization.TypedConfig[*schema.AgenticMessage]{
+		Model: model,
+		Trigger: &summarization.TriggerCondition{
+			ContextTokens: memory.ContextTokens,
+		},
+		TokenCounter: tokenCounterForAgenticMessages,
+	})
+	if err != nil {
+		return nil, err
+	}
+	handlers := []adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage]{mw}
+	handlers = append(handlers, safeToolErrorHandlers[*schema.AgenticMessage]()...)
+	return handlers, nil
 }
 
 // validateAgenticChildHistorySharing 校验 Agentic 路径是否包含当前 Eino 不支持的子 Agent 历史共享配置。

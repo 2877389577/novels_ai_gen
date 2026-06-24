@@ -80,7 +80,7 @@ function AgentSettingsMemoryRetrySection() {
       </div>
       <div className="agent-settings-grid">
         <label className="ai-provider-field">
-          <span>最近对话轮数</span>
+          <span>最近对话轮数（兼容）</span>
           <input
             type="number"
             min="0"
@@ -88,6 +88,28 @@ function AgentSettingsMemoryRetrySection() {
             value={state.form.memoryRecentRounds}
             disabled={state.loading || state.saving}
             onChange={actions.changeMemoryRecentRounds}
+          />
+        </label>
+        <label className="ai-provider-field">
+          <span>上下文压缩 Token 阈值</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={state.form.memoryContextTokens}
+            disabled={state.loading || state.saving}
+            onChange={actions.changeMemoryContextTokens}
+          />
+        </label>
+        <label className="ai-provider-field">
+          <span>原文历史 Token 预算</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={state.form.memoryRawHistoryTokens}
+            disabled={state.loading || state.saving}
+            onChange={actions.changeMemoryRawHistoryTokens}
           />
         </label>
         <label className="ai-provider-field">

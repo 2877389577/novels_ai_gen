@@ -35,6 +35,8 @@ const defaultAIProviderFormState: AIProviderFormState = {
 const defaultAgentSettingsFormState: AgentSettingsFormState = {
   toolRegistry: [],
   memoryRecentRounds: "10",
+  memoryContextTokens: "32000",
+  memoryRawHistoryTokens: "19200",
   retryMaxRetries: "0",
   retryBackoffMS: "300",
   supervisor: {
@@ -67,6 +69,8 @@ export function createDefaultAgentSettingsFormState(): AgentSettingsFormState {
   return {
     toolRegistry: defaultAgentSettingsFormState.toolRegistry.map(copyAgentToolConfig),
     memoryRecentRounds: defaultAgentSettingsFormState.memoryRecentRounds,
+    memoryContextTokens: defaultAgentSettingsFormState.memoryContextTokens,
+    memoryRawHistoryTokens: defaultAgentSettingsFormState.memoryRawHistoryTokens,
     retryMaxRetries: defaultAgentSettingsFormState.retryMaxRetries,
     retryBackoffMS: defaultAgentSettingsFormState.retryBackoffMS,
     supervisor: { ...defaultAgentSettingsFormState.supervisor },
@@ -168,6 +172,12 @@ export function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormSta
   return {
     toolRegistry: (agent.tools ?? []).map(copyAgentToolConfig),
     memoryRecentRounds: String(agent.memory?.recent_rounds ?? 10),
+    memoryContextTokens: String(
+      positiveConfigNumber(agent.memory?.context_tokens, 32000),
+    ),
+    memoryRawHistoryTokens: String(
+      positiveConfigNumber(agent.memory?.raw_history_tokens, 19200),
+    ),
     retryMaxRetries: String(agent.retry?.max_retries ?? 0),
     retryBackoffMS: String(agent.retry?.backoff_ms ?? 300),
     supervisor: {
@@ -185,6 +195,12 @@ export function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormSta
     },
     children: (agent.agent ?? []).map(agentDefinitionToChildFormState),
   };
+}
+
+// positiveConfigNumber 返回配置中的正整数，非正数或缺失时返回默认值。
+// 参数 value 表示后端返回的配置值；参数 fallback 表示默认值。
+function positiveConfigNumber(value: number | undefined, fallback: number): number {
+  return Number(value ?? 0) > 0 ? Number(value) : fallback;
 }
 
 // agentDefinitionToChildFormState 将子 Agent 配置转换为表单状态。
@@ -249,6 +265,22 @@ export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
   );
   if (recentRounds.error) {
     return { agent: null, error: recentRounds.error };
+  }
+
+  const contextTokens = parseNonNegativeInteger(
+    form.memoryContextTokens,
+    "上下文压缩 Token 阈值",
+  );
+  if (contextTokens.error) {
+    return { agent: null, error: contextTokens.error };
+  }
+
+  const rawHistoryTokens = parseNonNegativeInteger(
+    form.memoryRawHistoryTokens,
+    "原文历史 Token 预算",
+  );
+  if (rawHistoryTokens.error) {
+    return { agent: null, error: rawHistoryTokens.error };
   }
 
   const retryMaxRetries = parseNonNegativeInteger(
@@ -394,6 +426,8 @@ export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
       tools: toolRegistry.value ?? [],
       memory: {
         recent_rounds: recentRounds.value,
+        context_tokens: contextTokens.value,
+        raw_history_tokens: rawHistoryTokens.value,
       },
       retry: {
         max_retries: retryMaxRetries.value,
