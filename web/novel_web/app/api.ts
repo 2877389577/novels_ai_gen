@@ -81,6 +81,8 @@ export type LogStreamEvent =
 export interface NovelAgentStreamMetaEvent {
   // type 表示小说写作 Agent 流事件类型。
   type: "meta";
+  // run_id 表示本次 AI 对话后台运行任务 ID。
+  run_id?: string;
   // stage 表示当前处理阶段。
   stage?: string;
   // task 表示顶层 Agent 选择的任务类型。
@@ -93,6 +95,8 @@ export interface NovelAgentStreamMetaEvent {
 export interface NovelAgentStreamDeltaEvent {
   // type 表示小说写作 Agent 流事件类型。
   type: "delta";
+  // run_id 表示本次 AI 对话后台运行任务 ID。
+  run_id?: string;
   // task 表示顶层 Agent 选择的任务类型。
   task?: string;
   // reply_index 表示同一次请求中的可见助手回复段序号，从 1 开始。
@@ -115,6 +119,8 @@ export interface NovelAgentStreamReplyItem {
 export interface NovelAgentStreamDoneEvent {
   // type 表示小说写作 Agent 流事件类型。
   type: "done";
+  // run_id 表示本次 AI 对话后台运行任务 ID。
+  run_id?: string;
   // task 表示顶层 Agent 选择的任务类型。
   task?: string;
   // content 表示完整生成文本。
@@ -133,6 +139,8 @@ export interface NovelAgentStreamDoneEvent {
 export interface NovelAgentStreamApprovalRequiredEvent {
   // type 表示小说写作 Agent 流事件类型。
   type: "approval_required";
+  // run_id 表示本次 AI 对话后台运行任务 ID。
+  run_id?: string;
   // checkpoint_id 表示恢复 Agent 执行所需的 checkpoint 标识。
   checkpoint_id: string;
   // interrupt_id 表示恢复 Agent 执行所需的中断点标识。
@@ -149,9 +157,23 @@ export interface NovelAgentStreamApprovalRequiredEvent {
 export interface NovelAgentStreamErrorEvent {
   // type 表示小说写作 Agent 流事件类型。
   type: "error";
+  // run_id 表示本次 AI 对话后台运行任务 ID。
+  run_id?: string;
   // request_id 表示本次流式请求的追踪标识，用于和后端日志关联。
   request_id?: string;
   // message 表示可展示给用户的错误提示。
+  message?: string;
+}
+
+// NovelAgentStreamCancelledEvent 表示小说写作 Agent 被用户手动停止事件。
+export interface NovelAgentStreamCancelledEvent {
+  // type 表示小说写作 Agent 流事件类型。
+  type: "cancelled";
+  // run_id 表示本次 AI 对话后台运行任务 ID。
+  run_id?: string;
+  // request_id 表示本次流式请求的追踪标识，用于和后端日志关联。
+  request_id?: string;
+  // message 表示可展示给用户的取消提示。
   message?: string;
 }
 
@@ -161,7 +183,8 @@ export type NovelAgentStreamEvent =
   | NovelAgentStreamDeltaEvent
   | NovelAgentStreamApprovalRequiredEvent
   | NovelAgentStreamDoneEvent
-  | NovelAgentStreamErrorEvent;
+  | NovelAgentStreamErrorEvent
+  | NovelAgentStreamCancelledEvent;
 
 // NovelAgentMessageRole 表示 Agent 历史消息角色。
 export type NovelAgentMessageRole = "user" | "assistant";
@@ -212,6 +235,48 @@ export interface NovelAgentConversationListData {
   items: NovelAgentConversationItem[];
 }
 
+// NovelAgentRunStatus 表示 AI 对话后台运行任务状态。
+export type NovelAgentRunStatus =
+  | "running"
+  | "approval_required"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+// NovelAgentRunItem 表示一个 AI 对话后台运行任务快照。
+export interface NovelAgentRunItem {
+  // run_id 表示 AI 对话后台运行任务 ID。
+  run_id: string;
+  // status 表示 AI 对话后台运行任务状态。
+  status: NovelAgentRunStatus;
+  // novel_id 表示任务所属小说 ID。
+  novel_id: number;
+  // conversation_id 表示任务所属 Agent 会话 ID，新会话任务为空。
+  conversation_id?: number;
+  // chapter_id 表示任务关联章节 ID，普通小说级对话为空。
+  chapter_id?: number;
+  // chapter_number 表示任务关联章节号，普通小说级对话为空。
+  chapter_number?: number;
+  // message 表示任务对应的用户原始消息。
+  message: string;
+  // created_at 表示任务创建时间。
+  created_at: string;
+  // updated_at 表示任务最近更新时间。
+  updated_at: string;
+}
+
+// NovelAgentRunListData 表示 AI 对话后台运行任务列表响应数据。
+export interface NovelAgentRunListData {
+  // items 表示当前小说仍在运行或等待人工审核的 AI 对话任务。
+  items: NovelAgentRunItem[];
+}
+
+// NovelAgentRunStopData 表示停止 AI 对话后台运行任务响应数据。
+export interface NovelAgentRunStopData {
+  // stopped 表示是否已经向任务发出停止信号。
+  stopped: boolean;
+}
+
 // NovelAgentDeleteConversationData 表示删除 Agent 会话后的响应数据。
 export interface NovelAgentDeleteConversationData {
   // deleted 表示 Agent 会话是否已经删除。
@@ -230,7 +295,7 @@ export interface NovelAgentChatParams {
   chapterId?: number;
   // chapterNumber 表示当前请求关联的章节号，即“第 x 章”中的 x，普通对话可为空。
   chapterNumber?: number;
-  // signal 表示用于取消 AI 流式请求的浏览器 AbortSignal。
+  // signal 表示用于断开本次流监听的浏览器 AbortSignal，不会停止后台 AI 任务。
   signal?: AbortSignal;
 }
 
@@ -252,7 +317,7 @@ export interface NovelAgentApprovalResumeParams {
   approved: boolean;
   // reason 表示用户批准或拒绝时的补充原因。
   reason?: string;
-  // signal 表示用于取消恢复流式请求的浏览器 AbortSignal。
+  // signal 表示用于断开本次恢复流监听的浏览器 AbortSignal，不会停止后台 AI 任务。
   signal?: AbortSignal;
 }
 
@@ -2000,6 +2065,50 @@ export async function resumeNovelAgentChatApproval(
   await readNovelAgentStream(response.body, handlers);
 }
 
+// streamNovelAgentRun 重新订阅小说写作 Agent 后台运行任务。
+// 参数 runId 表示 AI 对话后台运行任务 ID；参数 handlers 表示流事件回调集合；参数 signal 表示用于断开本次流监听的浏览器 AbortSignal。
+export async function streamNovelAgentRun(
+  runId: string,
+  handlers: NovelAgentStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+  const normalizedRunId = runId.trim();
+  if (!normalizedRunId) {
+    throw new Error("AI 对话任务不存在或已结束");
+  }
+
+  const response = await fetch(
+    `/api/v1/ai/agents/chat/runs/${encodeURIComponent(normalizedRunId)}/stream`,
+    {
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+
+  if (response.status === 401) {
+    const payload = await parseApiResponse<unknown>(response);
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+
+  if (!response.ok) {
+    const payload = await parseApiResponse<unknown>(response);
+    throw new Error(payload?.message || "AI 写作助手连接失败，请稍后再试");
+  }
+
+  if (!response.body) {
+    throw new Error("当前浏览器不支持 AI 流式读取");
+  }
+
+  await readNovelAgentStream(response.body, handlers);
+}
+
 // fetchPromptTypes 查询配置文件中的提示词类型库。
 // 参数 signal 表示用于取消请求的浏览器 AbortSignal。
 export async function fetchPromptTypes(
@@ -2300,6 +2409,70 @@ export async function fetchNovelAgentConversations(
   }
   if (!response.ok || !payload?.data) {
     throw new Error(payload?.message || "AI 会话列表加载失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// fetchNovelAgentRuns 查询当前小说仍在运行或等待人工审核的 AI 对话任务。
+// 参数 novelId 表示小说主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+export async function fetchNovelAgentRuns(
+  novelId: number,
+  signal?: AbortSignal,
+): Promise<NovelAgentRunListData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+
+  const response = await fetch(`/api/v1/novels/${novelId}/agent-runs`, {
+    headers: {
+      Authorization: formatAuthorizationHeader(authData),
+    },
+    signal,
+  });
+  const payload = await parseApiResponse<NovelAgentRunListData>(response);
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "AI 对话任务加载失败，请稍后再试");
+  }
+  return payload.data;
+}
+
+// stopNovelAgentRun 手动停止指定 AI 对话后台运行任务。
+// 参数 runId 表示 AI 对话后台运行任务 ID；参数 signal 表示用于取消停止请求的浏览器 AbortSignal。
+export async function stopNovelAgentRun(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<NovelAgentRunStopData> {
+  const authData = readAuthData();
+  if (!authData) {
+    throw new UnauthorizedError("登录已过期，请重新登录");
+  }
+  const normalizedRunId = runId.trim();
+  if (!normalizedRunId) {
+    throw new Error("AI 对话任务不存在或已结束");
+  }
+
+  const response = await fetch(
+    `/api/v1/ai/agents/chat/runs/${encodeURIComponent(normalizedRunId)}/stop`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: formatAuthorizationHeader(authData),
+      },
+      signal,
+    },
+  );
+  const payload = await parseApiResponse<NovelAgentRunStopData>(response);
+  if (response.status === 401) {
+    clearAuthData();
+    throw new UnauthorizedError(payload?.message || "登录已过期，请重新登录");
+  }
+  if (!response.ok || !payload?.data) {
+    throw new Error(payload?.message || "停止 AI 对话失败，请稍后再试");
   }
   return payload.data;
 }
@@ -4032,7 +4205,8 @@ function parseNovelAgentStreamEvent(line: string): NovelAgentStreamEvent | null 
       event.type === "delta" ||
       event.type === "approval_required" ||
       event.type === "done" ||
-      event.type === "error"
+      event.type === "error" ||
+      event.type === "cancelled"
     ) {
       return event;
     }

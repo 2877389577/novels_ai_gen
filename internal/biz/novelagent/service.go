@@ -84,6 +84,8 @@ type Service struct {
 	memoryRepo MemoryRepository
 	// approvalStore 表示人工审核 checkpoint 与待审核记录的内存存储。
 	approvalStore *agentApprovalStore
+	// runManager 表示进程内 AI 对话后台运行任务管理器。
+	runManager *agentRunManager
 }
 
 // savedTurnInfo 表示本轮成功入库后的会话信息。
@@ -107,6 +109,7 @@ func NewService(repo Repository, cipher Cipher, prompts PromptProvider, runtimeF
 		runtimeFactory: runtimeFactory,
 		memoryRepo:     memoryRepo,
 		approvalStore:  newAgentApprovalStore(),
+		runManager:     newAgentRunManager(),
 	}
 }
 
@@ -118,8 +121,16 @@ func (s *Service) ensureApprovalStore() *agentApprovalStore {
 	return s.approvalStore
 }
 
-// StreamChat 执行小说写作 Agent 流式对话。
-// 参数 ctx 表示请求上下文；参数 req 表示流式对话请求；参数 writer 表示 NDJSON 事件写出器。
+// ensureRunManager 返回可用的 AI 对话后台运行任务管理器。
+func (s *Service) ensureRunManager() *agentRunManager {
+	if s.runManager == nil {
+		s.runManager = newAgentRunManager()
+	}
+	return s.runManager
+}
+
+// StreamChat 创建小说写作 Agent 后台对话任务，并订阅该任务的流事件。
+// 参数 ctx 表示当前 HTTP 订阅请求上下文；参数 req 表示流式对话请求；参数 writer 表示 NDJSON 事件写出器。
 func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventWriter) error {
 	req = normalizeChatRequest(req)
 	if err := ValidateChatRequest(req); err != nil {
@@ -129,6 +140,50 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		return fmt.Errorf("Agent 流事件写出器不能为空")
 	}
 
+	run, err := s.startChatRun(ctx, req)
+	if err != nil {
+		return err
+	}
+	return s.StreamRun(ctx, run.id, writer)
+}
+
+// startChatRun 创建后台执行的小说写作 Agent 对话任务。
+// 参数 ctx 表示创建任务的请求上下文；参数 req 表示流式对话请求。
+func (s *Service) startChatRun(ctx context.Context, req ChatRequest) (*agentRun, error) {
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	run, err := s.ensureRunManager().NewRun(runCtx, cancel, req)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	_ = run.WriteEvent(StreamEvent{Type: "meta", Stage: "accepted", Message: "Agent 任务已进入后台执行"})
+	go s.executeChatRun(run)
+	return run, nil
+}
+
+// executeChatRun 在后台执行小说写作 Agent 对话任务。
+// 参数 run 表示需要执行的后台任务。
+func (s *Service) executeChatRun(run *agentRun) {
+	status := AgentRunStatusCompleted
+	if err := s.executeChat(run.ctx, run.req, run); err != nil {
+		if IsCanceledError(run.ctx, err) {
+			status = AgentRunStatusCancelled
+			_ = run.WriteEvent(StreamEvent{Type: "cancelled", RequestID: requestid.FromContext(run.ctx), Message: "本次 AI 回复已取消。"})
+		} else {
+			status = AgentRunStatusFailed
+			_ = run.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(run.ctx), Message: friendlyError(err)})
+		}
+	}
+	if s.ensureRunManager().Status(run) == AgentRunStatusApprovalRequired {
+		s.ensureRunManager().Pause(run)
+		return
+	}
+	s.ensureRunManager().Finish(run, status)
+}
+
+// executeChat 执行小说写作 Agent 对话并写出流事件。
+// 参数 ctx 表示后台运行上下文；参数 req 表示流式对话请求；参数 writer 表示事件写出器。
+func (s *Service) executeChat(ctx context.Context, req ChatRequest, writer EventWriter) error {
 	cfg := s.currentConfig()
 	modelConfig, err := s.runtimeModelConfig(ctx, cfg)
 	if err != nil {
@@ -175,7 +230,7 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	})
 	if err != nil {
 		if IsCanceledError(ctx, err) {
-			return nil
+			return ctx.Err()
 		}
 		var interrupted *AgentInterruptedError
 		if errors.As(err, &interrupted) {
@@ -194,12 +249,12 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
 	}
 	if IsCanceledError(ctx, nil) {
-		return nil
+		return ctx.Err()
 	}
 	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, entryConfig, nil)
 	if err != nil {
 		if IsCanceledError(ctx, err) {
-			return nil
+			return ctx.Err()
 		}
 		slog.ErrorContext(ctx, "小说写作 Agent 记忆保存失败",
 			"error", err,
@@ -224,8 +279,8 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, writer EventW
 	})
 }
 
-// ResumeToolApproval 根据用户人工审核结果恢复小说写作 Agent 流式对话。
-// 参数 ctx 表示请求上下文；参数 req 表示人工审核恢复请求；参数 writer 表示 NDJSON 事件写出器。
+// ResumeToolApproval 创建人工审核恢复后台任务，并订阅该任务的流事件。
+// 参数 ctx 表示当前 HTTP 订阅请求上下文；参数 req 表示人工审核恢复请求；参数 writer 表示 NDJSON 事件写出器。
 func (s *Service) ResumeToolApproval(ctx context.Context, req ChatApprovalResumeRequest, writer EventWriter) error {
 	req = normalizeChatApprovalResumeRequest(req)
 	if err := ValidateChatApprovalResumeRequest(req); err != nil {
@@ -235,11 +290,58 @@ func (s *Service) ResumeToolApproval(ctx context.Context, req ChatApprovalResume
 		return fmt.Errorf("Agent 流事件写出器不能为空")
 	}
 
+	run, err := s.startApprovalRun(ctx, req)
+	if err != nil {
+		return err
+	}
+	return s.StreamRun(ctx, run.id, writer)
+}
+
+// startApprovalRun 创建后台执行的人工审核恢复任务。
+// 参数 ctx 表示创建任务的请求上下文；参数 req 表示人工审核恢复请求。
+func (s *Service) startApprovalRun(ctx context.Context, req ChatApprovalResumeRequest) (*agentRun, error) {
 	approvalStore := s.ensureApprovalStore()
 	pendingApproval, ok := approvalStore.FindPending(req.CheckPointID, req.InterruptID)
 	if !ok || pendingApproval.Request.NovelID != req.NovelID {
-		return ErrAgentApprovalNotFound
+		return nil, ErrAgentApprovalNotFound
 	}
+	s.ensureRunManager().FinishApprovalRun(req.CheckPointID, req.InterruptID)
+
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	run, err := s.ensureRunManager().NewRun(runCtx, cancel, pendingApproval.Request)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	_ = run.WriteEvent(StreamEvent{Type: "meta", Stage: "accepted", Message: "Agent 恢复任务已进入后台执行"})
+	go s.executeApprovalRun(run, req, pendingApproval)
+	return run, nil
+}
+
+// executeApprovalRun 在后台执行人工审核恢复任务。
+// 参数 run 表示需要执行的后台任务；参数 req 表示人工审核恢复请求；参数 pendingApproval 表示原始待审核工具调用。
+func (s *Service) executeApprovalRun(run *agentRun, req ChatApprovalResumeRequest, pendingApproval pendingToolApproval) {
+	status := AgentRunStatusCompleted
+	if err := s.executeApproval(run.ctx, req, run, pendingApproval); err != nil {
+		if IsCanceledError(run.ctx, err) {
+			status = AgentRunStatusCancelled
+			_ = run.WriteEvent(StreamEvent{Type: "cancelled", RequestID: requestid.FromContext(run.ctx), Message: "本次 AI 回复已取消。"})
+		} else {
+			status = AgentRunStatusFailed
+			_ = run.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(run.ctx), Message: friendlyError(err)})
+		}
+	}
+	if s.ensureRunManager().Status(run) == AgentRunStatusApprovalRequired {
+		s.ensureRunManager().Pause(run)
+		return
+	}
+	s.ensureRunManager().Finish(run, status)
+}
+
+// executeApproval 根据用户人工审核结果恢复小说写作 Agent 流式对话。
+// 参数 ctx 表示后台运行上下文；参数 req 表示人工审核恢复请求；参数 writer 表示事件写出器；参数 pendingApproval 表示原始待审核工具调用。
+func (s *Service) executeApproval(ctx context.Context, req ChatApprovalResumeRequest, writer EventWriter, pendingApproval pendingToolApproval) error {
+	approvalStore := s.ensureApprovalStore()
 	originalReq := pendingApproval.Request
 	cfg := s.currentConfig()
 	modelConfig, err := s.runtimeModelConfig(ctx, cfg)
@@ -283,7 +385,7 @@ func (s *Service) ResumeToolApproval(ctx context.Context, req ChatApprovalResume
 	})
 	if err != nil {
 		if IsCanceledError(ctx, err) {
-			return nil
+			return ctx.Err()
 		}
 		var interrupted *AgentInterruptedError
 		if errors.As(err, &interrupted) {
@@ -303,12 +405,12 @@ func (s *Service) ResumeToolApproval(ctx context.Context, req ChatApprovalResume
 		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
 	}
 	if IsCanceledError(ctx, nil) {
-		return nil
+		return ctx.Err()
 	}
 	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, originalReq, result, entryConfig, &pendingApproval)
 	if err != nil {
 		if IsCanceledError(ctx, err) {
-			return nil
+			return ctx.Err()
 		}
 		slog.ErrorContext(ctx, "小说写作 Agent 恢复后记忆保存失败",
 			"error", err,
@@ -333,6 +435,57 @@ func (s *Service) ResumeToolApproval(ctx context.Context, req ChatApprovalResume
 		ConversationTitle: savedTurn.ConversationTitle,
 		Message:           "ok",
 	})
+}
+
+// StreamRun 订阅指定 AI 对话后台运行任务的流事件。
+// 参数 ctx 表示当前 HTTP 请求上下文；参数 runID 表示任务 ID；参数 writer 表示 NDJSON 事件写出器。
+func (s *Service) StreamRun(ctx context.Context, runID string, writer EventWriter) error {
+	if strings.TrimSpace(runID) == "" {
+		return ErrAgentRunNotFound
+	}
+	if writer == nil {
+		return fmt.Errorf("Agent 流事件写出器不能为空")
+	}
+	_, events, unsubscribe, ok := s.ensureRunManager().Subscribe(ctx, runID)
+	if !ok {
+		return ErrAgentRunNotFound
+	}
+	defer unsubscribe()
+
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return nil
+			}
+			if err := writer.WriteEvent(event); err != nil {
+				return nil
+			}
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+// StopRun 手动停止指定 AI 对话后台运行任务。
+// 参数 ctx 表示请求上下文；参数 runID 表示任务 ID。
+func (s *Service) StopRun(ctx context.Context, runID string) (AgentRunStopResponse, error) {
+	_ = ctx
+	stopped, ok := s.ensureRunManager().Stop(strings.TrimSpace(runID))
+	if !ok {
+		return AgentRunStopResponse{}, ErrAgentRunNotFound
+	}
+	return AgentRunStopResponse{Stopped: stopped}, nil
+}
+
+// ListRuns 查询指定小说仍在运行或等待审核的 AI 对话任务。
+// 参数 ctx 表示请求上下文；参数 novelID 表示小说主键 ID。
+func (s *Service) ListRuns(ctx context.Context, novelID uint64) (AgentRunListResponse, error) {
+	_ = ctx
+	if novelID == 0 {
+		return AgentRunListResponse{}, ErrNovelIDRequired
+	}
+	return AgentRunListResponse{Items: s.ensureRunManager().ListActiveByNovelID(novelID)}, nil
 }
 
 // ListConversations 查询指定小说下的 Agent 会话列表。

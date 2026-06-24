@@ -172,6 +172,8 @@ type DeleteConversationResponse struct {
 type StreamEvent struct {
 	// Type 表示事件类型，支持 meta、delta、approval_required、done、error。
 	Type string `json:"type" example:"delta"`
+	// RunID 表示本次 AI 对话后台运行任务 ID。
+	RunID string `json:"run_id,omitempty" example:"agent-run-abc123"`
 	// RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Stage 表示 meta 事件所处阶段。

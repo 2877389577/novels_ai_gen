@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"novels_ai_gen/internal/api/response"
@@ -56,6 +57,8 @@ type ChatApprovalResumeRequest struct {
 type StreamEvent struct {
 	// Type 表示事件类型，支持 meta、delta、approval_required、done、error。
 	Type string `json:"type" example:"delta"`
+	// RunID 表示本次 AI 对话后台运行任务 ID。
+	RunID string `json:"run_id,omitempty" example:"agent-run-abc123"`
 	// RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。
 	RequestID string `json:"request_id,omitempty" example:"8f2d6c6d0cf2473e9f8e24d9d0ab3d81"`
 	// Stage 表示 meta 事件所处阶段。
@@ -411,6 +414,71 @@ func (h *Handler) ResumeToolApproval(c *gin.Context) {
 	}
 }
 
+// ListRuns 查询当前小说仍在运行或等待人工审核的 AI 对话任务。
+// 参数 c 表示 Gin 请求上下文。
+func (h *Handler) ListRuns(c *gin.Context) {
+	novelID, ok := parseNovelID(c)
+	if !ok {
+		return
+	}
+
+	data, err := h.service.ListRuns(c.Request.Context(), novelID)
+	if err != nil {
+		writeAgentError(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+// StreamRun 重新订阅指定 AI 对话后台运行任务的流事件。
+// 参数 c 表示 Gin 请求上下文。
+func (h *Handler) StreamRun(c *gin.Context) {
+	runID := strings.TrimSpace(c.Param("run_id"))
+	if runID == "" {
+		response.Error(c, http.StatusBadRequest, "请求参数错误")
+		return
+	}
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		response.Error(c, http.StatusInternalServerError, "当前运行环境不支持 AI 流式输出")
+		return
+	}
+
+	c.Header("Content-Type", "application/x-ndjson; charset=utf-8")
+	c.Status(http.StatusOK)
+
+	writer := &ndjsonWriter{
+		encoder: json.NewEncoder(c.Writer),
+		flusher: flusher,
+	}
+	if err := h.service.StreamRun(c.Request.Context(), runID, writer); err != nil && !writer.hasError {
+		_ = writer.WriteEvent(biznovelagent.StreamEvent{
+			Type:      "error",
+			RunID:     runID,
+			RequestID: requestid.FromContext(c.Request.Context()),
+			Message:   agentErrorMessage(err),
+		})
+	}
+}
+
+// StopRun 手动停止指定 AI 对话后台运行任务。
+// 参数 c 表示 Gin 请求上下文。
+func (h *Handler) StopRun(c *gin.Context) {
+	runID := strings.TrimSpace(c.Param("run_id"))
+	if runID == "" {
+		response.Error(c, http.StatusBadRequest, "请求参数错误")
+		return
+	}
+
+	data, err := h.service.StopRun(c.Request.Context(), runID)
+	if err != nil {
+		writeAgentError(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
 // ndjsonWriter 表示基于 HTTP 响应的 NDJSON 流事件写出器。
 type ndjsonWriter struct {
 	// encoder 表示 JSON 行编码器。
@@ -456,6 +524,8 @@ func agentErrorMessage(err error) string {
 		return "AI 记忆暂时不可用，请稍后再试"
 	case errors.Is(err, biznovelagent.ErrAgentApprovalNotFound):
 		return "人工审核记录不存在或已失效，请重新发起 AI 请求"
+	case errors.Is(err, biznovelagent.ErrAgentRunNotFound):
+		return "AI 对话任务不存在或已结束"
 	default:
 		return "AI 写作助手暂时不可用，请稍后再试"
 	}
@@ -503,6 +573,8 @@ func writeAgentError(c *gin.Context, err error) {
 	case errors.Is(err, biznovelagent.ErrConversationNotFound):
 		response.Error(c, http.StatusNotFound, agentErrorMessage(err))
 	case errors.Is(err, biznovelagent.ErrAgentApprovalNotFound):
+		response.Error(c, http.StatusNotFound, agentErrorMessage(err))
+	case errors.Is(err, biznovelagent.ErrAgentRunNotFound):
 		response.Error(c, http.StatusNotFound, agentErrorMessage(err))
 	default:
 		response.Error(c, http.StatusInternalServerError, agentErrorMessage(err))

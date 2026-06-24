@@ -27,4 +27,6 @@ var (
 	ErrConversationNotFound = errors.New("novel agent conversation not found")
 	// ErrAgentApprovalNotFound 表示人工审核中断记录不存在或已经失效。
 	ErrAgentApprovalNotFound = errors.New("novel agent approval not found")
+	// ErrAgentRunNotFound 表示 AI 对话后台运行任务不存在或已经结束清理。
+	ErrAgentRunNotFound = errors.New("novel agent run not found")
 )
