@@ -748,7 +748,7 @@ func (s *Service) memoryForRun(ctx context.Context, cfg *appconfig.AppConfig, no
 
 // saveSuccessfulTurn 将成功完成的一轮用户消息和 Agent 内部记忆事件写入会话级 Agent 记忆。
 // 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 runtime 表示本轮使用的 Agent 运行时；参数 req 表示本轮聊天请求。
-// 参数 result 表示 Agent 最终生成结果；参数 entryConfig 表示本轮入口模型配置；参数 pendingApproval 表示恢复人工审核时的原始待审核工具调用。
+// 参数 result 表示 Agent 最终生成结果；参数 entryConfig 表示本轮入口模型配置；参数 pendingApproval 表示恢复人工审核时的原始待审核工具调用，当前仅为兼容恢复流程保留且不写入记忆。
 func (s *Service) saveSuccessfulTurn(
 	ctx context.Context,
 	cfg *appconfig.AppConfig,
@@ -758,6 +758,7 @@ func (s *Service) saveSuccessfulTurn(
 	entryConfig ModelConfig,
 	pendingApproval *pendingToolApproval,
 ) (savedTurnInfo, error) {
+	_ = pendingApproval
 	if req.NovelID == 0 {
 		return savedTurnInfo{}, nil
 	}
@@ -799,7 +800,7 @@ func (s *Service) saveSuccessfulTurn(
 			RequestID:      requestID,
 		},
 	}
-	events := memoryEventsWithPendingApprovalCall(agentMemoryEventsForSave(result), pendingApproval)
+	events := agentMemoryEventsForSave(result)
 	for _, event := range events {
 		eventProviderID := event.ProviderID
 		if eventProviderID == 0 {
@@ -1017,7 +1018,7 @@ func agentRepliesForSave(result AgentResult) []AgentReply {
 	return normalizedAgentReplies(result)
 }
 
-// agentMemoryEventsForSave 返回需要写入记忆表的内部事件列表。
+// agentMemoryEventsForSave 返回需要写入记忆表的助手回复事件列表。
 // 参数 result 表示 Agent 本轮运行的最终结果。
 func agentMemoryEventsForSave(result AgentResult) []AgentMemoryEvent {
 	events := make([]AgentMemoryEvent, 0, len(result.MemoryEvents))
@@ -1058,96 +1059,15 @@ func agentMemoryEventsForSave(result AgentResult) []AgentMemoryEvent {
 	return events
 }
 
-// isMemoryEventRoleForSave 判断记忆事件角色是否允许入库。
+// isMemoryEventRoleForSave 判断记忆事件角色是否允许作为会话记忆入库。
 // 参数 role 表示 Agent 记忆消息角色。
 func isMemoryEventRoleForSave(role MessageRole) bool {
 	switch role {
-	case MessageRoleAssistant, MessageRoleFunctionCall, MessageRoleFunctionResult:
+	case MessageRoleAssistant:
 		return true
 	default:
 		return false
 	}
-}
-
-// memoryEventsWithPendingApprovalCall 在审核恢复缺少原始工具调用时补齐 function_call 记忆。
-// 参数 events 表示本轮已经收集到的记忆事件；参数 pendingApproval 表示恢复人工审核时的原始待审核工具调用。
-func memoryEventsWithPendingApprovalCall(events []AgentMemoryEvent, pendingApproval *pendingToolApproval) []AgentMemoryEvent {
-	event, ok := pendingApprovalFunctionCallMemoryEvent(pendingApproval)
-	if !ok || hasFunctionCallMemoryEvent(events, event) {
-		return events
-	}
-	items := make([]AgentMemoryEvent, 0, len(events)+1)
-	items = append(items, event)
-	items = append(items, events...)
-	return items
-}
-
-// pendingApprovalFunctionCallMemoryEvent 将待审核记录转换为 function_call 记忆事件。
-// 参数 pendingApproval 表示恢复人工审核时的原始待审核工具调用。
-func pendingApprovalFunctionCallMemoryEvent(pendingApproval *pendingToolApproval) (AgentMemoryEvent, bool) {
-	if pendingApproval == nil {
-		return AgentMemoryEvent{}, false
-	}
-	call := agentFunctionToolCall{
-		ID:        strings.TrimSpace(pendingApproval.InterruptID),
-		Type:      "function",
-		Name:      strings.TrimSpace(pendingApproval.ToolName),
-		Arguments: pendingApproval.ToolArguments,
-	}
-	if strings.TrimSpace(call.ID) == "" && call.Name == "" && strings.TrimSpace(call.Arguments) == "" {
-		return AgentMemoryEvent{}, false
-	}
-	content, ok := encodeFunctionCallMemoryContent([]agentFunctionToolCall{call})
-	if !ok {
-		return AgentMemoryEvent{}, false
-	}
-	return AgentMemoryEvent{
-		Role:    MessageRoleFunctionCall,
-		Task:    taskDirect,
-		Content: content,
-	}, true
-}
-
-// hasFunctionCallMemoryEvent 判断事件列表中是否已经包含目标工具调用。
-// 参数 events 表示本轮已经收集到的记忆事件；参数 target 表示待匹配的 function_call 记忆事件。
-func hasFunctionCallMemoryEvent(events []AgentMemoryEvent, target AgentMemoryEvent) bool {
-	targetCalls, ok := decodeFunctionCallMemoryContent(target.Content)
-	if !ok || len(targetCalls) == 0 {
-		return false
-	}
-	for _, event := range events {
-		if event.Role != MessageRoleFunctionCall {
-			continue
-		}
-		calls, ok := decodeFunctionCallMemoryContent(event.Content)
-		if !ok {
-			continue
-		}
-		for _, call := range calls {
-			for _, targetCall := range targetCalls {
-				if sameFunctionToolCall(call, targetCall) {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// sameFunctionToolCall 判断两个工具调用是否表示同一次调用。
-// 参数 call 表示已收集的工具调用；参数 target 表示待匹配的目标工具调用。
-func sameFunctionToolCall(call agentFunctionToolCall, target agentFunctionToolCall) bool {
-	callID := strings.TrimSpace(call.ID)
-	targetID := strings.TrimSpace(target.ID)
-	if callID != "" && targetID != "" && callID == targetID {
-		return true
-	}
-	callName := strings.TrimSpace(call.Name)
-	targetName := strings.TrimSpace(target.Name)
-	if callName == "" && targetName == "" && strings.TrimSpace(call.Arguments) == "" && strings.TrimSpace(target.Arguments) == "" {
-		return false
-	}
-	return callName == targetName && call.Arguments == target.Arguments
 }
 
 // normalizedPromptTypes 返回配置文件中可用于推荐判定的提示词类型列表。

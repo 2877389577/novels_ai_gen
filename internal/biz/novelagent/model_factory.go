@@ -782,16 +782,6 @@ func chatRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Message
 			messages = append(messages, schema.UserMessage(item.Content))
 		case MessageRoleAssistant:
 			messages = append(messages, schema.AssistantMessage(item.Content, nil))
-		case MessageRoleFunctionCall:
-			if calls, ok := decodeFunctionCallMemoryContent(item.Content); ok && len(calls) > 0 {
-				messages = append(messages, schema.AssistantMessage("", schemaToolCallsFromMemory(calls)))
-			}
-		case MessageRoleFunctionResult:
-			if results, ok := decodeFunctionResultMemoryContent(item.Content); ok && len(results) > 0 {
-				for _, result := range results {
-					messages = append(messages, schema.ToolMessage(result.Content, result.ID, schema.WithToolName(result.Name)))
-				}
-			}
 		}
 	}
 	messages = append(messages, schema.UserMessage(req.Message))
@@ -815,14 +805,6 @@ func agenticRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Agen
 			messages = append(messages, schema.UserAgenticMessage(item.Content))
 		case MessageRoleAssistant:
 			messages = append(messages, assistantAgenticMessage(item.Content))
-		case MessageRoleFunctionCall:
-			if calls, ok := decodeFunctionCallMemoryContent(item.Content); ok && len(calls) > 0 {
-				messages = append(messages, functionCallAgenticMessage(calls))
-			}
-		case MessageRoleFunctionResult:
-			if results, ok := decodeFunctionResultMemoryContent(item.Content); ok && len(results) > 0 {
-				messages = append(messages, functionResultAgenticMessage(results))
-			}
 		}
 	}
 	messages = append(messages, schema.UserAgenticMessage(req.Message))
