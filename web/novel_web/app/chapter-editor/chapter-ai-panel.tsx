@@ -1,6 +1,6 @@
 import { Modal, Toast } from "@douyinfe/semi-ui-19";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import { UnauthorizedError, deleteNovelAgentConversation, fetchNovelAgentConversationMessages, fetchNovelAgentConversations, resumeNovelAgentChatApproval, streamNovelAgentChat, type NovelAgentConversationItem, type NovelAgentStreamApprovalRequiredEvent, type NovelAgentStreamEvent } from "../api";
+import { UnauthorizedError, deleteNovelAgentConversation, fetchNovelAgentConversationMessages, fetchNovelAgentConversations, fetchNovelAgentRuns, resumeNovelAgentChatApproval, stopNovelAgentRun, streamNovelAgentChat, streamNovelAgentRun, type NovelAgentConversationItem, type NovelAgentRunItem, type NovelAgentStreamApprovalRequiredEvent, type NovelAgentStreamEvent } from "../api";
 import { chapterAiAssistantMessages } from "./constants";
 import { ChapterAIContext } from "./chapter-ai-context";
 import { createChapterAiDialogueRenderConfig } from "./chapter-ai-dialogue-actions";
@@ -36,6 +36,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   const [assistantSending, setAssistantSending] = useState(false);
   const assistantInputRef = useRef<HTMLTextAreaElement | null>(null);
   const streamControllerRef = useRef<AbortController | null>(null);
+  const currentRunIDRef = useRef<string | null>(null);
   const selectedConversationIDRef = useRef<number | null>(null);
 
   const conversationSelectOptions = useMemo(
@@ -81,12 +82,22 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
 
       async function loadConversations() {
         try {
-          const data = await fetchNovelAgentConversations(props.novelId, controller.signal);
+          const [data, runData] = await Promise.all([
+            fetchNovelAgentConversations(props.novelId, controller.signal),
+            fetchNovelAgentRuns(props.novelId, controller.signal),
+          ]);
           if (controller.signal.aborted) {
             return;
           }
 
           setConversations(data.items);
+          const activeRun = runData.items[0];
+          if (activeRun) {
+            attachActiveAgentRun(activeRun);
+            setConversationLoading(false);
+            setHistoryLoading(false);
+            return;
+          }
           if (data.items.length === 0) {
             setSelectedConversationID(null);
             setChats(chapterAiAssistantMessages);
@@ -134,6 +145,14 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
 
   useEffect(
     function loadSelectedConversationHistory() {
+      if (currentRunIDRef.current) {
+        setHistoryLoading(false);
+        return;
+      }
+      if (assistantSending) {
+        setHistoryLoading(false);
+        return;
+      }
       if (selectedConversationID === null) {
         setChats(chapterAiAssistantMessages);
         setHistoryLoading(false);
@@ -182,7 +201,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         controller.abort();
       };
     },
-    [onUnauthorized, props.novelId, selectedConversationID],
+    [assistantSending, onUnauthorized, props.novelId, selectedConversationID],
   );
 
   useEffect(
@@ -211,6 +230,57 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     [inputValue, props.prefillMessage],
   );
 
+  // attachActiveAgentRun 将后端仍在运行的 AI 任务恢复为当前前端对话。
+  // 参数 run 表示后端返回的 AI 对话运行任务快照。
+  function attachActiveAgentRun(run: NovelAgentRunItem) {
+    const createdAt = Date.parse(run.created_at) || Date.now();
+    const pairID = `agent-run-${run.run_id}`;
+    const userMessageID = `agent-run-user-${run.run_id}`;
+    const assistantMessageID = `agent-run-assistant-${run.run_id}`;
+    const retryPayload: ChapterAiRetryPayload = {
+      conversationId: run.conversation_id,
+      message: run.message,
+    };
+    currentRunIDRef.current = run.run_id;
+    setSelectedConversationID(run.conversation_id ?? null);
+    setAssistantSending(true);
+    setInputValue("");
+    setChats([
+      ...chapterAiAssistantMessages,
+      {
+        id: userMessageID,
+        chapterAiConversationID: run.conversation_id,
+        chapterAiPairID: pairID,
+        chapterAiRetryable: false,
+        chapterAiRetryPayload: retryPayload,
+        role: "user",
+        content: run.message,
+        createAt: createdAt,
+      },
+      {
+        id: assistantMessageID,
+        chapterAiConversationID: run.conversation_id,
+        chapterAiPairID: pairID,
+        chapterAiSourceID: assistantMessageID,
+        chapterAiReplyIndex: 1,
+        role: "assistant",
+        content: "",
+        status: "in_progress",
+        createAt: createdAt,
+      },
+    ]);
+    void runChapterAiStream({
+      runId: run.run_id,
+      pairID,
+      assistantMessageID,
+      requestContext: {
+        chapterId: run.chapter_id,
+        chapterNumber: run.chapter_number,
+      },
+      retryPayload,
+    });
+  }
+
   // handleAssistantInputChange 同步 AI 对话输入框内容。
   // 参数 event 表示输入框变更事件。
   function handleAssistantInputChange(event: ChangeEvent<HTMLTextAreaElement>) {
@@ -233,15 +303,27 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     void submitAssistantMessage();
   }
 
-  // handleAssistantClose 关闭 AI 侧栏并取消仍在进行的流式请求。
+  // handleAssistantClose 关闭 AI 侧栏但不停止仍在后台运行的 AI 任务。
   function handleAssistantClose() {
-    streamControllerRef.current?.abort();
     props.onClose();
   }
 
   // handleCancelAssistantMessage 中断当前正在进行的 AI 流式回复。
-  function handleCancelAssistantMessage() {
-    streamControllerRef.current?.abort();
+  async function handleCancelAssistantMessage() {
+    const runID = currentRunIDRef.current;
+    if (!runID) {
+      Toast.info("AI 任务正在启动，请稍后再停止");
+      return;
+    }
+    try {
+      await stopNovelAgentRun(runID);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        onUnauthorized();
+        return;
+      }
+      Toast.error(getErrorMessage(error, "停止 AI 对话失败，请稍后再试"));
+    }
   }
 
   // handleConversationChange 切换当前 AI 会话。
@@ -529,11 +611,13 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     const controller = new AbortController();
     streamControllerRef.current?.abort();
     streamControllerRef.current = controller;
+    currentRunIDRef.current = request.runId ?? null;
 
     const initialAssistantContent =
       request.approvalDecision?.existingContent ?? "";
     let assistantContent = initialAssistantContent;
     let handledFailure = false;
+    let waitingForApproval = false;
     const assistantReplies = new Map<number, ChapterAiReplyDraft>();
     assistantReplies.set(1, {
       messageID: createChapterAiReplyMessageID(request.assistantMessageID, 1),
@@ -636,6 +720,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         requestContext: request.requestContext,
         retryPayload: request.retryPayload,
       };
+      waitingForApproval = true;
       removeChapterAiLoadingMessage(request.pairID);
       updateChapterAiPairRetryable(request.pairID, false);
       setChapterAiApproval(request.assistantMessageID, approval);
@@ -646,6 +731,9 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     function handleNovelAgentStreamEvent(event: NovelAgentStreamEvent) {
       if (handledFailure) {
         return;
+      }
+      if (event.run_id) {
+        currentRunIDRef.current = event.run_id;
       }
       if (event.type === "approval_required") {
         handleApprovalRequiredEvent(event);
@@ -698,6 +786,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           );
         }
         updateChapterAiPairRetryable(request.pairID, false);
+        currentRunIDRef.current = null;
         return;
       }
       if (event.type === "error") {
@@ -708,12 +797,30 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           ? `${baseErrorMessage}（请求ID：${requestID}）`
           : baseErrorMessage;
         handleChapterAiStreamFailure(errorMessage);
+        currentRunIDRef.current = null;
+        return;
+      }
+      if (event.type === "cancelled") {
+        updateChapterAiPairRetryable(request.pairID, false);
+        removeChapterAiLoadingMessage(request.pairID);
+        collapseAssistantRepliesToStatus(
+          request.assistantMessageID,
+          event.message || "本次 AI 回复已取消。",
+          "cancelled",
+        );
+        currentRunIDRef.current = null;
       }
     }
 
     try {
       const approvalDecision = request.approvalDecision;
-      if (approvalDecision) {
+      if (request.runId) {
+        await streamNovelAgentRun(
+          request.runId,
+          { onEvent: handleNovelAgentStreamEvent },
+          controller.signal,
+        );
+      } else if (approvalDecision) {
         await resumeNovelAgentChatApproval(
           {
             novelId: props.novelId,
@@ -745,26 +852,24 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         return;
       }
       if (controller.signal.aborted) {
-        updateChapterAiPairRetryable(request.pairID, false);
-        removeChapterAiLoadingMessage(request.pairID);
-        collapseAssistantRepliesToStatus(
-          request.assistantMessageID,
-          "本次 AI 回复已取消。",
-          "cancelled",
-        );
         return;
       }
       if (error instanceof UnauthorizedError) {
+        currentRunIDRef.current = null;
         handleChapterAiStreamFailure(getErrorMessage(error, "登录已过期，请重新登录"));
         onUnauthorized();
         return;
       }
       const errorMessage = getErrorMessage(error, "AI 写作助手生成失败，请稍后再试");
+      currentRunIDRef.current = null;
       handleChapterAiStreamFailure(errorMessage);
     } finally {
       removeChapterAiLoadingMessage(request.pairID);
       if (streamControllerRef.current === controller) {
         streamControllerRef.current = null;
+      }
+      if (!waitingForApproval && currentRunIDRef.current === request.runId) {
+        currentRunIDRef.current = null;
       }
       setAssistantSending(false);
     }

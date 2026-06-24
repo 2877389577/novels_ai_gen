@@ -81,6 +81,8 @@ export interface ChapterAiRequestContext {
 
 // ChapterAiStreamRequest 表示一次章节 AI 流式请求所需的本地上下文。
 export interface ChapterAiStreamRequest {
+  // runId 表示需要重新订阅的后端 AI 对话运行任务 ID，新请求为空。
+  runId?: string;
   // pairID 表示当前用户消息和助手消息共用的配对 ID。
   pairID: string;
   // assistantMessageID 表示当前助手消息的基础 ID。
