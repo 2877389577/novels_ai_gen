@@ -88,6 +88,44 @@ type Service struct {
 	runManager *agentRunManager
 }
 
+// loggedAgentError 表示已经写过错误日志的 Agent 错误包装。
+type loggedAgentError struct {
+	// err 表示被包装的原始错误。
+	err error
+}
+
+// Error 返回原始错误文本。
+func (e *loggedAgentError) Error() string {
+	if e == nil || e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+// Unwrap 返回被包装的原始错误，供 errors.Is 和 errors.As 继续匹配。
+func (e *loggedAgentError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
+// markAgentErrorLogged 标记错误已经在 Agent 内部写过日志。
+// 参数 err 表示需要标记的错误。
+func markAgentErrorLogged(err error) error {
+	if err == nil || isAgentErrorLogged(err) {
+		return err
+	}
+	return &loggedAgentError{err: err}
+}
+
+// isAgentErrorLogged 判断错误链中是否已经包含 Agent 日志标记。
+// 参数 err 表示需要检查的错误。
+func isAgentErrorLogged(err error) bool {
+	var logged *loggedAgentError
+	return errors.As(err, &logged)
+}
+
 // savedTurnInfo 表示本轮成功入库后的会话信息。
 type savedTurnInfo struct {
 	// ConversationID 表示本轮消息保存到的 Agent 会话 ID。
@@ -127,6 +165,28 @@ func (s *Service) ensureRunManager() *agentRunManager {
 		s.runManager = newAgentRunManager()
 	}
 	return s.runManager
+}
+
+// logAgentRunError 写出后台 Agent 任务的兜底错误日志。
+// 参数 ctx 表示任务上下文；参数 message 表示日志消息；参数 err 表示任务错误；参数 run 表示后台运行任务。
+func (*Service) logAgentRunError(ctx context.Context, message string, err error, run *agentRun) {
+	if err == nil || isAgentErrorLogged(err) || IsCanceledError(ctx, err) {
+		return
+	}
+	fields := []any{
+		"error", err,
+		"request_id", requestid.FromContext(ctx),
+	}
+	if run != nil {
+		fields = append(fields,
+			"run_id", run.id,
+			"novel_id", run.req.NovelID,
+			"conversation_id", run.req.ConversationID,
+			"chapter_id", run.req.ChapterID,
+			"chapter_number", run.req.ChapterNumber,
+		)
+	}
+	slog.ErrorContext(ctx, message, fields...)
 }
 
 // StreamChat 创建小说写作 Agent 后台对话任务，并订阅该任务的流事件。
@@ -171,6 +231,7 @@ func (s *Service) executeChatRun(run *agentRun) {
 			_ = run.WriteEvent(StreamEvent{Type: "cancelled", RequestID: requestid.FromContext(run.ctx), Message: "本次 AI 回复已取消。"})
 		} else {
 			status = AgentRunStatusFailed
+			s.logAgentRunError(run.ctx, "小说写作 Agent 后台任务失败", err, run)
 			_ = run.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(run.ctx), Message: friendlyError(err)})
 		}
 	}
@@ -205,7 +266,7 @@ func (s *Service) executeChat(ctx context.Context, req ChatRequest, writer Event
 			"model", entryConfig.Model,
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
-		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
+		return markAgentErrorLogged(fmt.Errorf("%w: %w", ErrModelStreamFailed, err))
 	}
 
 	if err := writer.WriteEvent(StreamEvent{Type: "meta", Stage: "started", Message: "Agent 已开始处理"}); err != nil {
@@ -246,19 +307,27 @@ func (s *Service) executeChat(ctx context.Context, req ChatRequest, writer Event
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: friendlyError(err)})
-		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
+		return markAgentErrorLogged(fmt.Errorf("%w: %w", ErrModelStreamFailed, err))
 	}
 	if IsCanceledError(ctx, nil) {
 		return ctx.Err()
 	}
 	if !hasDisplayableAgentReply(result) {
+		slog.ErrorContext(ctx, "小说写作 Agent 返回空内容",
+			"error", ErrAgentEmptyResponse,
+			"provider_id", entryConfig.ProviderID,
+			"provider_type", entryConfig.ProviderType,
+			"api_type", entryConfig.APIType,
+			"model", entryConfig.Model,
+			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
+		)
 		_ = writer.WriteEvent(StreamEvent{
 			Type:      "error",
 			RequestID: requestid.FromContext(ctx),
 			Task:      result.Task,
 			Message:   friendlyError(ErrAgentEmptyResponse),
 		})
-		return fmt.Errorf("%w: %w", ErrModelStreamFailed, ErrAgentEmptyResponse)
+		return markAgentErrorLogged(fmt.Errorf("%w: %w", ErrModelStreamFailed, ErrAgentEmptyResponse))
 	}
 	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, entryConfig, nil)
 	if err != nil {
@@ -274,7 +343,7 @@ func (s *Service) executeChat(ctx context.Context, req ChatRequest, writer Event
 			"chapter_number", req.ChapterNumber,
 		)
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: "AI 记忆保存失败，本次回复未完成入库"})
-		return fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+		return markAgentErrorLogged(fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err))
 	}
 
 	return writer.WriteEvent(StreamEvent{
@@ -337,6 +406,7 @@ func (s *Service) executeApprovalRun(run *agentRun, req ChatApprovalResumeReques
 			_ = run.WriteEvent(StreamEvent{Type: "cancelled", RequestID: requestid.FromContext(run.ctx), Message: "本次 AI 回复已取消。"})
 		} else {
 			status = AgentRunStatusFailed
+			s.logAgentRunError(run.ctx, "小说写作 Agent 人工审核恢复后台任务失败", err, run)
 			_ = run.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(run.ctx), Message: friendlyError(err)})
 		}
 	}
@@ -373,7 +443,7 @@ func (s *Service) executeApproval(ctx context.Context, req ChatApprovalResumeReq
 			"model", entryConfig.Model,
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
-		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
+		return markAgentErrorLogged(fmt.Errorf("%w: %w", ErrModelStreamFailed, err))
 	}
 
 	if err := writer.WriteEvent(StreamEvent{Type: "meta", Stage: "resumed", Message: "Agent 已根据人工审核继续处理"}); err != nil {
@@ -411,19 +481,27 @@ func (s *Service) executeApproval(ctx context.Context, req ChatApprovalResumeReq
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: friendlyError(err)})
-		return fmt.Errorf("%w: %w", ErrModelStreamFailed, err)
+		return markAgentErrorLogged(fmt.Errorf("%w: %w", ErrModelStreamFailed, err))
 	}
 	if IsCanceledError(ctx, nil) {
 		return ctx.Err()
 	}
 	if !hasDisplayableAgentReply(result) {
+		slog.ErrorContext(ctx, "小说写作 Agent 恢复后返回空内容",
+			"error", ErrAgentEmptyResponse,
+			"provider_id", entryConfig.ProviderID,
+			"provider_type", entryConfig.ProviderType,
+			"api_type", entryConfig.APIType,
+			"model", entryConfig.Model,
+			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
+		)
 		_ = writer.WriteEvent(StreamEvent{
 			Type:      "error",
 			RequestID: requestid.FromContext(ctx),
 			Task:      result.Task,
 			Message:   friendlyError(ErrAgentEmptyResponse),
 		})
-		return fmt.Errorf("%w: %w", ErrModelStreamFailed, ErrAgentEmptyResponse)
+		return markAgentErrorLogged(fmt.Errorf("%w: %w", ErrModelStreamFailed, ErrAgentEmptyResponse))
 	}
 	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, originalReq, result, entryConfig, &pendingApproval)
 	if err != nil {
@@ -439,7 +517,7 @@ func (s *Service) executeApproval(ctx context.Context, req ChatApprovalResumeReq
 			"chapter_number", originalReq.ChapterNumber,
 		)
 		_ = writer.WriteEvent(StreamEvent{Type: "error", RequestID: requestid.FromContext(ctx), Task: result.Task, Message: "AI 记忆保存失败，本次回复未完成入库"})
-		return fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err)
+		return markAgentErrorLogged(fmt.Errorf("%w: %v", ErrAgentMemoryFailed, err))
 	}
 	approvalStore.DeletePending(req.CheckPointID, req.InterruptID)
 	_ = approvalStore.Delete(ctx, req.CheckPointID)
