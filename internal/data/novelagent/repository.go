@@ -113,14 +113,17 @@ func (r *Repository) ListRecentMessagesByUserRounds(ctx context.Context, convers
 	}
 
 	var boundary biznovelagent.MessageRecord
-	err := r.db.WithContext(ctx).
+	result := r.db.WithContext(ctx).
 		Where("conversation_id = ? AND role = ?", conversationID, biznovelagent.MessageRoleUser).
 		Order("created_at DESC").
 		Order("id DESC").
 		Offset(rounds - 1).
 		Limit(1).
-		Take(&boundary).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+		Find(&boundary)
+	if result.Error != nil {
+		return nil, fmt.Errorf("查询 Agent 记忆轮次边界失败: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
 		var items []biznovelagent.MessageRecord
 		if err := r.db.WithContext(ctx).
 			Where("conversation_id = ?", conversationID).
@@ -130,9 +133,6 @@ func (r *Repository) ListRecentMessagesByUserRounds(ctx context.Context, convers
 			return nil, fmt.Errorf("查询 Agent 全部轮次消息失败: %w", err)
 		}
 		return items, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("查询 Agent 记忆轮次边界失败: %w", err)
 	}
 
 	var items []biznovelagent.MessageRecord
