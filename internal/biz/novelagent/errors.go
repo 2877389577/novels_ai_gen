@@ -21,6 +21,8 @@ var (
 	ErrModelFactoryUnavailable = errors.New("novel agent model factory unavailable")
 	// ErrModelStreamFailed 表示模型流式生成失败。
 	ErrModelStreamFailed = errors.New("novel agent model stream failed")
+	// ErrAgentEmptyResponse 表示 Agent 没有返回可展示的助手回复。
+	ErrAgentEmptyResponse = errors.New("novel agent empty response")
 	// ErrAgentMemoryFailed 表示 Agent 记忆读取或写入失败。
 	ErrAgentMemoryFailed = errors.New("novel agent memory failed")
 	// ErrConversationNotFound 表示 Agent 会话不存在或不属于当前小说。

@@ -767,7 +767,15 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       if (event.type === "done") {
         clearChapterAiApproval(request.assistantMessageID);
         assistantContent = event.content || assistantContent;
-        completeAssistantReplies(event.replies ?? []);
+        const replies = event.replies ?? [];
+        if (replies.length === 0 && assistantContent.trim() === "") {
+          handleChapterAiStreamFailure(
+            "AI 没有返回可展示内容，请重试或检查模型配置",
+          );
+          currentRunIDRef.current = null;
+          return;
+        }
+        completeAssistantReplies(replies);
         removeChapterAiLoadingMessage(request.pairID);
         if (event.conversation_id && event.conversation_id > 0) {
           const conversationTitle =

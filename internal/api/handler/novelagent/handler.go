@@ -520,6 +520,8 @@ func agentErrorMessage(err error) string {
 		return "当前 AI 提供商未启用"
 	case errors.Is(err, biznovelagent.ErrAgentNotConfigured), errors.Is(err, biznovelagent.ErrAgentConfigInvalid):
 		return "AI 写作智能体配置错误"
+	case errors.Is(err, biznovelagent.ErrAgentEmptyResponse):
+		return "AI 没有返回可展示内容，请重试或检查模型配置"
 	case errors.Is(err, biznovelagent.ErrAgentMemoryFailed):
 		return "AI 记忆暂时不可用，请稍后再试"
 	case errors.Is(err, biznovelagent.ErrAgentApprovalNotFound):

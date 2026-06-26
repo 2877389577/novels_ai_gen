@@ -251,6 +251,15 @@ func (s *Service) executeChat(ctx context.Context, req ChatRequest, writer Event
 	if IsCanceledError(ctx, nil) {
 		return ctx.Err()
 	}
+	if !hasDisplayableAgentReply(result) {
+		_ = writer.WriteEvent(StreamEvent{
+			Type:      "error",
+			RequestID: requestid.FromContext(ctx),
+			Task:      result.Task,
+			Message:   friendlyError(ErrAgentEmptyResponse),
+		})
+		return fmt.Errorf("%w: %w", ErrModelStreamFailed, ErrAgentEmptyResponse)
+	}
 	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, req, result, entryConfig, nil)
 	if err != nil {
 		if IsCanceledError(ctx, err) {
@@ -406,6 +415,15 @@ func (s *Service) executeApproval(ctx context.Context, req ChatApprovalResumeReq
 	}
 	if IsCanceledError(ctx, nil) {
 		return ctx.Err()
+	}
+	if !hasDisplayableAgentReply(result) {
+		_ = writer.WriteEvent(StreamEvent{
+			Type:      "error",
+			RequestID: requestid.FromContext(ctx),
+			Task:      result.Task,
+			Message:   friendlyError(ErrAgentEmptyResponse),
+		})
+		return fmt.Errorf("%w: %w", ErrModelStreamFailed, ErrAgentEmptyResponse)
 	}
 	savedTurn, err := s.saveSuccessfulTurn(ctx, cfg, runtime, originalReq, result, entryConfig, &pendingApproval)
 	if err != nil {
@@ -962,6 +980,17 @@ func normalizedAgentReplies(result AgentResult) []AgentReply {
 	return replies
 }
 
+// hasDisplayableAgentReply 判断 Agent 结果是否包含非空白的可展示助手回复。
+// 参数 result 表示 Agent 本轮运行的最终结果。
+func hasDisplayableAgentReply(result AgentResult) bool {
+	for _, reply := range normalizedAgentReplies(result) {
+		if strings.TrimSpace(reply.Content) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // streamRepliesForResult 将 Agent 运行结果转换为 done 事件中的分段回复列表。
 // 参数 result 表示 Agent 本轮运行的最终结果。
 func streamRepliesForResult(result AgentResult) []StreamReply {
@@ -1220,6 +1249,9 @@ func friendlyError(err error) string {
 	}
 	if errors.Is(err, ErrAgentNotConfigured) || errors.Is(err, ErrAgentConfigInvalid) {
 		return "AI 写作智能体配置错误，请检查模型配置"
+	}
+	if errors.Is(err, ErrAgentEmptyResponse) {
+		return "AI 没有返回可展示内容，请重试或检查模型配置"
 	}
 	if strings.TrimSpace(err.Error()) == "" {
 		return "AI 生成失败，请稍后再试"
