@@ -3,3 +3,5 @@ config/config-dev.yaml
 logs/
 .idea/
 **/*_test.go
+!internal/biz/novelagent/model_factory_test.go
+!internal/biz/novelagent/service_test.go
