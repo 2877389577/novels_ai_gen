@@ -780,7 +780,7 @@ func chatRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Message
 		switch item.Role {
 		case MessageRoleUser:
 			messages = append(messages, schema.UserMessage(item.Content))
-		case MessageRoleAssistant:
+		case MessageRoleAssistant, MessageRoleFunctionCall, MessageRoleFunctionResult:
 			messages = append(messages, schema.AssistantMessage(item.Content, nil))
 		}
 	}
@@ -803,7 +803,7 @@ func agenticRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Agen
 		switch item.Role {
 		case MessageRoleUser:
 			messages = append(messages, schema.UserAgenticMessage(item.Content))
-		case MessageRoleAssistant:
+		case MessageRoleAssistant, MessageRoleFunctionCall, MessageRoleFunctionResult:
 			messages = append(messages, assistantAgenticMessage(item.Content))
 		}
 	}
@@ -831,151 +831,63 @@ func assistantAgenticMessage(content string) *schema.AgenticMessage {
 	}
 }
 
-// agentFunctionCallMemoryContent 表示 function_call 记忆消息的 JSON 正文。
-type agentFunctionCallMemoryContent struct {
-	// ToolCalls 表示本条助手消息中发起的函数工具调用列表。
-	ToolCalls []agentFunctionToolCall `json:"tool_calls"`
-}
-
-// agentFunctionResultMemoryContent 表示 function_result 记忆消息的 JSON 正文。
-type agentFunctionResultMemoryContent struct {
-	// ToolResults 表示本条工具消息中包含的函数工具结果列表。
-	ToolResults []agentFunctionToolResult `json:"tool_results"`
-}
-
-// agentFunctionToolCall 表示可写入记忆的函数工具调用。
+// agentFunctionToolCall 表示可写入记忆的函数工具调用摘要。
 type agentFunctionToolCall struct {
-	// ID 表示模型生成的工具调用 ID。
-	ID string `json:"id,omitempty"`
-	// Type 表示工具调用类型，通常为 function。
-	Type string `json:"type,omitempty"`
 	// Name 表示被调用的工具名称。
-	Name string `json:"name,omitempty"`
-	// Arguments 表示工具调用参数 JSON 字符串。
-	Arguments string `json:"arguments,omitempty"`
+	Name string
 }
 
-// agentFunctionToolResult 表示可写入记忆的函数工具结果。
+// agentFunctionToolResult 表示可写入记忆的函数工具结果摘要。
 type agentFunctionToolResult struct {
 	// ID 表示对应的工具调用 ID。
-	ID string `json:"id,omitempty"`
-	// Name 表示返回结果的工具名称。
-	Name string `json:"name,omitempty"`
+	ID string
 	// Content 表示工具返回给模型的文本结果。
-	Content string `json:"content"`
+	Content string
 }
 
-// encodeFunctionCallMemoryContent 将函数工具调用列表编码为记忆正文。
+// encodeFunctionCallMemoryContent 将函数工具调用列表编码为纯文本记忆正文。
 // 参数 calls 表示需要写入记忆的函数工具调用列表。
 func encodeFunctionCallMemoryContent(calls []agentFunctionToolCall) (string, bool) {
 	if len(calls) == 0 {
 		return "", false
 	}
-	data, err := json.Marshal(agentFunctionCallMemoryContent{ToolCalls: calls})
-	if err != nil {
+	lines := make([]string, 0, len(calls))
+	for _, call := range calls {
+		name := strings.TrimSpace(call.Name)
+		if name == "" {
+			continue
+		}
+		lines = append(lines, "Tool Call:"+name)
+	}
+	if len(lines) == 0 {
 		return "", false
 	}
-	return string(data), true
+	return strings.Join(lines, "\n"), true
 }
 
-// encodeFunctionResultMemoryContent 将函数工具结果列表编码为记忆正文。
+// encodeFunctionResultMemoryContent 将函数工具结果列表编码为纯文本记忆正文。
 // 参数 results 表示需要写入记忆的函数工具结果列表。
 func encodeFunctionResultMemoryContent(results []agentFunctionToolResult) (string, bool) {
 	if len(results) == 0 {
 		return "", false
 	}
-	data, err := json.Marshal(agentFunctionResultMemoryContent{ToolResults: results})
-	if err != nil {
+	lines := make([]string, 0, len(results))
+	for _, result := range results {
+		id := strings.TrimSpace(result.ID)
+		if id == "" && strings.TrimSpace(result.Content) == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf(
+			"Tool ID:%s, Original token count:%d, Output:%s",
+			id,
+			estimateTextTokens(result.Content),
+			result.Content,
+		))
+	}
+	if len(lines) == 0 {
 		return "", false
 	}
-	return string(data), true
-}
-
-// decodeFunctionCallMemoryContent 从记忆正文中解析函数工具调用列表。
-// 参数 content 表示数据库中保存的 function_call JSON 正文。
-func decodeFunctionCallMemoryContent(content string) ([]agentFunctionToolCall, bool) {
-	var payload agentFunctionCallMemoryContent
-	if err := json.Unmarshal([]byte(content), &payload); err != nil {
-		return nil, false
-	}
-	return payload.ToolCalls, len(payload.ToolCalls) > 0
-}
-
-// decodeFunctionResultMemoryContent 从记忆正文中解析函数工具结果列表。
-// 参数 content 表示数据库中保存的 function_result JSON 正文。
-func decodeFunctionResultMemoryContent(content string) ([]agentFunctionToolResult, bool) {
-	var payload agentFunctionResultMemoryContent
-	if err := json.Unmarshal([]byte(content), &payload); err != nil {
-		return nil, false
-	}
-	return payload.ToolResults, len(payload.ToolResults) > 0
-}
-
-// schemaToolCallsFromMemory 将记忆中的函数工具调用还原为 schema.ToolCall。
-// 参数 calls 表示从记忆正文解析出的函数工具调用列表。
-func schemaToolCallsFromMemory(calls []agentFunctionToolCall) []schema.ToolCall {
-	items := make([]schema.ToolCall, 0, len(calls))
-	for _, call := range calls {
-		name := strings.TrimSpace(call.Name)
-		arguments := call.Arguments
-		if strings.TrimSpace(call.ID) == "" && name == "" && strings.TrimSpace(arguments) == "" {
-			continue
-		}
-		callType := strings.TrimSpace(call.Type)
-		if callType == "" {
-			callType = "function"
-		}
-		items = append(items, schema.ToolCall{
-			ID:   strings.TrimSpace(call.ID),
-			Type: callType,
-			Function: schema.FunctionCall{
-				Name:      name,
-				Arguments: arguments,
-			},
-		})
-	}
-	return items
-}
-
-// functionCallAgenticMessage 将记忆中的函数工具调用还原为 AgenticMessage。
-// 参数 calls 表示从记忆正文解析出的函数工具调用列表。
-func functionCallAgenticMessage(calls []agentFunctionToolCall) *schema.AgenticMessage {
-	blocks := make([]*schema.ContentBlock, 0, len(calls))
-	for _, call := range calls {
-		name := strings.TrimSpace(call.Name)
-		arguments := call.Arguments
-		if strings.TrimSpace(call.ID) == "" && name == "" && strings.TrimSpace(arguments) == "" {
-			continue
-		}
-		blocks = append(blocks, schema.NewContentBlock(&schema.FunctionToolCall{
-			CallID:    strings.TrimSpace(call.ID),
-			Name:      name,
-			Arguments: arguments,
-		}))
-	}
-	return &schema.AgenticMessage{Role: schema.AgenticRoleTypeAssistant, ContentBlocks: blocks}
-}
-
-// functionResultAgenticMessage 将记忆中的函数工具结果还原为 AgenticMessage。
-// 参数 results 表示从记忆正文解析出的函数工具结果列表。
-func functionResultAgenticMessage(results []agentFunctionToolResult) *schema.AgenticMessage {
-	blocks := make([]*schema.ContentBlock, 0, len(results))
-	for _, result := range results {
-		if strings.TrimSpace(result.ID) == "" && strings.TrimSpace(result.Name) == "" && result.Content == "" {
-			continue
-		}
-		blocks = append(blocks, schema.NewContentBlock(&schema.FunctionToolResult{
-			CallID: strings.TrimSpace(result.ID),
-			Name:   strings.TrimSpace(result.Name),
-			Content: []*schema.FunctionToolResultContentBlock{
-				{
-					Type: schema.FunctionToolResultContentBlockTypeText,
-					Text: &schema.UserInputText{Text: result.Content},
-				},
-			},
-		}))
-	}
-	return &schema.AgenticMessage{Role: schema.AgenticRoleTypeUser, ContentBlocks: blocks}
+	return strings.Join(lines, "\n"), true
 }
 
 // requestContextPrompt 生成仅用于本轮模型输入的请求上下文提示，不写入记忆。
@@ -1818,10 +1730,7 @@ func appendChatMessageMemoryEvents(agentName string, task string, variant *adk.T
 		calls := make([]agentFunctionToolCall, 0, len(msg.ToolCalls))
 		for _, call := range msg.ToolCalls {
 			calls = append(calls, agentFunctionToolCall{
-				ID:        strings.TrimSpace(call.ID),
-				Type:      strings.TrimSpace(call.Type),
-				Name:      strings.TrimSpace(call.Function.Name),
-				Arguments: call.Function.Arguments,
+				Name: strings.TrimSpace(call.Function.Name),
 			})
 		}
 		if content, ok := encodeFunctionCallMemoryContent(calls); ok {
@@ -1837,13 +1746,8 @@ func appendChatMessageMemoryEvents(agentName string, task string, variant *adk.T
 		return
 	}
 	if variant.Role == schema.Tool || msg.Role == schema.Tool {
-		name := strings.TrimSpace(msg.ToolName)
-		if name == "" {
-			name = strings.TrimSpace(variant.ToolName)
-		}
 		toolResult := agentFunctionToolResult{
 			ID:      strings.TrimSpace(msg.ToolCallID),
-			Name:    name,
 			Content: msg.Content,
 		}
 		if content, ok := encodeFunctionResultMemoryContent([]agentFunctionToolResult{toolResult}); ok {
@@ -1879,16 +1783,12 @@ func appendAgenticMessageMemoryEvents(agentName string, task string, variant *ad
 		}
 		if block.FunctionToolCall != nil {
 			calls = append(calls, agentFunctionToolCall{
-				ID:        strings.TrimSpace(block.FunctionToolCall.CallID),
-				Type:      "function",
-				Name:      strings.TrimSpace(block.FunctionToolCall.Name),
-				Arguments: block.FunctionToolCall.Arguments,
+				Name: strings.TrimSpace(block.FunctionToolCall.Name),
 			})
 		}
 		if block.FunctionToolResult != nil {
 			results = append(results, agentFunctionToolResult{
 				ID:      strings.TrimSpace(block.FunctionToolResult.CallID),
-				Name:    strings.TrimSpace(block.FunctionToolResult.Name),
 				Content: functionToolResultContentText(block.FunctionToolResult.Content),
 			})
 		}

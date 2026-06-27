@@ -1125,7 +1125,7 @@ func agentRepliesForSave(result AgentResult) []AgentReply {
 	return normalizedAgentReplies(result)
 }
 
-// agentMemoryEventsForSave 返回需要写入记忆表的助手回复事件列表。
+// agentMemoryEventsForSave 返回需要写入记忆表的助手回复和内部工具事件列表。
 // 参数 result 表示 Agent 本轮运行的最终结果。
 func agentMemoryEventsForSave(result AgentResult) []AgentMemoryEvent {
 	events := make([]AgentMemoryEvent, 0, len(result.MemoryEvents))
@@ -1170,7 +1170,7 @@ func agentMemoryEventsForSave(result AgentResult) []AgentMemoryEvent {
 // 参数 role 表示 Agent 记忆消息角色。
 func isMemoryEventRoleForSave(role MessageRole) bool {
 	switch role {
-	case MessageRoleAssistant:
+	case MessageRoleAssistant, MessageRoleFunctionCall, MessageRoleFunctionResult:
 		return true
 	default:
 		return false
