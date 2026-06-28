@@ -51,6 +51,24 @@ type approvalInvokableTool struct {
 	toolName string
 }
 
+// emptyJSONArgumentsInvokableTool 表示会把空参数恢复为 JSON 空对象的 InvokableTool 包装器。
+type emptyJSONArgumentsInvokableTool struct {
+	// inner 表示被包装的原始工具。
+	inner tool.InvokableTool
+}
+
+// Info 返回被包装工具的元信息。
+// 参数 ctx 表示请求上下文。
+func (t emptyJSONArgumentsInvokableTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
+	return t.inner.Info(ctx)
+}
+
+// InvokableRun 执行工具前把空白参数标准化为合法 JSON 空对象。
+// 参数 ctx 表示请求上下文；参数 argumentsInJSON 表示模型传入的工具参数 JSON 字符串；参数 opts 表示 Eino 工具调用选项。
+func (t emptyJSONArgumentsInvokableTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	return t.inner.InvokableRun(ctx, normalizeToolArgumentsJSON(argumentsInJSON), opts...)
+}
+
 // Info 返回被包装工具的元信息。
 // 参数 ctx 表示请求上下文。
 func (t approvalInvokableTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
@@ -92,6 +110,25 @@ func wrapToolApproval(baseTool tool.BaseTool, toolConfig runtimeAgentTool) (tool
 		return nil, fmt.Errorf("%w: 工具 %s 不支持人工审核包装", ErrAgentConfigInvalid, toolConfig.name)
 	}
 	return approvalInvokableTool{inner: invokableTool, toolName: toolConfig.name}, nil
+}
+
+// wrapEmptyJSONArguments 为普通可调用工具增加空 JSON 参数兼容包装。
+// 参数 baseTool 表示需要包装的工具。
+func wrapEmptyJSONArguments(baseTool tool.BaseTool) tool.BaseTool {
+	invokableTool, ok := baseTool.(tool.InvokableTool)
+	if !ok {
+		return baseTool
+	}
+	return emptyJSONArgumentsInvokableTool{inner: invokableTool}
+}
+
+// normalizeToolArgumentsJSON 将模型输出的空白工具参数恢复为合法 JSON 空对象。
+// 参数 argumentsInJSON 表示模型传入的工具参数 JSON 字符串。
+func normalizeToolArgumentsJSON(argumentsInJSON string) string {
+	if strings.TrimSpace(argumentsInJSON) == "" {
+		return "{}"
+	}
+	return argumentsInJSON
 }
 
 // toolApprovalRejectedJSON 生成用户拒绝执行工具后返回给 Agent 的 JSON 文本。

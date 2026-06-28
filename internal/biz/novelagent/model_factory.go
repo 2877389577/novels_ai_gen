@@ -1141,7 +1141,7 @@ func appendConfiguredAgentTool(tools []tool.BaseTool, baseTool tool.BaseTool, to
 	if err != nil {
 		return nil, err
 	}
-	return append(tools, wrappedTool), nil
+	return append(tools, wrapEmptyJSONArguments(wrappedTool)), nil
 }
 
 // childToolsConfig 创建子 Agent 自身使用的普通工具配置。
