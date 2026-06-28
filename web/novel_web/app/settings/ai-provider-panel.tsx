@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormE
 import Modal from "@douyinfe/semi-ui-19/lib/es/modal";
 import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
 import { createAIProvider, deleteAIProvider, fetchAIProviderModels, fetchAIProviderModelsByProviderID, fetchAIProviders, updateAIProvider, UnauthorizedError, type AIProviderItem, type AIProviderModelItem } from "../api";
-import { aiProviderAPITypeOptions, aiProviderDefaultPage, aiProviderPageSize, aiProviderTypeOptions } from "./settings-constants";
+import { aiProviderDefaultPage, aiProviderPageSize, aiProviderTypeOptions } from "./settings-constants";
 import { AIProviderContext } from "./ai-provider-context";
 import type { AIProviderFormMode, AIProviderFormState, AIProviderSettingsPanelProps } from "./types";
 import { createDefaultAIProviderFormState, formatAgentModelOption, formatOptionalText, formatTime, getErrorMessage, isAbortError, isAIProviderType, isProviderConnectionUnchanged, providerToAIProviderFormState, toAIProviderUpsertParams, uniqueAIProviderModelOptions, validateAIProviderForm } from "./settings-utils";
@@ -152,10 +152,7 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
         case "name":
           return { ...current, name: value };
         case "providerType":
-          if (value === "openai") {
-            return { ...current, providerType: value, apiType: "completions" };
-          }
-          return { ...current, providerType: value };
+          return { ...current, providerType: value, apiType: "completions" };
         case "apiKey":
           return { ...current, apiKey: value };
         case "baseURL":
@@ -166,8 +163,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
           return { ...current, defaultModel: value };
         case "priority":
           return { ...current, priority: value };
-        case "apiType":
-          return { ...current, apiType: value };
         default:
           return current;
       }
@@ -281,7 +276,7 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
   async function loadProviderModelOptions() {
     const providerType = form.providerType.trim();
     if (!isAIProviderType(providerType)) {
-      const message = "AI 提供商类型只能是 openai、claude 或 gemini";
+      const message = "AI 提供商类型只能是 openai 或 claude";
       setProviderModelError(message);
       Toast.error(message);
       return;
@@ -650,7 +645,7 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                   list="ai-provider-default-model-options"
                   value={form.defaultModel}
                   disabled={submitting}
-                  placeholder="例如 gpt-5、claude-sonnet-4-5 或 gemini-2.5-pro"
+                  placeholder="例如 gpt-5 或 claude-sonnet-4-5"
                   onChange={handleFormInputChange}
                 />
                 <button
@@ -694,24 +689,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                 onChange={handleFormInputChange}
               />
             </label>
-            <fieldset className="ai-provider-choice-field">
-              <legend>API 类型</legend>
-              <div className="ai-provider-choice-list">
-                {aiProviderAPITypeOptions.map((option) => (
-                  <label className="ai-provider-choice" key={option.value}>
-                    <input
-                      type="radio"
-                      name="apiType"
-                      value={option.value}
-                      checked={form.apiType === option.value}
-                      disabled={submitting || form.providerType === "openai"}
-                      onChange={handleFormInputChange}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
             <label className="ai-provider-toggle-field">
               <input
                 type="checkbox"

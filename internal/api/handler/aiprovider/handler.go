@@ -20,7 +20,7 @@ type Handler struct {
 type CreateRequest struct {
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" binding:"required" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示 AI 提供商 API Key，创建时不能为空。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
@@ -32,7 +32,7 @@ type CreateRequest struct {
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
+	// APIType 表示 AI 接口类型，只能是 completions。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时默认 true。
 	Enabled *bool `json:"enabled" example:"true"`
@@ -42,7 +42,7 @@ type CreateRequest struct {
 type UpdateRequest struct {
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" binding:"required" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。
 	APIKey string `json:"api_key" example:"sk-xxx"`
@@ -54,7 +54,7 @@ type UpdateRequest struct {
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
+	// APIType 表示 AI 接口类型，只能是 completions；为空时保存为 completions。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时保留原值。
 	Enabled *bool `json:"enabled" example:"true"`
@@ -144,7 +144,7 @@ type ProviderDeleteSuccessResponse struct {
 
 // ModelListRequest 表示 Swagger 文档中的 AI 提供商模型列表查询请求参数。
 type ModelListRequest struct {
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示用于请求官方模型列表接口的 API Key。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
@@ -440,11 +440,11 @@ func writeServiceError(c *gin.Context, err error) {
 	case errors.Is(err, bizaiprovider.ErrProviderTypeRequired):
 		response.Error(c, http.StatusBadRequest, "AI 提供商类型不能为空")
 	case errors.Is(err, bizaiprovider.ErrInvalidProviderType):
-		response.Error(c, http.StatusBadRequest, "AI 提供商类型只能是 openai、claude 或 gemini")
+		response.Error(c, http.StatusBadRequest, "AI 提供商类型只能是 openai 或 claude")
 	case errors.Is(err, bizaiprovider.ErrAPIKeyRequired):
 		response.Error(c, http.StatusBadRequest, "AI 提供商 API Key 不能为空")
 	case errors.Is(err, bizaiprovider.ErrInvalidAPIType):
-		response.Error(c, http.StatusBadRequest, "AI 接口类型只能是 response 或 completions")
+		response.Error(c, http.StatusBadRequest, "AI 接口类型只能是 completions")
 	case errors.Is(err, bizaiprovider.ErrInvalidPriority):
 		response.Error(c, http.StatusBadRequest, "AI 提供商优先级不能小于 0")
 	case errors.Is(err, bizaiprovider.ErrInvalidBaseURL):

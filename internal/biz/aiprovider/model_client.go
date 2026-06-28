@@ -16,7 +16,6 @@ const (
 	defaultModelListTimeout = 15 * time.Second
 	defaultOpenAIBaseURL    = "https://api.openai.com/v1"
 	defaultClaudeBaseURL    = "https://api.anthropic.com/v1"
-	defaultGeminiBaseURL    = "https://generativelanguage.googleapis.com/v1beta"
 	anthropicVersion        = "2023-06-01"
 	maxModelListBodyBytes   = 4 << 20
 )
@@ -46,8 +45,6 @@ func (c *ModelClient) ListModels(ctx context.Context, req ModelListRequest) (Mod
 		return c.listOpenAIModels(ctx, req)
 	case providerTypeClaude:
 		return c.listClaudeModels(ctx, req)
-	case providerTypeGemini:
-		return c.listGeminiModels(ctx, req)
 	default:
 		return ModelListResponse{}, ErrInvalidProviderType
 	}
@@ -122,50 +119,6 @@ func (c *ModelClient) listClaudeModels(ctx context.Context, req ModelListRequest
 			ID:          id,
 			DisplayName: displayName,
 			CreatedAt:   model.CreatedAt,
-		})
-	}
-	return ModelListResponse{Items: items}, nil
-}
-
-// listGeminiModels 按 Google Gemini 官方协议查询模型列表。
-// 参数 ctx 表示请求上下文；参数 req 表示模型列表查询请求参数。
-func (c *ModelClient) listGeminiModels(ctx context.Context, req ModelListRequest) (ModelListResponse, error) {
-	endpoint, err := modelEndpointURL(req.BaseURL, defaultGeminiBaseURL, "models")
-	if err != nil {
-		return ModelListResponse{}, err
-	}
-	parsed, err := url.Parse(endpoint)
-	if err != nil {
-		return ModelListResponse{}, ErrInvalidBaseURL
-	}
-	query := parsed.Query()
-	query.Set("key", req.APIKey)
-	parsed.RawQuery = query.Encode()
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
-	if err != nil {
-		return ModelListResponse{}, fmt.Errorf("%w: 创建 Gemini 模型列表请求失败", ErrModelListUnavailable)
-	}
-
-	var payload geminiModelListResponse
-	if err := c.doJSON(httpReq, req.HTTPProxy, &payload); err != nil {
-		return ModelListResponse{}, err
-	}
-
-	items := make([]ModelInfo, 0, len(payload.Models))
-	for _, model := range payload.Models {
-		id := strings.TrimPrefix(strings.TrimSpace(model.Name), "models/")
-		if id == "" {
-			continue
-		}
-		displayName := strings.TrimSpace(model.DisplayName)
-		if displayName == "" {
-			displayName = id
-		}
-		items = append(items, ModelInfo{
-			ID:                         id,
-			DisplayName:                displayName,
-			SupportedGenerationMethods: model.SupportedGenerationMethods,
 		})
 	}
 	return ModelListResponse{Items: items}, nil
@@ -268,20 +221,4 @@ type claudeModel struct {
 	DisplayName string `json:"display_name"`
 	// CreatedAt 表示模型创建时间。
 	CreatedAt string `json:"created_at"`
-}
-
-// geminiModelListResponse 表示 Gemini 模型列表响应。
-type geminiModelListResponse struct {
-	// Models 表示 Gemini 返回的模型数组。
-	Models []geminiModel `json:"models"`
-}
-
-// geminiModel 表示 Gemini 模型列表中的单个模型。
-type geminiModel struct {
-	// Name 表示模型资源名称，通常以 models/ 开头。
-	Name string `json:"name"`
-	// DisplayName 表示模型展示名称。
-	DisplayName string `json:"displayName"`
-	// SupportedGenerationMethods 表示模型支持的生成能力。
-	SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
 }
