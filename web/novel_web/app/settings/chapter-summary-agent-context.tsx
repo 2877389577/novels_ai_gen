@@ -87,6 +87,7 @@ export type ChapterSummaryAgentTextField =
   | "description"
   | "instruction"
   | "maxIterations"
+  | "userAgent"
   | "retryMaxRetries"
   | "retryBackoffMS";
 
@@ -288,13 +289,18 @@ export function ChapterSummaryAgentSettingsProvider(
           },
           changeProvider(nextProviderId) {
             setForm(function updateProvider(current) {
-              return { ...current, providerId: nextProviderId, model: "" };
+              return {
+                ...current,
+                providerId: nextProviderId,
+                model: "",
+                userAgent: "",
+              };
             });
             void loadModelOptions(nextProviderId);
           },
           changeModel(model) {
             setForm(function updateModel(current) {
-              return { ...current, model };
+              return { ...current, model, userAgent: "" };
             });
           },
           changeReasoningEffort(reasoningEffort) {

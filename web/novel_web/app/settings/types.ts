@@ -101,6 +101,8 @@ export interface AgentSupervisorFormState {
   model: string;
   // reasoningEffort 表示顶层 Agent 使用 GPT 类模型时的推理强度。
   reasoningEffort: string;
+  // userAgent 表示顶层 Agent 自定义模型请求使用的 User-Agent 头。
+  userAgent: string;
 }
 
 // AgentChildFormState 表示子 Agent 表单输入状态。
@@ -129,6 +131,8 @@ export interface AgentChildFormState {
   model: string;
   // reasoningEffort 表示该子 Agent 使用 GPT 类模型时的推理强度。
   reasoningEffort: string;
+  // userAgent 表示该子 Agent 自定义模型请求使用的 User-Agent 头。
+  userAgent: string;
   // parametersText 表示子 Agent 工具参数 JSON 文本。
   parametersText: string;
 }
@@ -158,7 +162,8 @@ export type AgentChildTextField =
   | "task"
   | "description"
   | "instruction"
-  | "maxIterations";
+  | "maxIterations"
+  | "userAgent";
 
 // AgentSettingsFormState 表示智能体配置页完整表单状态。
 export interface AgentSettingsFormState {
@@ -198,6 +203,8 @@ export interface ChapterSummaryAgentFormState {
   model: string;
   // reasoningEffort 表示章节概要 Agent 使用 GPT 类模型时的推理强度。
   reasoningEffort: string;
+  // userAgent 表示章节概要 Agent 自定义模型请求使用的 User-Agent 头。
+  userAgent: string;
   // retryMaxRetries 表示模型失败最大重试次数配置文本。
   retryMaxRetries: string;
   // retryBackoffMS 表示模型失败重试间隔毫秒数配置文本。

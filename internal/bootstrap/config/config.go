@@ -143,6 +143,8 @@ type AgentDefinition struct {
 	Model string `mapstructure:"model" json:"model" yaml:"model"`
 	// ReasoningEffort 表示 GPT 类模型使用的推理强度，可选值为 low、medium、high，空值由运行时默认处理。
 	ReasoningEffort string `mapstructure:"reasoning_effort" json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
+	// UserAgent 表示该 Agent 自定义模型请求使用的 User-Agent 头，空值表示使用模型 SDK 默认值。
+	UserAgent string `mapstructure:"user_agent" json:"user_agent,omitempty" yaml:"user_agent,omitempty"`
 	// Task 表示子 Agent 产生流式事件时返回给前端的任务标识，顶层 Agent 可留空。
 	Task string `mapstructure:"task" json:"task" yaml:"task,omitempty"`
 	// Description 表示 Agent 能力描述，供顶层 Agent 判断是否调用该子 Agent。

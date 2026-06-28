@@ -747,6 +747,7 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 		agentCfg.supervisor.providerID,
 		agentCfg.supervisor.model,
 		agentCfg.supervisor.reasoningEffort,
+		agentCfg.supervisor.userAgent,
 	)
 	if err != nil {
 		return RuntimeModelConfig{}, err
@@ -766,6 +767,7 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 			child.providerID,
 			child.model,
 			child.reasoningEffort,
+			child.userAgent,
 		)
 		if err != nil {
 			return RuntimeModelConfig{}, err
@@ -779,13 +781,14 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 }
 
 // agentModelOverrideConfig 读取单个 Agent 模型对应的提供商凭据。
-// 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示模型提供商 ID；参数 model 表示配置文件中的模型标识；参数 reasoningEffort 表示 GPT 类模型推理强度配置。
+// 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示模型提供商 ID；参数 model 表示配置文件中的模型标识；参数 reasoningEffort 表示 GPT 类模型推理强度配置；参数 userAgent 表示该 Agent 模型请求使用的 User-Agent 头。
 func (s *Service) agentModelOverrideConfig(
 	ctx context.Context,
 	label string,
 	providerID uint64,
 	model string,
 	reasoningEffort string,
+	userAgent string,
 ) (ModelConfig, error) {
 	provider, apiKey, err := s.providerCredential(ctx, providerID)
 	if err != nil {
@@ -803,6 +806,7 @@ func (s *Service) agentModelOverrideConfig(
 		BaseURL:         provider.BaseURL,
 		Model:           model,
 		ReasoningEffort: strings.TrimSpace(reasoningEffort),
+		UserAgent:       strings.TrimSpace(userAgent),
 	}, nil
 }
 

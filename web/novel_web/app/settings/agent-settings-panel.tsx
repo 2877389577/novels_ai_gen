@@ -377,6 +377,7 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           ...current.supervisor,
           providerId,
           model: "",
+          userAgent: "",
         },
       };
     });
@@ -393,6 +394,7 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
         supervisor: {
           ...current.supervisor,
           model,
+          userAgent: "",
         },
       };
     });
@@ -458,7 +460,7 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
   // 参数 index 表示子 Agent 在表单列表中的位置；参数 providerId 表示新的 AI 提供商 ID 文本。
   function handleChildModelProviderChange(index: number, providerId: string) {
     updateChildForm(index, function updateChildModelProvider(child) {
-      return { ...child, providerId, model: "" };
+      return { ...child, providerId, model: "", userAgent: "" };
     });
     void loadAgentModelOptions(providerId);
   }
@@ -467,7 +469,7 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
   // 参数 index 表示子 Agent 在表单列表中的位置；参数 model 表示新的模型标识。
   function handleChildModelChange(index: number, model: string) {
     updateChildForm(index, function updateChildModel(child) {
-      return { ...child, model };
+      return { ...child, model, userAgent: "" };
     });
   }
 

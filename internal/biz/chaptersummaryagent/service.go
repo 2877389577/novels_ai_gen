@@ -273,6 +273,7 @@ func (s *Service) modelConfig(ctx context.Context, agentCfg runtimeChapterSummar
 		BaseURL:         provider.BaseURL,
 		Model:           agentCfg.model,
 		ReasoningEffort: agentCfg.reasoningEffort,
+		UserAgent:       agentCfg.userAgent,
 	}, nil
 }
 

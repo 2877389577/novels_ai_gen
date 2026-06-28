@@ -149,6 +149,11 @@ function ChapterSummaryAgentModelSection() {
     actions.changeReasoningEffort(event.target.value);
   }
 
+  // handleUserAgentChange 处理自定义 User-Agent 输入。
+  function handleUserAgentChange(event: ChangeEvent<HTMLInputElement>) {
+    actions.changeTextField("userAgent", event.target.value);
+  }
+
   return (
     <section className="agent-settings-section" aria-labelledby="chapter-summary-model-title">
       <div className="ai-provider-form-heading">
@@ -199,6 +204,15 @@ function ChapterSummaryAgentModelSection() {
           >
             {agentReasoningEffortOptions.map(renderReasoningEffortOption)}
           </select>
+        </label>
+        <label className="ai-provider-field">
+          <span>User-Agent</span>
+          <input
+            type="text"
+            value={state.form.userAgent}
+            disabled={!state.form.providerId || !state.form.model}
+            onChange={handleUserAgentChange}
+          />
         </label>
       </div>
     </section>
