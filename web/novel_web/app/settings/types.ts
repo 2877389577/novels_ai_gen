@@ -73,6 +73,8 @@ export interface AIProviderFormState {
   apiKey: string;
   // baseURL 表示 AI 提供商接口基础地址。
   baseURL: string;
+  // httpProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址。
+  httpProxy: string;
   // defaultModel 表示模型列表不可用时使用的默认模型标识。
   defaultModel: string;
   // priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。

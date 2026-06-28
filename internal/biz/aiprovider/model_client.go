@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"novels_ai_gen/internal/aihttp"
 	"strings"
 	"time"
 )
@@ -28,8 +29,12 @@ type ModelClient struct {
 
 // NewModelClient 创建官方模型列表查询器。
 func NewModelClient() *ModelClient {
+	client, err := aihttp.NewClient(aihttp.ClientConfig{Timeout: defaultModelListTimeout})
+	if err != nil {
+		return &ModelClient{}
+	}
 	return &ModelClient{
-		client: &http.Client{Timeout: defaultModelListTimeout},
+		client: client,
 	}
 }
 
@@ -63,7 +68,7 @@ func (c *ModelClient) listOpenAIModels(ctx context.Context, req ModelListRequest
 	httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
 
 	var payload openAIModelListResponse
-	if err := c.doJSON(httpReq, &payload); err != nil {
+	if err := c.doJSON(httpReq, req.HTTPProxy, &payload); err != nil {
 		return ModelListResponse{}, err
 	}
 
@@ -99,7 +104,7 @@ func (c *ModelClient) listClaudeModels(ctx context.Context, req ModelListRequest
 	httpReq.Header.Set("anthropic-version", anthropicVersion)
 
 	var payload claudeModelListResponse
-	if err := c.doJSON(httpReq, &payload); err != nil {
+	if err := c.doJSON(httpReq, req.HTTPProxy, &payload); err != nil {
 		return ModelListResponse{}, err
 	}
 
@@ -143,7 +148,7 @@ func (c *ModelClient) listGeminiModels(ctx context.Context, req ModelListRequest
 	}
 
 	var payload geminiModelListResponse
-	if err := c.doJSON(httpReq, &payload); err != nil {
+	if err := c.doJSON(httpReq, req.HTTPProxy, &payload); err != nil {
 		return ModelListResponse{}, err
 	}
 
@@ -167,11 +172,11 @@ func (c *ModelClient) listGeminiModels(ctx context.Context, req ModelListRequest
 }
 
 // doJSON 执行 HTTP 请求并解析 JSON 响应。
-// 参数 req 表示已经构造好的 HTTP 请求；参数 target 表示 JSON 解析目标。
-func (c *ModelClient) doJSON(req *http.Request, target any) error {
-	client := c.client
-	if client == nil {
-		client = http.DefaultClient
+// 参数 req 表示已经构造好的 HTTP 请求；参数 httpProxy 表示本次请求使用的 HTTP 代理地址；参数 target 表示 JSON 解析目标。
+func (c *ModelClient) doJSON(req *http.Request, httpProxy string, target any) error {
+	client, err := c.clientForProxy(httpProxy)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidHTTPProxy, err)
 	}
 
 	resp, err := client.Do(req)
@@ -190,6 +195,19 @@ func (c *ModelClient) doJSON(req *http.Request, target any) error {
 		return fmt.Errorf("%w: 解析官方模型列表响应失败", ErrModelListInvalid)
 	}
 	return nil
+}
+
+// clientForProxy 返回指定 HTTP 代理配置对应的请求客户端。
+// 参数 httpProxy 表示本次请求使用的 HTTP 代理地址，空值复用默认无代理客户端。
+func (c *ModelClient) clientForProxy(httpProxy string) (*http.Client, error) {
+	httpProxy = strings.TrimSpace(httpProxy)
+	if httpProxy == "" && c.client != nil {
+		return c.client, nil
+	}
+	return aihttp.NewClient(aihttp.ClientConfig{
+		HTTPProxy: httpProxy,
+		Timeout:   defaultModelListTimeout,
+	})
 }
 
 // modelEndpointURL 拼接模型列表接口地址。

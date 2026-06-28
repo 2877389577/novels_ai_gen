@@ -3,6 +3,7 @@ package aiprovider
 import (
 	"context"
 	"fmt"
+	"novels_ai_gen/internal/aihttp"
 	"strings"
 )
 
@@ -83,6 +84,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (ProviderRespon
 		APIKeyCiphertext: ciphertext,
 		APIKeyMask:       maskAPIKey(req.APIKey),
 		BaseURL:          req.BaseURL,
+		HTTPProxy:        req.HTTPProxy,
 		DefaultModel:     req.DefaultModel,
 		Priority:         req.Priority,
 		APIType:          providerAPIType(req.ProviderType, req.APIType),
@@ -163,6 +165,7 @@ func applyUpdateRequest(cipher *Cipher, item *Provider, req UpdateRequest) error
 	item.Name = req.Name
 	item.ProviderType = req.ProviderType
 	item.BaseURL = req.BaseURL
+	item.HTTPProxy = req.HTTPProxy
 	item.DefaultModel = req.DefaultModel
 	item.Priority = req.Priority
 	if item.ProviderType == providerTypeOpenAI {
@@ -219,6 +222,7 @@ func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64) (ModelL
 		ProviderType: item.ProviderType,
 		APIKey:       apiKey,
 		BaseURL:      item.BaseURL,
+		HTTPProxy:    item.HTTPProxy,
 	})
 	if err != nil {
 		if fallback, ok := defaultModelList(item.DefaultModel); ok {
@@ -262,6 +266,7 @@ func normalizeCreateRequest(req CreateRequest) CreateRequest {
 	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
 	req.APIKey = strings.TrimSpace(req.APIKey)
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
+	req.HTTPProxy = strings.TrimSpace(req.HTTPProxy)
 	req.DefaultModel = strings.TrimSpace(req.DefaultModel)
 	req.APIType = strings.ToLower(strings.TrimSpace(req.APIType))
 	return req
@@ -274,6 +279,7 @@ func normalizeUpdateRequest(req UpdateRequest) UpdateRequest {
 	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
 	req.APIKey = strings.TrimSpace(req.APIKey)
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
+	req.HTTPProxy = strings.TrimSpace(req.HTTPProxy)
 	req.DefaultModel = strings.TrimSpace(req.DefaultModel)
 	req.APIType = strings.ToLower(strings.TrimSpace(req.APIType))
 	return req
@@ -285,6 +291,7 @@ func normalizeModelListRequest(req ModelListRequest) ModelListRequest {
 	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
 	req.APIKey = strings.TrimSpace(req.APIKey)
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
+	req.HTTPProxy = strings.TrimSpace(req.HTTPProxy)
 	return req
 }
 
@@ -324,6 +331,9 @@ func validateCreateRequest(req CreateRequest) error {
 	if req.Priority < 0 {
 		return ErrInvalidPriority
 	}
+	if !aihttp.IsValidHTTPProxy(req.HTTPProxy) {
+		return ErrInvalidHTTPProxy
+	}
 	return nil
 }
 
@@ -345,6 +355,9 @@ func validateUpdateRequest(req UpdateRequest) error {
 	if req.Priority < 0 {
 		return ErrInvalidPriority
 	}
+	if !aihttp.IsValidHTTPProxy(req.HTTPProxy) {
+		return ErrInvalidHTTPProxy
+	}
 	return nil
 }
 
@@ -359,6 +372,9 @@ func validateModelListRequest(req ModelListRequest) error {
 	}
 	if req.APIKey == "" {
 		return ErrAPIKeyRequired
+	}
+	if !aihttp.IsValidHTTPProxy(req.HTTPProxy) {
+		return ErrInvalidHTTPProxy
 	}
 	return nil
 }
@@ -421,6 +437,7 @@ func toResponse(item Provider) ProviderResponse {
 		ProviderType: item.ProviderType,
 		MaskedAPIKey: item.APIKeyMask,
 		BaseURL:      item.BaseURL,
+		HTTPProxy:    item.HTTPProxy,
 		DefaultModel: item.DefaultModel,
 		Priority:     item.Priority,
 		APIType:      item.APIType,

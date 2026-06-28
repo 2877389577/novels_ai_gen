@@ -140,7 +140,10 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
   function handleFormInputChange(event: ChangeEvent<HTMLInputElement>) {
     const { name, value } = event.target;
     const shouldClearModelOptions =
-      name === "providerType" || name === "apiKey" || name === "baseURL";
+      name === "providerType" ||
+      name === "apiKey" ||
+      name === "baseURL" ||
+      name === "httpProxy";
     if (shouldClearModelOptions) {
       clearProviderModelOptions();
     }
@@ -157,6 +160,8 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
           return { ...current, apiKey: value };
         case "baseURL":
           return { ...current, baseURL: value };
+        case "httpProxy":
+          return { ...current, httpProxy: value };
         case "defaultModel":
           return { ...current, defaultModel: value };
         case "priority":
@@ -284,6 +289,7 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
 
     const apiKey = form.apiKey.trim();
     const baseURL = form.baseURL.trim();
+    const httpProxy = form.httpProxy.trim();
     const canUseSavedProvider =
       formMode === "edit" &&
       editingProvider !== null &&
@@ -307,10 +313,11 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
       const data = canUseSavedProvider
         ? await fetchAIProviderModelsByProviderID(editingProvider.id)
         : await fetchAIProviderModels({
-            provider_type: providerType,
-            api_key: apiKey,
-            base_url: baseURL,
-          });
+          provider_type: providerType,
+          api_key: apiKey,
+          base_url: baseURL,
+          http_proxy: httpProxy,
+        });
       const options = uniqueAIProviderModelOptions(data.items);
       setProviderModelOptions(options);
       if (options.length === 0) {
@@ -497,6 +504,12 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                       </dd>
                     </div>
                     <div>
+                      <dt>HTTP 代理</dt>
+                      <dd title={provider.http_proxy}>
+                        {formatOptionalText(provider.http_proxy)}
+                      </dd>
+                    </div>
+                    <div>
                       <dt>默认模型</dt>
                       <dd title={provider.default_model}>
                         {formatOptionalText(provider.default_model)}
@@ -616,6 +629,16 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                 value={form.baseURL}
                 disabled={submitting}
                 placeholder="https://api.openai.com/v1"
+                onChange={handleFormInputChange}
+              />
+            </label>
+            <label className="ai-provider-field ai-provider-field-wide">
+              <span>HTTP 代理</span>
+              <input
+                name="httpProxy"
+                value={form.httpProxy}
+                disabled={submitting}
+                placeholder="http://127.0.0.1:7890"
                 onChange={handleFormInputChange}
               />
             </label>

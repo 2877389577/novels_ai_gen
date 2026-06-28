@@ -16,6 +16,8 @@ type Provider struct {
 	APIKeyMask string `json:"masked_api_key" gorm:"column:api_key_mask;type:varchar(255);not null;comment:API Key掩码，仅用于列表和详情展示" example:"sk-p...abcd"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" gorm:"column:base_url;type:varchar(1000);comment:AI提供商接口基础地址，可以为空" example:"https://api.openai.com/v1"`
+	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
+	HTTPProxy string `json:"http_proxy" gorm:"column:http_proxy;type:varchar(1000);comment:AI提供商网络请求使用的HTTP代理地址，可以为空" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" gorm:"column:default_model;type:varchar(255);comment:模型列表不可用时使用的默认模型标识，可以为空" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
@@ -45,6 +47,8 @@ type CreateRequest struct {
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
+	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
@@ -65,6 +69,8 @@ type UpdateRequest struct {
 	APIKey string `json:"api_key" example:"sk-xxx"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
+	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
@@ -95,6 +101,8 @@ type ProviderResponse struct {
 	MaskedAPIKey string `json:"masked_api_key" example:"sk-p...abcd"`
 	// BaseURL 表示 AI 提供商接口基础地址。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址。
+	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
@@ -129,6 +137,8 @@ type ModelListRequest struct {
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
 	// BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// HTTPProxy 表示请求官方模型列表时使用的 HTTP 代理地址；为空时不使用代理。
+	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 }
 
 // ModelInfo 表示 AI 提供商官方模型列表中的单个模型。

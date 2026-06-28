@@ -19,6 +19,8 @@ var (
 	ErrInvalidPriority = errors.New("ai provider priority invalid")
 	// ErrInvalidBaseURL 表示 AI 提供商接口基础地址格式无效。
 	ErrInvalidBaseURL = errors.New("ai provider base url invalid")
+	// ErrInvalidHTTPProxy 表示 AI 提供商 HTTP 代理地址格式无效。
+	ErrInvalidHTTPProxy = errors.New("ai provider http proxy invalid")
 	// ErrModelListUnavailable 表示官方模型列表接口暂时不可用。
 	ErrModelListUnavailable = errors.New("ai provider model list unavailable")
 	// ErrModelListInvalid 表示官方模型列表响应格式无效。

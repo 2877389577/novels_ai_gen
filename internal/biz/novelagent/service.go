@@ -804,6 +804,7 @@ func (s *Service) agentModelOverrideConfig(
 		APIType:         provider.APIType,
 		APIKey:          apiKey,
 		BaseURL:         provider.BaseURL,
+		HTTPProxy:       provider.HTTPProxy,
 		Model:           model,
 		ReasoningEffort: strings.TrimSpace(reasoningEffort),
 		UserAgent:       strings.TrimSpace(userAgent),

@@ -231,6 +231,8 @@ type ModelConfig struct {
 	APIKey string
 	// BaseURL 表示 AI 提供商接口基础地址。
 	BaseURL string
+	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，空值表示不使用代理。
+	HTTPProxy string
 	// Model 表示本次对话使用的模型标识。
 	Model string
 	// ReasoningEffort 表示 GPT 类模型使用的推理强度。
