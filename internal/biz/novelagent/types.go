@@ -235,6 +235,8 @@ type ModelConfig struct {
 	Model string
 	// ReasoningEffort 表示 GPT 类模型使用的推理强度。
 	ReasoningEffort string
+	// UserAgent 表示该模型请求使用的 User-Agent 头，空值表示使用 SDK 默认值。
+	UserAgent string
 }
 
 // RuntimeRetryConfig 表示一次 Agent 运行中的模型失败重试配置。

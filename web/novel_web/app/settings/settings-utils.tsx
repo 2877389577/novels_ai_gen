@@ -48,6 +48,7 @@ const defaultAgentSettingsFormState: AgentSettingsFormState = {
     providerId: "",
     model: "",
     reasoningEffort: "",
+    userAgent: "",
   },
   children: [],
 };
@@ -60,6 +61,7 @@ const defaultChapterSummaryAgentFormState: ChapterSummaryAgentFormState = {
   providerId: "",
   model: "",
   reasoningEffort: "",
+  userAgent: "",
   retryMaxRetries: "0",
   retryBackoffMS: "300",
 };
@@ -98,6 +100,7 @@ export function createDefaultAgentChildFormState(): AgentChildFormState {
     providerId: "",
     model: "",
     reasoningEffort: "",
+    userAgent: "",
     parametersText: "{}",
   };
 }
@@ -192,6 +195,7 @@ export function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormSta
           : "",
       model: agent.supervisor?.model ?? "",
       reasoningEffort: agent.supervisor?.reasoning_effort ?? "",
+      userAgent: agent.supervisor?.user_agent ?? "",
     },
     children: (agent.agent ?? []).map(agentDefinitionToChildFormState),
   };
@@ -225,6 +229,7 @@ export function agentDefinitionToChildFormState(
         : "",
     model: definition.model ?? "",
     reasoningEffort: definition.reasoning_effort ?? "",
+    userAgent: definition.user_agent ?? "",
     parametersText: formatAgentParameters(definition.parameters),
   };
 }
@@ -404,6 +409,7 @@ export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
       provider_id: childModel.providerId,
       model: childModel.model,
       reasoning_effort: child.reasoningEffort.trim(),
+      user_agent: child.userAgent.trim(),
       task: childTask,
       description: childDescription,
       instruction: childInstruction,
@@ -438,6 +444,7 @@ export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
         provider_id: supervisorModel.providerId,
         model: supervisorModel.model,
         reasoning_effort: form.supervisor.reasoningEffort.trim(),
+        user_agent: form.supervisor.userAgent.trim(),
         task: "",
         description: supervisorDescription,
         instruction: supervisorInstruction,
@@ -469,6 +476,7 @@ export function chapterSummaryAgentConfigToFormState(
         : "",
     model: agent?.model ?? "",
     reasoningEffort: agent?.reasoning_effort ?? "",
+    userAgent: agent?.user_agent ?? "",
     retryMaxRetries: String(config.retry?.max_retries ?? 0),
     retryBackoffMS: String(config.retry?.backoff_ms ?? 300),
   };
@@ -539,6 +547,7 @@ export function buildChapterSummaryAgentConfigFromForm(
         provider_id: model.providerId,
         model: model.model,
         reasoning_effort: form.reasoningEffort.trim(),
+        user_agent: form.userAgent.trim(),
         task: "generate_summary",
         description,
         instruction: form.instruction,

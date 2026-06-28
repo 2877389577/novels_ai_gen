@@ -159,6 +159,20 @@ function SupervisorAgentEditor() {
               {agentReasoningEffortOptions.map(renderReasoningEffortOption)}
             </select>
           </label>
+          <label className="ai-provider-field">
+            <span>User-Agent</span>
+            <input
+              name="userAgent"
+              value={state.form.supervisor.userAgent}
+              disabled={
+                state.loading ||
+                state.saving ||
+                !state.form.supervisor.providerId ||
+                !state.form.supervisor.model
+              }
+              onChange={actions.changeSupervisorInput}
+            />
+          </label>
           <label className="ai-provider-field ai-provider-field-wide">
             <span>Description</span>
             <input
@@ -464,6 +478,20 @@ function ChildAgentModelFields() {
             );
           })}
         </select>
+      </label>
+      <label className="ai-provider-field">
+        <span>User-Agent</span>
+        <input
+          value={editingChild.userAgent}
+          disabled={state.saving || !editingChild.providerId || !editingChild.model}
+          onChange={function handleChildUserAgentChange(event) {
+            actions.changeChildInput(
+              state.editingChildIndex,
+              "userAgent",
+              event.target.value,
+            );
+          }}
+        />
       </label>
     </>
   );

@@ -22,6 +22,8 @@ type runtimeChapterSummaryAgentConfig struct {
 	model string
 	// reasoningEffort 表示 GPT 类模型使用的推理强度。
 	reasoningEffort string
+	// userAgent 表示章节概要 Agent 自定义模型请求使用的 User-Agent 头。
+	userAgent string
 	// description 表示章节概要 Agent 能力描述。
 	description string
 	// instruction 表示章节概要 Agent 系统提示词。
@@ -53,6 +55,7 @@ func newRuntimeChapterSummaryAgentConfig(cfg appconfig.ChapterSummaryAgentConfig
 	instruction := strings.TrimSpace(def.Instruction)
 	model := strings.TrimSpace(def.Model)
 	reasoningEffort := strings.ToLower(strings.TrimSpace(def.ReasoningEffort))
+	userAgent := strings.TrimSpace(def.UserAgent)
 
 	if name == "" {
 		return runtimeChapterSummaryAgentConfig{}, fmt.Errorf("%w: 章节概要 Agent name 不能为空", ErrChapterSummaryAgentConfigInvalid)
@@ -82,6 +85,7 @@ func newRuntimeChapterSummaryAgentConfig(cfg appconfig.ChapterSummaryAgentConfig
 		providerID:      def.ProviderID,
 		model:           model,
 		reasoningEffort: reasoningEffort,
+		userAgent:       userAgent,
 		description:     description,
 		instruction:     def.Instruction,
 		maxIterations:   def.MaxIterations,
@@ -133,6 +137,7 @@ func isEmptyChapterSummaryAgentDefinition(def appconfig.AgentDefinition) bool {
 		strings.TrimSpace(def.Instruction) == "" &&
 		strings.TrimSpace(def.Model) == "" &&
 		strings.TrimSpace(def.ReasoningEffort) == "" &&
+		strings.TrimSpace(def.UserAgent) == "" &&
 		def.ProviderID == 0 &&
 		def.MaxIterations == 0 &&
 		def.Enabled == nil &&

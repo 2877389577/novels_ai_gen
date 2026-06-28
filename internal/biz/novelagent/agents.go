@@ -28,6 +28,8 @@ type runtimeAgentDefinition struct {
 	model string
 	// reasoningEffort 表示 GPT 类模型使用的推理强度。
 	reasoningEffort string
+	// userAgent 表示该 Agent 自定义模型请求使用的 User-Agent 头。
+	userAgent string
 	// task 表示子 Agent 产生流式事件时返回给前端的任务标识。
 	task string
 	// shareChatHistory 表示父 Agent 调用该子 Agent 时是否传入完整聊天历史。
@@ -225,6 +227,7 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition, registry map[string
 		providerID:      def.ProviderID,
 		model:           model,
 		reasoningEffort: strings.TrimSpace(def.ReasoningEffort),
+		userAgent:       strings.TrimSpace(def.UserAgent),
 		description:     description,
 		instruction:     instruction,
 		maxIterations:   maxIterations,
@@ -284,6 +287,7 @@ func normalizeChildAgent(def appconfig.AgentDefinition, registry map[string]runt
 		providerID:       def.ProviderID,
 		model:            model,
 		reasoningEffort:  strings.TrimSpace(def.ReasoningEffort),
+		userAgent:        strings.TrimSpace(def.UserAgent),
 		task:             task,
 		shareChatHistory: shareChatHistory,
 		description:      description,
@@ -480,6 +484,7 @@ func isEmptyAgentDefinition(def appconfig.AgentDefinition) bool {
 		strings.TrimSpace(def.Instruction) == "" &&
 		strings.TrimSpace(def.Model) == "" &&
 		strings.TrimSpace(def.ReasoningEffort) == "" &&
+		strings.TrimSpace(def.UserAgent) == "" &&
 		def.ProviderID == 0 &&
 		def.MaxIterations == 0 &&
 		def.Enabled == nil &&

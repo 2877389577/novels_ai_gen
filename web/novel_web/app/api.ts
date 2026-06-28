@@ -561,6 +561,8 @@ export interface AgentDefinition {
   model: string;
   // reasoning_effort 表示 GPT 类模型使用的推理强度。
   reasoning_effort?: string;
+  // user_agent 表示该 Agent 自定义模型请求使用的 User-Agent 头。
+  user_agent?: string;
   // task 表示子 Agent 产生流式事件时返回给前端的任务标识。
   task: string;
   // description 表示 Agent 能力描述。

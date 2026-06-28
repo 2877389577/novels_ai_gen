@@ -227,6 +227,9 @@ func (f *EinoAgentRuntimeFactory) newChatModel(ctx context.Context, cfg ModelCon
 		Model:   cfg.Model,
 		Timeout: defaultTimeout,
 	}
+	if httpClient := newUserAgentHTTPClient(cfg.UserAgent, defaultTimeout); httpClient != nil {
+		modelConfig.HTTPClient = httpClient
+	}
 
 	reasoningEffort, ok, err := chatModelReasoningEffort(cfg)
 	if err != nil {
@@ -251,24 +254,32 @@ func (f *EinoAgentRuntimeFactory) newAgenticModel(ctx context.Context, cfg Model
 	case providerTypeOpenAI:
 		timeout := defaultTimeout
 		maxRetries := retry.MaxRetries
-		model, err := agenticopenai.NewResponsesModel(ctx, &agenticopenai.ResponsesConfig{
+		modelConfig := &agenticopenai.ResponsesConfig{
 			APIKey:     cfg.APIKey,
 			BaseURL:    cfg.BaseURL,
 			Model:      cfg.Model,
 			Timeout:    &timeout,
 			MaxRetries: &maxRetries,
-		})
+		}
+		if httpClient := newUserAgentHTTPClient(cfg.UserAgent, defaultTimeout); httpClient != nil {
+			modelConfig.HTTPClient = httpClient
+		}
+		model, err := agenticopenai.NewResponsesModel(ctx, modelConfig)
 		if err != nil {
 			return nil, err
 		}
 		return model, nil
 	case providerTypeClaude:
+		httpClient := &http.Client{Timeout: defaultTimeout}
+		if customHTTPClient := newUserAgentHTTPClient(cfg.UserAgent, defaultTimeout); customHTTPClient != nil {
+			httpClient = customHTTPClient
+		}
 		model, err := agenticclaude.New(ctx, &agenticclaude.Config{
 			APIKey:     cfg.APIKey,
 			BaseURL:    cfg.BaseURL,
 			Model:      cfg.Model,
 			MaxTokens:  defaultMaxTokens,
-			HTTPClient: &http.Client{Timeout: defaultTimeout},
+			HTTPClient: httpClient,
 		})
 		if err != nil {
 			return nil, err
@@ -283,6 +294,9 @@ func (f *EinoAgentRuntimeFactory) newAgenticModel(ctx context.Context, cfg Model
 				APIVersion: "v1beta",
 				Timeout:    &timeout,
 			},
+		}
+		if httpClient := newUserAgentHTTPClient(cfg.UserAgent, defaultTimeout); httpClient != nil {
+			clientConfig.HTTPClient = httpClient
 		}
 		client, err := genai.NewClient(ctx, clientConfig)
 		if err != nil {
@@ -393,7 +407,53 @@ func normalizeModelConfig(cfg ModelConfig) ModelConfig {
 	cfg.BaseURL = strings.TrimSpace(cfg.BaseURL)
 	cfg.Model = strings.TrimSpace(cfg.Model)
 	cfg.ReasoningEffort = strings.ToLower(strings.TrimSpace(cfg.ReasoningEffort))
+	cfg.UserAgent = strings.TrimSpace(cfg.UserAgent)
 	return cfg
+}
+
+// userAgentRoundTripper 表示为模型请求写入固定 User-Agent 的 HTTP 传输层。
+type userAgentRoundTripper struct {
+	// userAgent 表示写入请求的 User-Agent 头。
+	userAgent string
+	// base 表示实际发送请求的底层 RoundTripper。
+	base http.RoundTripper
+}
+
+// RoundTrip 克隆请求并写入 User-Agent 后交给底层传输层发送。
+// 参数 req 表示本次模型请求。
+func (t userAgentRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req == nil {
+		return nil, fmt.Errorf("HTTP 请求未初始化")
+	}
+
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+
+	cloned := req.Clone(req.Context())
+	cloned.Header = req.Header.Clone()
+	if cloned.Header == nil {
+		cloned.Header = make(http.Header)
+	}
+	cloned.Header.Set("User-Agent", t.userAgent)
+	return base.RoundTrip(cloned)
+}
+
+// newUserAgentHTTPClient 在 User-Agent 非空时创建模型请求专用 HTTP client。
+// 参数 userAgent 表示需要写入的 User-Agent 头；参数 timeout 表示请求超时时间。
+func newUserAgentHTTPClient(userAgent string, timeout time.Duration) *http.Client {
+	userAgent = strings.TrimSpace(userAgent)
+	if userAgent == "" {
+		return nil
+	}
+	return &http.Client{
+		Timeout: timeout,
+		Transport: userAgentRoundTripper{
+			userAgent: userAgent,
+			base:      http.DefaultTransport,
+		},
+	}
 }
 
 // chatModelReasoningEffort 返回 ChatModel 应使用的 GPT 推理强度。
