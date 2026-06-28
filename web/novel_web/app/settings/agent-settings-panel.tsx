@@ -7,7 +7,7 @@ import { AgentSettingsContext } from "./agent-settings-context";
 import { AgentSettingsEditorModal } from "./agent-settings-editor-modal";
 import { AgentSettingsOverview } from "./agent-settings-overview";
 import type { AgentChildFormState, AgentChildTextField, AgentParameterJsonViewerRef, AgentSettingsFormState, AgentSettingsPanelProps, EditingAgentTarget } from "./types";
-import { agentConfigToFormState, buildAgentConfigFromForm, copyAgentToolConfig, createDefaultAgentChildFormState, createDefaultAgentSettingsFormState, defaultAgentModelOption, defaultModelForAgentProvider, formatTime, getErrorMessage, isAbortError, modelsWithDefaultAgentModel, toggleAgentToolName, validateAgentSettingsForm } from "./settings-utils";
+import { agentConfigToFormState, agentProviderModelCacheKey, buildAgentConfigFromForm, copyAgentToolConfig, createDefaultAgentChildFormState, createDefaultAgentSettingsFormState, defaultAgentModelOption, defaultModelForAgentProvider, formatTime, getErrorMessage, isAbortError, isAIProviderType, modelsWithDefaultAgentModel, normalizeAgentProviderType, toggleAgentToolName, validateAgentSettingsForm } from "./settings-utils";
 
 // AgentSettingsPanel 渲染结构化智能体配置面板。
 // 参数 props 表示智能体配置面板需要的外部回调。
@@ -198,23 +198,33 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
   );
 
   const loadAgentModelOptions = useCallback(
-    // loadAgentModelOptions 读取指定 AI 提供商的模型列表，失败时按默认模型兜底。
-    // 参数 providerId 表示 AI 提供商 ID 文本；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+    // loadAgentModelOptions 读取指定 AI 提供商和 API 协议的模型列表，失败时按默认模型兜底。
+    // 参数 providerId 表示 AI 提供商 ID 文本；参数 providerType 表示模型 API 协议；参数 signal 表示用于取消请求的浏览器 AbortSignal。
     async function loadAgentModelOptions(
       providerId: string,
+      providerType: string,
       signal?: AbortSignal,
     ) {
       const normalizedProviderID = providerId.trim();
-      if (!normalizedProviderID || modelLoadingByProvider[normalizedProviderID]) {
+      const normalizedProviderType = normalizeAgentProviderType(providerType);
+      if (!isAIProviderType(normalizedProviderType)) {
+        return;
+      }
+      const cacheKey = agentProviderModelCacheKey(
+        normalizedProviderID,
+        normalizedProviderType,
+      );
+      if (!normalizedProviderID || modelLoadingByProvider[cacheKey]) {
         return;
       }
 
       setModelLoadingByProvider(function markModelLoading(current) {
-        return { ...current, [normalizedProviderID]: true };
+        return { ...current, [cacheKey]: true };
       });
       try {
         const data = await fetchAIProviderModelsByProviderID(
           Number(normalizedProviderID),
+          normalizedProviderType,
           signal,
         );
         const defaultModel = defaultModelForAgentProvider(
@@ -224,7 +234,7 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
         setModelOptionsByProvider(function updateModelOptions(current) {
           return {
             ...current,
-            [normalizedProviderID]: modelsWithDefaultAgentModel(
+            [cacheKey]: modelsWithDefaultAgentModel(
               data.items,
               defaultModel,
             ),
@@ -246,7 +256,7 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           setModelOptionsByProvider(function fallbackModelOptions(current) {
             return {
               ...current,
-              [normalizedProviderID]: [defaultAgentModelOption(defaultModel)],
+              [cacheKey]: [defaultAgentModelOption(defaultModel)],
             };
           });
           return;
@@ -255,7 +265,7 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
       } finally {
         if (!signal?.aborted) {
           setModelLoadingByProvider(function clearModelLoading(current) {
-            return { ...current, [normalizedProviderID]: false };
+            return { ...current, [cacheKey]: false };
           });
         }
       }
@@ -381,7 +391,25 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
         },
       };
     });
-    void loadAgentModelOptions(providerId);
+    void loadAgentModelOptions(providerId, form.supervisor.providerType);
+  }
+
+  // handleSupervisorProviderTypeChange 处理顶层 Agent API 协议变化。
+  // 参数 event 表示下拉框变化事件。
+  function handleSupervisorProviderTypeChange(event: ChangeEvent<HTMLSelectElement>) {
+    const providerType = event.target.value;
+    setForm(function updateSupervisorProviderType(current) {
+      return {
+        ...current,
+        supervisor: {
+          ...current.supervisor,
+          providerType,
+          model: "",
+          userAgent: "",
+        },
+      };
+    });
+    void loadAgentModelOptions(form.supervisor.providerId, providerType);
   }
 
   // handleSupervisorModelChange 处理顶层 Agent 模型变化。
@@ -459,10 +487,21 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
   // handleChildModelProviderChange 处理子 Agent 模型提供商变化。
   // 参数 index 表示子 Agent 在表单列表中的位置；参数 providerId 表示新的 AI 提供商 ID 文本。
   function handleChildModelProviderChange(index: number, providerId: string) {
+    const providerType = form.children[index]?.providerType ?? "openai";
     updateChildForm(index, function updateChildModelProvider(child) {
       return { ...child, providerId, model: "", userAgent: "" };
     });
-    void loadAgentModelOptions(providerId);
+    void loadAgentModelOptions(providerId, providerType);
+  }
+
+  // handleChildProviderTypeChange 处理子 Agent API 协议变化。
+  // 参数 index 表示子 Agent 在表单列表中的位置；参数 providerType 表示新的模型 API 协议。
+  function handleChildProviderTypeChange(index: number, providerType: string) {
+    const providerId = form.children[index]?.providerId ?? "";
+    updateChildForm(index, function updateChildProviderType(child) {
+      return { ...child, providerType, model: "", userAgent: "" };
+    });
+    void loadAgentModelOptions(providerId, providerType);
   }
 
   // handleChildModelChange 处理子 Agent 模型变化。
@@ -493,12 +532,12 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
   }
 
   // handleAgentModelSelectFocus 处理模型下拉框聚焦时的按需加载。
-  // 参数 providerId 表示当前选择的 AI 提供商 ID 文本。
-  function handleAgentModelSelectFocus(providerId: string) {
+  // 参数 providerId 表示当前选择的 AI 提供商 ID 文本；参数 providerType 表示当前选择的模型 API 协议。
+  function handleAgentModelSelectFocus(providerId: string, providerType: string) {
     if (!providerId.trim()) {
       return;
     }
-    void loadAgentModelOptions(providerId);
+    void loadAgentModelOptions(providerId, providerType);
   }
 
   // updateChildForm 更新指定子 Agent 的表单状态。
@@ -684,6 +723,7 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           changeSupervisorInput: handleSupervisorInputChange,
           changeSupervisorTool: handleSupervisorToolChange,
           changeSupervisorModelProvider: handleSupervisorModelProviderChange,
+          changeSupervisorProviderType: handleSupervisorProviderTypeChange,
           changeSupervisorModel: handleSupervisorModelChange,
           changeSupervisorReasoningEffort: handleSupervisorReasoningEffortChange,
           changeChildEnabled: handleChildEnabledChange,
@@ -691,6 +731,7 @@ export function AgentSettingsPanel(props: AgentSettingsPanelProps) {
           changeChildInput: handleChildInputChange,
           changeChildTool: handleChildToolChange,
           changeChildModelProvider: handleChildModelProviderChange,
+          changeChildProviderType: handleChildProviderTypeChange,
           changeChildModel: handleChildModelChange,
           changeEditingChildReasoningEffort:
             handleEditingChildReasoningEffortChange,

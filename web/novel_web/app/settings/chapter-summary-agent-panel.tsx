@@ -1,6 +1,9 @@
 import type { ChangeEvent } from "react";
 import type { ChapterSummaryAgentSettingsPanelProps } from "./types";
-import { agentReasoningEffortOptions } from "./settings-constants";
+import {
+  agentProviderTypeOptions,
+  agentReasoningEffortOptions,
+} from "./settings-constants";
 import {
   formatAgentModelOption,
   formatAgentProviderOption,
@@ -144,6 +147,11 @@ function ChapterSummaryAgentModelSection() {
     actions.changeModel(event.target.value);
   }
 
+  // handleProviderTypeChange 处理模型 API 协议选择。
+  function handleProviderTypeChange(event: ChangeEvent<HTMLSelectElement>) {
+    actions.changeProviderType(event.target.value);
+  }
+
   // handleReasoningEffortChange 处理推理强度切换。
   function handleReasoningEffortChange(event: ChangeEvent<HTMLSelectElement>) {
     actions.changeReasoningEffort(event.target.value);
@@ -171,6 +179,23 @@ function ChapterSummaryAgentModelSection() {
               return (
                 <option key={provider.id} value={provider.id}>
                   {formatAgentProviderOption(provider)}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        <label className="ai-provider-field">
+          <span>API 协议</span>
+          <select
+            value={state.form.providerType}
+            onChange={handleProviderTypeChange}
+          >
+            {agentProviderTypeOptions.map(function renderProviderTypeOption(
+              option,
+            ) {
+              return (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               );
             })}

@@ -13,7 +13,6 @@ const (
 	maxPageSize        = 100
 	providerTypeOpenAI = "openai"
 	providerTypeClaude = "claude"
-	apiTypeCompletions = "completions"
 )
 
 // Repository 表示 AI 提供商数据仓储接口。
@@ -77,14 +76,12 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (ProviderRespon
 
 	item := &Provider{
 		Name:             req.Name,
-		ProviderType:     req.ProviderType,
 		APIKeyCiphertext: ciphertext,
 		APIKeyMask:       maskAPIKey(req.APIKey),
 		BaseURL:          req.BaseURL,
 		HTTPProxy:        req.HTTPProxy,
 		DefaultModel:     req.DefaultModel,
 		Priority:         req.Priority,
-		APIType:          providerAPIType(req.ProviderType, req.APIType),
 		Enabled:          enabledFromCreateRequest(req),
 	}
 	if err := s.repo.Create(ctx, item); err != nil {
@@ -160,17 +157,12 @@ func (s *Service) Delete(ctx context.Context, id uint64) error {
 // 参数 cipher 表示 API Key 加解密器；参数 item 表示已有 AI 提供商模型；参数 req 表示更新请求参数。
 func applyUpdateRequest(cipher *Cipher, item *Provider, req UpdateRequest) error {
 	item.Name = req.Name
-	item.ProviderType = req.ProviderType
 	item.BaseURL = req.BaseURL
 	item.HTTPProxy = req.HTTPProxy
 	item.DefaultModel = req.DefaultModel
 	item.Priority = req.Priority
-	item.APIType = apiTypeCompletions
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
-	}
-	if !isAllowedAPIType(item.APIType) {
-		return ErrInvalidAPIType
 	}
 	if req.APIKey == "" {
 		return nil
@@ -199,8 +191,8 @@ func (s *Service) ListModels(ctx context.Context, req ModelListRequest) (ModelLi
 }
 
 // ListModelsByProviderID 使用已保存 AI 提供商配置查询官方模型列表。
-// 参数 ctx 表示请求上下文；参数 id 表示 AI 提供商主键 ID。
-func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64) (ModelListResponse, error) {
+// 参数 ctx 表示请求上下文；参数 id 表示 AI 提供商主键 ID；参数 providerType 表示本次查询使用的 API 协议。
+func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64, providerType string) (ModelListResponse, error) {
 	item, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return ModelListResponse{}, fmt.Errorf("查询 AI 提供商失败: %w", err)
@@ -212,7 +204,7 @@ func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64) (ModelL
 	}
 
 	result, err := s.ListModels(ctx, ModelListRequest{
-		ProviderType: item.ProviderType,
+		ProviderType: providerType,
 		APIKey:       apiKey,
 		BaseURL:      item.BaseURL,
 		HTTPProxy:    item.HTTPProxy,
@@ -231,14 +223,6 @@ func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64) (ModelL
 	return result, nil
 }
 
-// providerAPIType 根据 AI 提供商协议返回最终保存的接口类型。
-// 参数 providerType 表示 AI 提供商协议类型；参数 apiType 表示请求传入的接口类型。
-func providerAPIType(providerType string, apiType string) string {
-	_ = providerType
-	_ = apiType
-	return apiTypeCompletions
-}
-
 // enabledFromCreateRequest 返回创建请求中的启用状态默认值。
 // 参数 req 表示已经标准化的创建 AI 提供商请求参数。
 func enabledFromCreateRequest(req CreateRequest) bool {
@@ -252,12 +236,10 @@ func enabledFromCreateRequest(req CreateRequest) bool {
 // 参数 req 表示创建 AI 提供商请求参数。
 func normalizeCreateRequest(req CreateRequest) CreateRequest {
 	req.Name = strings.TrimSpace(req.Name)
-	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
 	req.APIKey = strings.TrimSpace(req.APIKey)
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
 	req.HTTPProxy = strings.TrimSpace(req.HTTPProxy)
 	req.DefaultModel = strings.TrimSpace(req.DefaultModel)
-	req.APIType = strings.ToLower(strings.TrimSpace(req.APIType))
 	return req
 }
 
@@ -265,12 +247,10 @@ func normalizeCreateRequest(req CreateRequest) CreateRequest {
 // 参数 req 表示更新 AI 提供商请求参数。
 func normalizeUpdateRequest(req UpdateRequest) UpdateRequest {
 	req.Name = strings.TrimSpace(req.Name)
-	req.ProviderType = strings.ToLower(strings.TrimSpace(req.ProviderType))
 	req.APIKey = strings.TrimSpace(req.APIKey)
 	req.BaseURL = strings.TrimSpace(req.BaseURL)
 	req.HTTPProxy = strings.TrimSpace(req.HTTPProxy)
 	req.DefaultModel = strings.TrimSpace(req.DefaultModel)
-	req.APIType = strings.ToLower(strings.TrimSpace(req.APIType))
 	return req
 }
 
@@ -305,17 +285,8 @@ func validateCreateRequest(req CreateRequest) error {
 	if req.Name == "" {
 		return ErrNameRequired
 	}
-	if req.ProviderType == "" {
-		return ErrProviderTypeRequired
-	}
-	if !isAllowedProviderType(req.ProviderType) {
-		return ErrInvalidProviderType
-	}
 	if req.APIKey == "" {
 		return ErrAPIKeyRequired
-	}
-	if req.APIType != "" && !isAllowedAPIType(req.APIType) {
-		return ErrInvalidAPIType
 	}
 	if req.Priority < 0 {
 		return ErrInvalidPriority
@@ -331,15 +302,6 @@ func validateCreateRequest(req CreateRequest) error {
 func validateUpdateRequest(req UpdateRequest) error {
 	if req.Name == "" {
 		return ErrNameRequired
-	}
-	if req.ProviderType == "" {
-		return ErrProviderTypeRequired
-	}
-	if !isAllowedProviderType(req.ProviderType) {
-		return ErrInvalidProviderType
-	}
-	if req.APIType != "" && !isAllowedAPIType(req.APIType) {
-		return ErrInvalidAPIType
 	}
 	if req.Priority < 0 {
 		return ErrInvalidPriority
@@ -379,17 +341,6 @@ func isAllowedProviderType(value string) bool {
 	}
 }
 
-// isAllowedAPIType 判断 AI 接口类型是否在系统允许范围内。
-// 参数 value 表示需要校验的 AI 接口类型。
-func isAllowedAPIType(value string) bool {
-	switch value {
-	case apiTypeCompletions:
-		return true
-	default:
-		return false
-	}
-}
-
 // maskAPIKey 生成 API Key 掩码。
 // 参数 value 表示需要遮蔽的 API Key 明文。
 func maskAPIKey(value string) string {
@@ -423,13 +374,11 @@ func toResponse(item Provider) ProviderResponse {
 	return ProviderResponse{
 		ID:           item.ID,
 		Name:         item.Name,
-		ProviderType: item.ProviderType,
 		MaskedAPIKey: item.APIKeyMask,
 		BaseURL:      item.BaseURL,
 		HTTPProxy:    item.HTTPProxy,
 		DefaultModel: item.DefaultModel,
 		Priority:     item.Priority,
-		APIType:      item.APIType,
 		Enabled:      item.Enabled,
 		CreatedAt:    item.CreatedAt,
 		UpdatedAt:    item.UpdatedAt,

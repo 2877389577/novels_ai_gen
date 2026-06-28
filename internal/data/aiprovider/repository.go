@@ -86,14 +86,12 @@ func (r *Repository) Update(ctx context.Context, provider *bizaiprovider.Provide
 		Where("id = ?", provider.ID).
 		Updates(map[string]any{
 			"name":               provider.Name,
-			"provider_type":      provider.ProviderType,
 			"api_key_ciphertext": provider.APIKeyCiphertext,
 			"api_key_mask":       provider.APIKeyMask,
 			"base_url":           provider.BaseURL,
 			"http_proxy":         provider.HTTPProxy,
 			"default_model":      provider.DefaultModel,
 			"priority":           provider.Priority,
-			"api_type":           provider.APIType,
 			"enabled":            provider.Enabled,
 		})
 	if result.Error != nil {

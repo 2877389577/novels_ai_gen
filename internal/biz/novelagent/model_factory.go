@@ -21,6 +21,7 @@ import (
 	"github.com/cloudwego/eino/schema/openai"
 
 	"novels_ai_gen/internal/aihttp"
+	"novels_ai_gen/internal/aiurl"
 	agenttools "novels_ai_gen/internal/biz/novelagent/tools"
 	appconfig "novels_ai_gen/internal/bootstrap/config"
 )
@@ -28,7 +29,6 @@ import (
 const (
 	providerTypeOpenAI = "openai"
 	providerTypeClaude = "claude"
-	apiTypeCompletions = "completions"
 	defaultMaxTokens   = 4096
 	defaultTimeout     = 300 * time.Second
 )
@@ -171,9 +171,13 @@ func (f *EinoAgentRuntimeFactory) newChatModel(ctx context.Context, cfg ModelCon
 // newOpenAIChatModel 创建 OpenAI 协议的 Eino ChatModel。
 // 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
 func newOpenAIChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseChatModel, error) {
+	baseURL, err := aiurl.NormalizeOpenAIBaseURL(cfg.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("%w: OpenAI 服务根地址格式无效", ErrAgentConfigInvalid)
+	}
 	modelConfig := &einoopenai.ChatModelConfig{
 		APIKey:  cfg.APIKey,
-		BaseURL: cfg.BaseURL,
+		BaseURL: baseURL,
 		Model:   cfg.Model,
 		Timeout: defaultTimeout,
 	}
@@ -201,6 +205,10 @@ func newOpenAIChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseCha
 // newClaudeChatModel 创建 Claude 协议的 Eino ChatModel。
 // 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
 func newClaudeChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseChatModel, error) {
+	baseURL, err := aiurl.NormalizeClaudeBaseURL(cfg.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("%w: Claude 服务根地址格式无效", ErrAgentConfigInvalid)
+	}
 	httpClient, err := newModelHTTPClient(cfg, defaultTimeout)
 	if err != nil {
 		return nil, err
@@ -211,8 +219,8 @@ func newClaudeChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseCha
 		MaxTokens:  defaultMaxTokens,
 		HTTPClient: httpClient,
 	}
-	if strings.TrimSpace(cfg.BaseURL) != "" {
-		modelConfig.BaseURL = &cfg.BaseURL
+	if baseURL != "" {
+		modelConfig.BaseURL = &baseURL
 	}
 	model, err := einoclaude.NewChatModel(ctx, modelConfig)
 	if err != nil {
@@ -277,7 +285,9 @@ func normalizeRuntimeRetryConfig(cfg RuntimeRetryConfig) RuntimeRetryConfig {
 // 参数 cfg 表示模型创建配置。
 func normalizeModelConfig(cfg ModelConfig) ModelConfig {
 	cfg.ProviderType = strings.ToLower(strings.TrimSpace(cfg.ProviderType))
-	cfg.APIType = strings.ToLower(strings.TrimSpace(cfg.APIType))
+	if cfg.ProviderType == "" {
+		cfg.ProviderType = providerTypeOpenAI
+	}
 	cfg.BaseURL = strings.TrimSpace(cfg.BaseURL)
 	cfg.HTTPProxy = strings.TrimSpace(cfg.HTTPProxy)
 	cfg.Model = strings.TrimSpace(cfg.Model)
@@ -351,10 +361,7 @@ func validateModelConfig(label string, cfg ModelConfig) error {
 	switch cfg.ProviderType {
 	case providerTypeOpenAI, providerTypeClaude:
 	default:
-		return fmt.Errorf("%w: %s 模型提供商类型仅支持 openai 或 claude", ErrAgentConfigInvalid, label)
-	}
-	if cfg.APIType != "" && cfg.APIType != apiTypeCompletions {
-		return fmt.Errorf("%w: %s 模型接口类型仅支持 completions", ErrAgentConfigInvalid, label)
+		return fmt.Errorf("%w: %s 模型 API 协议仅支持 openai 或 claude", ErrAgentConfigInvalid, label)
 	}
 	return nil
 }

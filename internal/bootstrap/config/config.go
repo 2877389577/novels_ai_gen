@@ -139,6 +139,8 @@ type AgentDefinition struct {
 	ShareChatHistory *bool `mapstructure:"share_chat_history" json:"share_chat_history,omitempty" yaml:"share_chat_history,omitempty"`
 	// ProviderID 表示该 Agent 使用的 AI 提供商 ID，保存时必须大于 0。
 	ProviderID uint64 `mapstructure:"provider_id" json:"provider_id" yaml:"provider_id"`
+	// ProviderType 表示该 Agent 模型使用的 API 协议，可选值为 openai、claude，空值默认 openai。
+	ProviderType string `mapstructure:"provider_type" json:"provider_type" yaml:"provider_type"`
 	// Model 表示该 Agent 使用的模型标识，保存时不能为空。
 	Model string `mapstructure:"model" json:"model" yaml:"model"`
 	// ReasoningEffort 表示 GPT 类模型使用的推理强度，可选值为 low、medium、high，空值由运行时默认处理。

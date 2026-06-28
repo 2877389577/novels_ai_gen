@@ -24,6 +24,8 @@ type runtimeAgentDefinition struct {
 	name string
 	// providerID 表示该 Agent 使用的 AI 提供商 ID。
 	providerID uint64
+	// providerType 表示该 Agent 模型使用的 API 协议。
+	providerType string
 	// model 表示该 Agent 使用的模型标识。
 	model string
 	// reasoningEffort 表示 GPT 类模型使用的推理强度。
@@ -116,7 +118,7 @@ func newRuntimeAgentConfigFromAgent(agentCfg appconfig.AgentConfig) (runtimeAgen
 	names := make(map[string]struct{}, len(agentCfg.Agent))
 	for index, childCfg := range agentCfg.Agent {
 		if !isChildAgentEnabled(childCfg) {
-			if _, err := normalizeAgentModelOverride(childCfg, "子 Agent"); err != nil {
+			if _, _, err := normalizeAgentModelOverride(childCfg, "子 Agent"); err != nil {
 				return runtimeAgentConfig{}, fmt.Errorf("子 Agent 配置 %d 无效: %w", index+1, err)
 			}
 			if _, err := normalizeAgentTools(childCfg.Tools, tools); err != nil {
@@ -208,7 +210,7 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition, registry map[string
 	if instruction == "" {
 		return runtimeAgentDefinition{}, fmt.Errorf("%w: 顶层 Agent instruction 不能为空", ErrAgentConfigInvalid)
 	}
-	model, err := normalizeAgentModelOverride(def, "顶层 Agent")
+	model, providerType, err := normalizeAgentModelOverride(def, "顶层 Agent")
 	if err != nil {
 		return runtimeAgentDefinition{}, err
 	}
@@ -225,6 +227,7 @@ func normalizeSupervisorAgent(def appconfig.AgentDefinition, registry map[string
 	return runtimeAgentDefinition{
 		name:            name,
 		providerID:      def.ProviderID,
+		providerType:    providerType,
 		model:           model,
 		reasoningEffort: strings.TrimSpace(def.ReasoningEffort),
 		userAgent:       strings.TrimSpace(def.UserAgent),
@@ -250,7 +253,7 @@ func normalizeChildAgent(def appconfig.AgentDefinition, registry map[string]runt
 	if instruction == "" {
 		return runtimeAgentDefinition{}, fmt.Errorf("%w: 子 Agent instruction 不能为空", ErrAgentConfigInvalid)
 	}
-	model, err := normalizeAgentModelOverride(def, "子 Agent")
+	model, providerType, err := normalizeAgentModelOverride(def, "子 Agent")
 	if err != nil {
 		return runtimeAgentDefinition{}, err
 	}
@@ -285,6 +288,7 @@ func normalizeChildAgent(def appconfig.AgentDefinition, registry map[string]runt
 	return runtimeAgentDefinition{
 		name:             name,
 		providerID:       def.ProviderID,
+		providerType:     providerType,
 		model:            model,
 		reasoningEffort:  strings.TrimSpace(def.ReasoningEffort),
 		userAgent:        strings.TrimSpace(def.UserAgent),
@@ -300,21 +304,46 @@ func normalizeChildAgent(def appconfig.AgentDefinition, registry map[string]runt
 
 // normalizeAgentModelOverride 标准化并校验 Agent 模型字段。
 // 参数 def 表示配置文件中的 Agent 定义；参数 label 表示错误提示中的 Agent 类型。
-func normalizeAgentModelOverride(def appconfig.AgentDefinition, label string) (string, error) {
+func normalizeAgentModelOverride(def appconfig.AgentDefinition, label string) (string, string, error) {
 	model := strings.TrimSpace(def.Model)
+	providerType, err := normalizeAgentProviderType(def.ProviderType)
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %s provider_type 仅支持 openai 或 claude", ErrAgentConfigInvalid, label)
+	}
 	if def.ProviderID == 0 {
-		return "", fmt.Errorf("%w: %s provider_id 不能为空", ErrAgentConfigInvalid, label)
+		return "", "", fmt.Errorf("%w: %s provider_id 不能为空", ErrAgentConfigInvalid, label)
 	}
 	if model == "" {
-		return "", fmt.Errorf("%w: %s model 不能为空", ErrAgentConfigInvalid, label)
+		return "", "", fmt.Errorf("%w: %s model 不能为空", ErrAgentConfigInvalid, label)
 	}
 	if _, _, err := chatModelReasoningEffort(ModelConfig{
 		Model:           model,
 		ReasoningEffort: def.ReasoningEffort,
 	}); err != nil {
-		return "", fmt.Errorf("%w: %s reasoning_effort 仅支持 low、medium、high", ErrAgentConfigInvalid, label)
+		return "", "", fmt.Errorf("%w: %s reasoning_effort 仅支持 low、medium、high", ErrAgentConfigInvalid, label)
 	}
-	return model, nil
+	return model, providerType, nil
+}
+
+// normalizeAgentProviderType 标准化 Agent 模型使用的 API 协议。
+// 参数 value 表示配置文件中的 provider_type 字段，空值默认 openai。
+func normalizeAgentProviderType(value string) (string, error) {
+	providerType := strings.ToLower(strings.TrimSpace(value))
+	if providerType == "" {
+		return providerTypeOpenAI, nil
+	}
+	switch providerType {
+	case providerTypeOpenAI, providerTypeClaude:
+		return providerType, nil
+	default:
+		return "", ErrAgentConfigInvalid
+	}
+}
+
+// NormalizeModelProviderType 标准化模型配置使用的 API 协议。
+// 参数 value 表示配置中的 provider_type 字段，空值默认 openai。
+func NormalizeModelProviderType(value string) (string, error) {
+	return normalizeAgentProviderType(value)
 }
 
 // normalizeAgentTools 标准化并校验 Agent 可用普通工具列表。
@@ -483,6 +512,7 @@ func isEmptyAgentDefinition(def appconfig.AgentDefinition) bool {
 		strings.TrimSpace(def.Description) == "" &&
 		strings.TrimSpace(def.Instruction) == "" &&
 		strings.TrimSpace(def.Model) == "" &&
+		strings.TrimSpace(def.ProviderType) == "" &&
 		strings.TrimSpace(def.ReasoningEffort) == "" &&
 		strings.TrimSpace(def.UserAgent) == "" &&
 		def.ProviderID == 0 &&

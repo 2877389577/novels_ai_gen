@@ -4,7 +4,7 @@ import type {
 
 export const aiProviderDefaultPage = 1;
 export const aiProviderPageSize = 20;
-export const aiProviderTypeOptions: { value: AIProviderType; label: string }[] = [
+export const agentProviderTypeOptions: { value: AIProviderType; label: string }[] = [
   { value: "openai", label: "OpenAI" },
   { value: "claude", label: "Claude" },
 ];

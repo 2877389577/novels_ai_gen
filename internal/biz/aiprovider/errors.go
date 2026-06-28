@@ -7,17 +7,15 @@ var (
 	ErrNotFound = errors.New("ai provider not found")
 	// ErrNameRequired 表示 AI 提供商名称不能为空。
 	ErrNameRequired = errors.New("ai provider name required")
-	// ErrProviderTypeRequired 表示 AI 提供商类型不能为空。
+	// ErrProviderTypeRequired 表示模型 API 协议不能为空。
 	ErrProviderTypeRequired = errors.New("ai provider type required")
-	// ErrInvalidProviderType 表示 AI 提供商类型不在允许范围内。
+	// ErrInvalidProviderType 表示模型 API 协议不在允许范围内。
 	ErrInvalidProviderType = errors.New("ai provider type invalid")
 	// ErrAPIKeyRequired 表示 AI 提供商 API Key 不能为空。
 	ErrAPIKeyRequired = errors.New("ai provider api key required")
-	// ErrInvalidAPIType 表示 AI 接口类型不在允许范围内。
-	ErrInvalidAPIType = errors.New("ai provider api type invalid")
 	// ErrInvalidPriority 表示 AI 提供商排序优先级不能小于 0。
 	ErrInvalidPriority = errors.New("ai provider priority invalid")
-	// ErrInvalidBaseURL 表示 AI 提供商接口基础地址格式无效。
+	// ErrInvalidBaseURL 表示 AI 提供商服务根地址格式无效。
 	ErrInvalidBaseURL = errors.New("ai provider base url invalid")
 	// ErrInvalidHTTPProxy 表示 AI 提供商 HTTP 代理地址格式无效。
 	ErrInvalidHTTPProxy = errors.New("ai provider http proxy invalid")

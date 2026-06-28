@@ -67,11 +67,9 @@ export interface SystemSettingsPanelProps {
 export interface AIProviderFormState {
   // name 表示 AI 提供商名称。
   name: string;
-  // providerType 表示 AI 提供商类型。
-  providerType: string;
   // apiKey 表示 AI 提供商 API Key。
   apiKey: string;
-  // baseURL 表示 AI 提供商接口基础地址。
+  // baseURL 表示 AI 提供商服务根地址。
   baseURL: string;
   // httpProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址。
   httpProxy: string;
@@ -79,8 +77,6 @@ export interface AIProviderFormState {
   defaultModel: string;
   // priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
   priority: string;
-  // apiType 表示 AI 接口类型。
-  apiType: string;
   // enabled 表示是否启用该 AI 提供商。
   enabled: boolean;
 }
@@ -99,6 +95,8 @@ export interface AgentSupervisorFormState {
   toolNames: string[];
   // providerId 表示顶层 Agent 使用的 AI 提供商 ID 文本。
   providerId: string;
+  // providerType 表示顶层 Agent 模型使用的 API 协议。
+  providerType: string;
   // model 表示顶层 Agent 使用的模型标识。
   model: string;
   // reasoningEffort 表示顶层 Agent 使用 GPT 类模型时的推理强度。
@@ -129,6 +127,8 @@ export interface AgentChildFormState {
   toolNames: string[];
   // providerId 表示该子 Agent 使用的 AI 提供商 ID 文本。
   providerId: string;
+  // providerType 表示该子 Agent 模型使用的 API 协议。
+  providerType: string;
   // model 表示该子 Agent 使用的模型标识。
   model: string;
   // reasoningEffort 表示该子 Agent 使用 GPT 类模型时的推理强度。
@@ -165,6 +165,7 @@ export type AgentChildTextField =
   | "description"
   | "instruction"
   | "maxIterations"
+  | "providerType"
   | "userAgent";
 
 // AgentSettingsFormState 表示智能体配置页完整表单状态。
@@ -201,6 +202,8 @@ export interface ChapterSummaryAgentFormState {
   maxIterations: string;
   // providerId 表示章节概要 Agent 使用的 AI 提供商 ID 文本。
   providerId: string;
+  // providerType 表示章节概要 Agent 模型使用的 API 协议。
+  providerType: string;
   // model 表示章节概要 Agent 使用的模型标识。
   model: string;
   // reasoningEffort 表示章节概要 Agent 使用 GPT 类模型时的推理强度。

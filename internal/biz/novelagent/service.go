@@ -262,7 +262,6 @@ func (s *Service) executeChat(ctx context.Context, req ChatRequest, writer Event
 			"error", err,
 			"provider_id", entryConfig.ProviderID,
 			"provider_type", entryConfig.ProviderType,
-			"api_type", entryConfig.APIType,
 			"model", entryConfig.Model,
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
@@ -302,7 +301,6 @@ func (s *Service) executeChat(ctx context.Context, req ChatRequest, writer Event
 			"error", err,
 			"provider_id", entryConfig.ProviderID,
 			"provider_type", entryConfig.ProviderType,
-			"api_type", entryConfig.APIType,
 			"model", entryConfig.Model,
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
@@ -317,7 +315,6 @@ func (s *Service) executeChat(ctx context.Context, req ChatRequest, writer Event
 			"error", ErrAgentEmptyResponse,
 			"provider_id", entryConfig.ProviderID,
 			"provider_type", entryConfig.ProviderType,
-			"api_type", entryConfig.APIType,
 			"model", entryConfig.Model,
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
@@ -439,7 +436,6 @@ func (s *Service) executeApproval(ctx context.Context, req ChatApprovalResumeReq
 			"error", err,
 			"provider_id", entryConfig.ProviderID,
 			"provider_type", entryConfig.ProviderType,
-			"api_type", entryConfig.APIType,
 			"model", entryConfig.Model,
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
@@ -476,7 +472,6 @@ func (s *Service) executeApproval(ctx context.Context, req ChatApprovalResumeReq
 			"error", err,
 			"provider_id", entryConfig.ProviderID,
 			"provider_type", entryConfig.ProviderType,
-			"api_type", entryConfig.APIType,
 			"model", entryConfig.Model,
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
@@ -491,7 +486,6 @@ func (s *Service) executeApproval(ctx context.Context, req ChatApprovalResumeReq
 			"error", ErrAgentEmptyResponse,
 			"provider_id", entryConfig.ProviderID,
 			"provider_type", entryConfig.ProviderType,
-			"api_type", entryConfig.APIType,
 			"model", entryConfig.Model,
 			"base_url_configured", strings.TrimSpace(entryConfig.BaseURL) != "",
 		)
@@ -745,6 +739,7 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 		ctx,
 		"顶层 Agent",
 		agentCfg.supervisor.providerID,
+		agentCfg.supervisor.providerType,
 		agentCfg.supervisor.model,
 		agentCfg.supervisor.reasoningEffort,
 		agentCfg.supervisor.userAgent,
@@ -765,6 +760,7 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 			ctx,
 			"子 Agent "+child.name,
 			child.providerID,
+			child.providerType,
 			child.model,
 			child.reasoningEffort,
 			child.userAgent,
@@ -781,11 +777,12 @@ func (s *Service) runtimeModelConfig(ctx context.Context, cfg *appconfig.AppConf
 }
 
 // agentModelOverrideConfig 读取单个 Agent 模型对应的提供商凭据。
-// 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示模型提供商 ID；参数 model 表示配置文件中的模型标识；参数 reasoningEffort 表示 GPT 类模型推理强度配置；参数 userAgent 表示该 Agent 模型请求使用的 User-Agent 头。
+// 参数 ctx 表示请求上下文；参数 label 表示错误提示中的 Agent 名称；参数 providerID 表示模型提供商 ID；参数 providerType 表示该 Agent 模型使用的 API 协议；参数 model 表示配置文件中的模型标识；参数 reasoningEffort 表示 GPT 类模型推理强度配置；参数 userAgent 表示该 Agent 模型请求使用的 User-Agent 头。
 func (s *Service) agentModelOverrideConfig(
 	ctx context.Context,
 	label string,
 	providerID uint64,
+	providerType string,
 	model string,
 	reasoningEffort string,
 	userAgent string,
@@ -800,8 +797,7 @@ func (s *Service) agentModelOverrideConfig(
 	}
 	return ModelConfig{
 		ProviderID:      provider.ID,
-		ProviderType:    provider.ProviderType,
-		APIType:         provider.APIType,
+		ProviderType:    providerType,
 		APIKey:          apiKey,
 		BaseURL:         provider.BaseURL,
 		HTTPProxy:       provider.HTTPProxy,
