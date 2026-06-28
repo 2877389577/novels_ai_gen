@@ -73,6 +73,10 @@ definitions:
         description: Enabled 表示是否启用该 AI 提供商。
         example: true
         type: boolean
+      http_proxy:
+        description: HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址。
+        example: http://127.0.0.1:7890
+        type: string
       id:
         description: ID 表示 AI 提供商主键 ID。
         example: 1
@@ -253,6 +257,10 @@ definitions:
         description: NovelID 表示所属小说 ID。
         example: 1
         type: integer
+      summary:
+        description: Summary 表示章节概要。
+        example: 主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。
+        type: string
       title:
         description: Title 表示章节名。
         example: 初入长夜
@@ -296,6 +304,33 @@ definitions:
         description: WordCount 表示正文中非空白 Unicode 字符数量。
         example: 8
         type: integer
+    type: object
+  chapter.ChapterSummaryDetailData:
+    properties:
+      chapter_number:
+        description: ChapterNumber 表示章节号，即“第 x 章”中的 x。
+        example: 1
+        type: integer
+      id:
+        description: ID 表示章节主键 ID。
+        example: 1
+        type: integer
+      novel_id:
+        description: NovelID 表示所属小说 ID。
+        example: 1
+        type: integer
+      summary:
+        description: Summary 表示章节概要，允许为空字符串。
+        example: 主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。
+        type: string
+      title:
+        description: Title 表示章节名。
+        example: 初入长夜
+        type: string
+      updated_at:
+        description: UpdatedAt 表示更新时间。
+        example: "2026-06-14T22:00:00+08:00"
+        type: string
     type: object
   chapter.DeleteData:
     properties:
@@ -417,6 +452,25 @@ definitions:
         allOf:
         - $ref: '#/definitions/chapter.ChapterData'
         description: Data 表示章节响应数据。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
+  chapter.SummarySuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/chapter.ChapterSummaryDetailData'
+        description: Data 表示章节概要响应数据。
       message:
         description: Message 表示响应提示信息。
         example: ok
@@ -678,6 +732,43 @@ definitions:
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
     type: object
+  config.ChapterSummaryAgentData:
+    properties:
+      chapter_summary_agent:
+        description: ChapterSummaryAgent 表示章节概要独立 Agent 配置。
+        type: object
+      config_file:
+        description: ConfigFile 表示启动 -f 参数指定的实际配置文件绝对路径。
+        example: D:\Go\GOPATH\src\novels_ai_gen\config\config-dev.yaml
+        type: string
+      modified_at:
+        description: ModifiedAt 表示配置文件在文件系统中的最后修改时间。
+        example: "2026-06-14T22:00:00+08:00"
+        type: string
+      reloaded_at:
+        description: ReloadedAt 表示后端最近一次成功加载该配置文件的时间。
+        example: "2026-06-14T22:00:00+08:00"
+        type: string
+    type: object
+  config.ChapterSummaryAgentSuccessResponse:
+    properties:
+      code:
+        description: Code 表示业务响应码，成功固定为 0。
+        example: 0
+        type: integer
+      data:
+        allOf:
+        - $ref: '#/definitions/config.ChapterSummaryAgentData'
+        description: Data 表示结构化章节概要 Agent 配置和加载状态。
+      message:
+        description: Message 表示响应提示信息。
+        example: ok
+        type: string
+      request_id:
+        description: RequestID 表示本次请求的追踪标识。
+        example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
+        type: string
+    type: object
   config.FileData:
     properties:
       config_file:
@@ -722,6 +813,13 @@ definitions:
     properties:
       agent:
         description: Agent 表示需要写入配置文件 ai.agent 子树的智能体配置。
+        type: object
+    type: object
+  config.UpdateChapterSummaryAgentRequest:
+    properties:
+      chapter_summary_agent:
+        description: ChapterSummaryAgent 表示需要写入配置文件 ai.chapter_summary_agent 子树的章节概要
+          Agent 配置。
         type: object
     type: object
   config.UpdateFileRequest:
@@ -1143,8 +1241,7 @@ definitions:
         example: sk-xxx
         type: string
       api_type:
-        description: APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用
-          completions。
+        description: APIType 表示 AI 接口类型，只能是 completions。
         example: completions
         type: string
       base_url:
@@ -1159,6 +1256,10 @@ definitions:
         description: Enabled 表示是否启用该 AI 提供商；未传时默认 true。
         example: true
         type: boolean
+      http_proxy:
+        description: HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
+        example: http://127.0.0.1:7890
+        type: string
       name:
         description: Name 表示 AI 提供商名称，不能为空且唯一。
         example: 默认 OpenAI
@@ -1168,7 +1269,7 @@ definitions:
         example: 1
         type: integer
       provider_type:
-        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude。
         example: openai
         type: string
     required:
@@ -1186,8 +1287,12 @@ definitions:
         description: BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。
         example: https://api.openai.com/v1
         type: string
+      http_proxy:
+        description: HTTPProxy 表示请求官方模型列表时使用的 HTTP 代理地址；为空时不使用代理。
+        example: http://127.0.0.1:7890
+        type: string
       provider_type:
-        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude。
         example: openai
         type: string
     required:
@@ -1201,7 +1306,7 @@ definitions:
         example: sk-xxx
         type: string
       api_type:
-        description: APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
+        description: APIType 表示 AI 接口类型，只能是 completions；为空时保存为 completions。
         example: completions
         type: string
       base_url:
@@ -1216,6 +1321,10 @@ definitions:
         description: Enabled 表示是否启用该 AI 提供商；未传时保留原值。
         example: true
         type: boolean
+      http_proxy:
+        description: HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
+        example: http://127.0.0.1:7890
+        type: string
       name:
         description: Name 表示 AI 提供商名称，不能为空且唯一。
         example: 默认 OpenAI
@@ -1225,7 +1334,7 @@ definitions:
         example: 1
         type: integer
       provider_type:
-        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude。
         example: openai
         type: string
     required:
@@ -1252,6 +1361,10 @@ definitions:
         description: Content 表示章节正文，可以为空。
         example: 夜色像墨一样铺开。
         type: string
+      generate_summary:
+        description: GenerateSummary 表示本次创建成功后是否触发后台章节概要生成，通常只由手动保存传入。
+        example: true
+        type: boolean
       title:
         description: Title 表示章节名，不能为空。
         example: 初入长夜
@@ -1260,12 +1373,23 @@ definitions:
     - chapter_number
     - title
     type: object
+  internal_api_handler_chapter.SummarySaveRequest:
+    properties:
+      summary:
+        description: Summary 表示需要保存的章节概要，允许为空字符串并保留原始空格和换行。
+        example: 主角在雨夜发现异常脚步声，为后续冲突埋下伏笔。
+        type: string
+    type: object
   internal_api_handler_chapter.UpdateRequest:
     properties:
       content:
         description: Content 表示章节正文，可以为空。
         example: 夜色像墨一样铺开。
         type: string
+      generate_summary:
+        description: GenerateSummary 表示本次更新成功后是否触发后台章节概要生成，自动保存应保持 false。
+        example: true
+        type: boolean
       title:
         description: Title 表示章节名，不能为空。
         example: 初入长夜
@@ -1463,6 +1587,45 @@ definitions:
     required:
     - name
     type: object
+  internal_api_handler_novelagent.ChatApprovalResumeRequest:
+    properties:
+      approved:
+        description: Approved 表示用户是否允许执行该工具。
+        example: true
+        type: boolean
+      chapter_id:
+        description: ChapterID 表示待恢复请求关联的章节 ID，普通对话可为空。
+        example: 1
+        type: integer
+      chapter_number:
+        description: ChapterNumber 表示待恢复请求关联的章节号，即“第 x 章”中的 x。
+        example: 3
+        type: integer
+      checkpoint_id:
+        description: CheckPointID 表示 Eino ADK 中断时保存的 checkpoint 标识。
+        example: agent-approval-abc123
+        type: string
+      conversation_id:
+        description: ConversationID 表示待恢复请求所属 Agent 会话 ID，新会话恢复时可为空。
+        example: 1
+        type: integer
+      interrupt_id:
+        description: InterruptID 表示本次人工审核对应的中断点标识。
+        example: agent:supervisor;tool:get_content:call_1
+        type: string
+      novel_id:
+        description: NovelID 表示待恢复请求关联的小说 ID。
+        example: 1
+        type: integer
+      reason:
+        description: Reason 表示用户拒绝或批准时填写的补充原因。
+        example: 这次允许读取章节内容
+        type: string
+    required:
+    - checkpoint_id
+    - interrupt_id
+    - novel_id
+    type: object
   internal_api_handler_novelagent.ChatRequest:
     properties:
       chapter_id:
@@ -1490,6 +1653,10 @@ definitions:
     type: object
   internal_api_handler_novelagent.StreamEvent:
     properties:
+      checkpoint_id:
+        description: CheckPointID 表示等待人工审核时用于恢复 Agent 执行的 checkpoint 标识。
+        example: agent-approval-abc123
+        type: string
       content:
         description: Content 表示增量文本或完整文本内容。
         example: 雨夜里，门外的脚步声一点点逼近。
@@ -1501,6 +1668,10 @@ definitions:
       conversation_title:
         description: ConversationTitle 表示本轮回复保存到的 Agent 会话标题，仅 done 事件返回。
         example: 讨论第三章节奏
+        type: string
+      interrupt_id:
+        description: InterruptID 表示等待人工审核时需要恢复的中断点标识。
+        example: agent:supervisor;tool:get_content:call_1
         type: string
       message:
         description: Message 表示错误或状态说明。
@@ -1519,6 +1690,10 @@ definitions:
         description: RequestID 表示本次流式请求的追踪标识，用于和后端日志关联。
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
+      run_id:
+        description: RunID 表示本次 AI 对话后台运行任务 ID。
+        example: agent-run-abc123
+        type: string
       stage:
         description: Stage 表示 meta 事件所处阶段。
         example: routed
@@ -1527,8 +1702,16 @@ definitions:
         description: Task 表示顶层 Agent 选择的任务类型。
         example: polish
         type: string
+      tool_arguments:
+        description: ToolArguments 表示等待人工审核的工具调用参数 JSON 字符串。
+        example: '{"chapter_number":3}'
+        type: string
+      tool_name:
+        description: ToolName 表示等待人工审核的工具名称。
+        example: get_content
+        type: string
       type:
-        description: Type 表示事件类型，支持 meta、delta、done、error。
+        description: Type 表示事件类型，支持 meta、delta、approval_required、done、error。
         example: delta
         type: string
     type: object
@@ -2567,6 +2750,46 @@ info:
   title: 小说创作应用 API
   version: "1.0"
 paths:
+  /ai/agents/chat/approval/resume:
+    post:
+      consumes:
+      - application/json
+      description: 用户批准或拒绝工具执行后，从 Eino ADK checkpoint 恢复小说写作 Agent，并继续以 NDJSON 输出。
+      parameters:
+      - description: 人工审核恢复请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler_novelagent.ChatApprovalResumeRequest'
+      produces:
+      - application/x-ndjson
+      responses:
+        "200":
+          description: NDJSON 流事件
+          schema:
+            $ref: '#/definitions/internal_api_handler_novelagent.StreamEvent'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录已过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "404":
+          description: 人工审核记录不存在或已失效
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 恢复 AI Agent 工具人工审核
+      tags:
+      - novel-agents
   /ai/agents/chat/stream:
     post:
       consumes:
@@ -3318,6 +3541,64 @@ paths:
       security:
       - Bearer: []
       summary: 保存智能体配置
+      tags:
+      - config
+  /config/chapter-summary-agent:
+    get:
+      description: 返回当前后端启动配置文件中的 ai.chapter_summary_agent 结构化配置。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 读取成功
+          schema:
+            $ref: '#/definitions/config.ChapterSummaryAgentSuccessResponse'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 读取章节概要 Agent 配置
+      tags:
+      - config
+    put:
+      consumes:
+      - application/json
+      description: 只替换当前启动配置文件中的 ai.chapter_summary_agent 子树，保存成功后立即热加载。
+      parameters:
+      - description: 章节概要 Agent 配置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/config.UpdateChapterSummaryAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存成功
+          schema:
+            $ref: '#/definitions/config.ChapterSummaryAgentSuccessResponse'
+        "400":
+          description: 配置内容错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: 未登录或登录过期
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 保存章节概要 Agent 配置
       tags:
       - config
   /config/file:
@@ -4802,6 +5083,142 @@ paths:
       security:
       - Bearer: []
       summary: 更新小说章节
+      tags:
+      - chapters
+  /novels/{novel_id}/chapters/{chapter_id}/summary:
+    delete:
+      consumes:
+      - application/json
+      description: 根据小说 ID 和章节 ID 清空章节概要，只修改 summary 字段。
+      parameters:
+      - description: 小说 ID
+        in: path
+        name: novel_id
+        required: true
+        type: integer
+      - description: 章节 ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/chapter.DeleteSuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+        "401":
+          description: 未登录或登录已过期
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 删除小说章节概要
+      tags:
+      - chapters
+    get:
+      consumes:
+      - application/json
+      description: 根据小说 ID 和章节 ID 查询章节概要；章节存在但概要为空时返回空字符串。
+      parameters:
+      - description: 小说 ID
+        in: path
+        name: novel_id
+        required: true
+        type: integer
+      - description: 章节 ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            $ref: '#/definitions/chapter.SummarySuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+        "401":
+          description: 未登录或登录已过期
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 查询小说章节概要
+      tags:
+      - chapters
+    put:
+      consumes:
+      - application/json
+      description: 根据小说 ID 和章节 ID 创建或更新章节概要，只修改 summary 字段。
+      parameters:
+      - description: 小说 ID
+        in: path
+        name: novel_id
+        required: true
+        type: integer
+      - description: 章节 ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      - description: 保存章节概要请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler_chapter.SummarySaveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存成功
+          schema:
+            $ref: '#/definitions/chapter.SummarySuccessResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+        "401":
+          description: 未登录或登录已过期
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/chapter.ErrorBody'
+      security:
+      - Bearer: []
+      summary: 保存小说章节概要
       tags:
       - chapters
   /novels/{novel_id}/characters:

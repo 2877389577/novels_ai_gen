@@ -189,7 +189,7 @@ func migrate(conn *gorm.DB) error {
 		)
 		return err
 	}
-	if err := syncOpenAIProviderAPIType(conn); err != nil {
+	if err := syncAIProviderAPIType(conn); err != nil {
 		slog.Error(
 			"AI 提供商接口类型迁移失败",
 			"duration_ms", time.Since(startedAt).Milliseconds(),
@@ -341,9 +341,9 @@ func agentConversationIndexIsUnique(conn *gorm.DB, tableName string, indexName s
 	}
 }
 
-// syncOpenAIProviderAPIType 将 OpenAI 协议提供商统一迁移为 completions 接口类型。
+// syncAIProviderAPIType 将 AI 提供商统一迁移为 completions 接口类型。
 // 参数 conn 表示已经完成自动迁移的 GORM 数据库连接。
-func syncOpenAIProviderAPIType(conn *gorm.DB) error {
+func syncAIProviderAPIType(conn *gorm.DB) error {
 	migrator := conn.Migrator()
 	if !migrator.HasTable(&bizaiprovider.Provider{}) || !migrator.HasColumn(&bizaiprovider.Provider{}, "api_type") {
 		return nil
@@ -353,9 +353,9 @@ func syncOpenAIProviderAPIType(conn *gorm.DB) error {
 		return err
 	}
 	if err := conn.Model(&bizaiprovider.Provider{}).
-		Where("provider_type = ?", "openai").
+		Where("api_type <> ? OR api_type IS NULL", "completions").
 		Update("api_type", "completions").Error; err != nil {
-		return fmt.Errorf("更新 OpenAI 提供商接口类型失败: %w", err)
+		return fmt.Errorf("更新 AI 提供商接口类型失败: %w", err)
 	}
 	return nil
 }
@@ -365,14 +365,14 @@ func syncOpenAIProviderAPIType(conn *gorm.DB) error {
 func alterAIProviderAPITypeDefault(conn *gorm.DB) error {
 	switch conn.Dialector.Name() {
 	case string(databaseTypeMySQL):
-		if err := conn.Exec("ALTER TABLE ai_providers MODIFY api_type VARCHAR(64) NOT NULL DEFAULT 'completions' COMMENT 'AI接口类型，只能是response或completions，OpenAI提供商固定使用completions'").Error; err != nil {
+		if err := conn.Exec("ALTER TABLE ai_providers MODIFY api_type VARCHAR(64) NOT NULL DEFAULT 'completions' COMMENT 'AI接口类型，固定为completions'").Error; err != nil {
 			return fmt.Errorf("更新 MySQL AI 提供商接口类型默认值失败: %w", err)
 		}
 	case string(databaseTypePostgres):
 		if err := conn.Exec("ALTER TABLE ai_providers ALTER COLUMN api_type SET DEFAULT 'completions'").Error; err != nil {
 			return fmt.Errorf("更新 PostgreSQL AI 提供商接口类型默认值失败: %w", err)
 		}
-		if err := conn.Exec("COMMENT ON COLUMN ai_providers.api_type IS 'AI接口类型，只能是response或completions，OpenAI提供商固定使用completions'").Error; err != nil {
+		if err := conn.Exec("COMMENT ON COLUMN ai_providers.api_type IS 'AI接口类型，固定为completions'").Error; err != nil {
 			return fmt.Errorf("更新 PostgreSQL AI 提供商接口类型注释失败: %w", err)
 		}
 	}

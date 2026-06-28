@@ -13,10 +13,7 @@ const (
 	maxPageSize        = 100
 	providerTypeOpenAI = "openai"
 	providerTypeClaude = "claude"
-	providerTypeGemini = "gemini"
-	apiTypeResponse    = "response"
 	apiTypeCompletions = "completions"
-	defaultAPIType     = apiTypeCompletions
 )
 
 // Repository 表示 AI 提供商数据仓储接口。
@@ -168,11 +165,7 @@ func applyUpdateRequest(cipher *Cipher, item *Provider, req UpdateRequest) error
 	item.HTTPProxy = req.HTTPProxy
 	item.DefaultModel = req.DefaultModel
 	item.Priority = req.Priority
-	if item.ProviderType == providerTypeOpenAI {
-		item.APIType = apiTypeCompletions
-	} else if req.APIType != "" {
-		item.APIType = req.APIType
-	}
+	item.APIType = apiTypeCompletions
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
 	}
@@ -241,13 +234,9 @@ func (s *Service) ListModelsByProviderID(ctx context.Context, id uint64) (ModelL
 // providerAPIType 根据 AI 提供商协议返回最终保存的接口类型。
 // 参数 providerType 表示 AI 提供商协议类型；参数 apiType 表示请求传入的接口类型。
 func providerAPIType(providerType string, apiType string) string {
-	if providerType == providerTypeOpenAI {
-		return apiTypeCompletions
-	}
-	if apiType == "" {
-		return defaultAPIType
-	}
-	return apiType
+	_ = providerType
+	_ = apiType
+	return apiTypeCompletions
 }
 
 // enabledFromCreateRequest 返回创建请求中的启用状态默认值。
@@ -383,7 +372,7 @@ func validateModelListRequest(req ModelListRequest) error {
 // 参数 value 表示需要校验的 AI 提供商类型。
 func isAllowedProviderType(value string) bool {
 	switch value {
-	case providerTypeOpenAI, providerTypeClaude, providerTypeGemini:
+	case providerTypeOpenAI, providerTypeClaude:
 		return true
 	default:
 		return false
@@ -394,7 +383,7 @@ func isAllowedProviderType(value string) bool {
 // 参数 value 表示需要校验的 AI 接口类型。
 func isAllowedAPIType(value string) bool {
 	switch value {
-	case apiTypeResponse, apiTypeCompletions:
+	case apiTypeCompletions:
 		return true
 	default:
 		return false

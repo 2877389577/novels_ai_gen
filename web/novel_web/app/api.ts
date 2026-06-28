@@ -648,10 +648,10 @@ export interface SystemUpdateData {
 }
 
 // AIProviderType 表示前端允许提交的 AI 提供商类型。
-export type AIProviderType = "openai" | "claude" | "gemini";
+export type AIProviderType = "openai" | "claude";
 
 // AIProviderAPIType 表示前端允许提交的 AI 接口类型。
-export type AIProviderAPIType = "response" | "completions";
+export type AIProviderAPIType = "completions";
 
 // AIProviderItem 表示 AI 提供商列表和详情中的单条记录。
 export interface AIProviderItem {

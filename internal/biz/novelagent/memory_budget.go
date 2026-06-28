@@ -80,23 +80,6 @@ func tokenCounterForMessages(ctx context.Context, input *summarization.TokenCoun
 	return total, nil
 }
 
-// tokenCounterForAgenticMessages 估算 schema.AgenticMessage 路径当前上下文使用的 Token 数。
-// 参数 ctx 表示请求上下文；参数 input 表示 Eino Summarization 传入的消息和工具定义。
-func tokenCounterForAgenticMessages(ctx context.Context, input *summarization.TypedTokenCounterInput[*schema.AgenticMessage]) (int, error) {
-	_ = ctx
-	if input == nil {
-		return 0, nil
-	}
-	total := 0
-	for _, message := range input.Messages {
-		total += estimateJSONTokens(message)
-	}
-	for _, toolInfo := range input.Tools {
-		total += estimateToolInfoTokens(toolInfo)
-	}
-	return total, nil
-}
-
 // selectRecentMessagesByTokenBudget 按最近完整用户轮次块选择可注入模型的原文历史。
 // 参数 messages 表示按时间正序排列的候选消息；参数 tokenBudget 表示允许保留的 Token 预算。
 func selectRecentMessagesByTokenBudget(messages []MessageRecord, tokenBudget int) []MessageRecord {

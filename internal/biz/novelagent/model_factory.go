@@ -10,9 +10,7 @@ import (
 	"strings"
 	"time"
 
-	agenticclaude "github.com/cloudwego/eino-ext/components/model/agenticclaude"
-	agenticgemini "github.com/cloudwego/eino-ext/components/model/agenticgemini"
-	agenticopenai "github.com/cloudwego/eino-ext/components/model/agenticopenai"
+	einoclaude "github.com/cloudwego/eino-ext/components/model/claude"
 	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/adk/middlewares/summarization"
@@ -21,7 +19,6 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/cloudwego/eino/schema/openai"
-	"google.golang.org/genai"
 
 	"novels_ai_gen/internal/aihttp"
 	agenttools "novels_ai_gen/internal/biz/novelagent/tools"
@@ -31,11 +28,7 @@ import (
 const (
 	providerTypeOpenAI = "openai"
 	providerTypeClaude = "claude"
-	providerTypeGemini = "gemini"
-	apiTypeResponse    = "response"
 	apiTypeCompletions = "completions"
-	modelPathChat      = "chat"
-	modelPathAgentic   = "agentic"
 	defaultMaxTokens   = 4096
 	defaultTimeout     = 300 * time.Second
 )
@@ -69,48 +62,24 @@ func NewEinoAgentRuntimeFactory(chapterReader agenttools.ChapterReader, novelSum
 func (f *EinoAgentRuntimeFactory) GenerateText(ctx context.Context, cfg ModelConfig, retry RuntimeRetryConfig, input ModelTextInput) (string, error) {
 	cfg = normalizeModelConfig(cfg)
 	retry = normalizeRuntimeRetryConfig(retry)
-	path, err := modelPathForConfig(cfg)
+
+	model, err := f.newChatModel(ctx, cfg)
 	if err != nil {
 		return "", err
 	}
-
-	switch path {
-	case modelPathChat:
-		model, err := f.newChatModel(ctx, cfg)
+	return generateTextWithRetry(ctx, retry, func() (string, error) {
+		output, err := model.Generate(ctx, []*schema.Message{
+			schema.SystemMessage(input.SystemPrompt),
+			schema.UserMessage(input.UserPrompt),
+		})
 		if err != nil {
 			return "", err
 		}
-		return generateTextWithRetry(ctx, retry, func() (string, error) {
-			output, err := model.Generate(ctx, []*schema.Message{
-				schema.SystemMessage(input.SystemPrompt),
-				schema.UserMessage(input.UserPrompt),
-			})
-			if err != nil {
-				return "", err
-			}
-			if output == nil {
-				return "", fmt.Errorf("模型返回空消息")
-			}
-			return output.Content, nil
-		})
-	case modelPathAgentic:
-		model, err := f.newAgenticModel(ctx, cfg, retry)
-		if err != nil {
-			return "", err
+		if output == nil {
+			return "", fmt.Errorf("模型返回空消息")
 		}
-		return generateTextWithRetry(ctx, retry, func() (string, error) {
-			output, err := model.Generate(ctx, []*schema.AgenticMessage{
-				schema.SystemAgenticMessage(input.SystemPrompt),
-				schema.UserAgenticMessage(input.UserPrompt),
-			})
-			if err != nil {
-				return "", err
-			}
-			return agenticMessageText(output), nil
-		})
-	default:
-		return "", fmt.Errorf("不支持的模型路径: %s", path)
-	}
+		return output.Content, nil
+	})
 }
 
 // generateTextWithRetry 按运行时重试配置执行直接文本生成。
@@ -149,79 +118,59 @@ func generateTextWithRetry(ctx context.Context, retry RuntimeRetryConfig, genera
 // 参数 ctx 表示请求上下文；参数 cfg 表示入口模型和启用 Agent 模型配置。
 func (f *EinoAgentRuntimeFactory) NewRuntime(ctx context.Context, cfg RuntimeModelConfig) (AgentRuntime, error) {
 	cfg = normalizeRuntimeModelConfig(cfg)
-	defaultPath, err := modelPathForConfig(cfg.Default)
-	if err != nil {
-		return nil, err
-	}
-	if err := validateRuntimeModelPath(defaultPath, cfg); err != nil {
+	if err := validateRuntimeModelConfig(cfg); err != nil {
 		return nil, err
 	}
 
 	registry := newAgentModelConfigRegistry(cfg)
-	switch defaultPath {
-	case modelPathChat:
-		defaultModel, err := f.newChatModel(ctx, cfg.Default)
-		if err != nil {
-			return nil, err
-		}
-		supervisorModel := defaultModel
-		if cfg.Supervisor != nil {
-			supervisorModel, err = f.newChatModel(ctx, *cfg.Supervisor)
-			if err != nil {
-				return nil, err
-			}
-		}
-		childModels, err := f.newChatChildModels(ctx, cfg.Children)
-		if err != nil {
-			return nil, err
-		}
-		return chatAgentRuntime{
-			model:                  defaultModel,
-			supervisorModel:        supervisorModel,
-			childModels:            childModels,
-			modelConfigs:           registry,
-			chapterReader:          f.chapterReader,
-			novelSummaryStore:      f.novelSummaryStore,
-			novelOutlineStore:      f.novelOutlineStore,
-			characterStore:         f.characterStore,
-			relationshipGraphStore: f.relationshipGraphStore,
-		}, nil
-	case modelPathAgentic:
-		defaultModel, err := f.newAgenticModel(ctx, cfg.Default, cfg.Retry)
-		if err != nil {
-			return nil, err
-		}
-		supervisorModel := defaultModel
-		if cfg.Supervisor != nil {
-			supervisorModel, err = f.newAgenticModel(ctx, *cfg.Supervisor, cfg.Retry)
-			if err != nil {
-				return nil, err
-			}
-		}
-		childModels, err := f.newAgenticChildModels(ctx, cfg.Children, cfg.Retry)
-		if err != nil {
-			return nil, err
-		}
-		return agenticAgentRuntime{
-			model:                  defaultModel,
-			supervisorModel:        supervisorModel,
-			childModels:            childModels,
-			modelConfigs:           registry,
-			chapterReader:          f.chapterReader,
-			novelSummaryStore:      f.novelSummaryStore,
-			novelOutlineStore:      f.novelOutlineStore,
-			characterStore:         f.characterStore,
-			relationshipGraphStore: f.relationshipGraphStore,
-		}, nil
-	default:
-		return nil, fmt.Errorf("不支持的 Agent 模型路径: %s", defaultPath)
+	defaultModel, err := f.newChatModel(ctx, cfg.Default)
+	if err != nil {
+		return nil, err
 	}
+	supervisorModel := defaultModel
+	if cfg.Supervisor != nil {
+		supervisorModel, err = f.newChatModel(ctx, *cfg.Supervisor)
+		if err != nil {
+			return nil, err
+		}
+	}
+	childModels, err := f.newChatChildModels(ctx, cfg.Children)
+	if err != nil {
+		return nil, err
+	}
+	return chatAgentRuntime{
+		model:                  defaultModel,
+		supervisorModel:        supervisorModel,
+		childModels:            childModels,
+		modelConfigs:           registry,
+		chapterReader:          f.chapterReader,
+		novelSummaryStore:      f.novelSummaryStore,
+		novelOutlineStore:      f.novelOutlineStore,
+		characterStore:         f.characterStore,
+		relationshipGraphStore: f.relationshipGraphStore,
+	}, nil
 }
 
 // newChatModel 创建 schema.Message 路径使用的 Eino ChatModel。
 // 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
 func (f *EinoAgentRuntimeFactory) newChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseChatModel, error) {
 	_ = f
+	if err := validateModelConfig("Agent", cfg); err != nil {
+		return nil, err
+	}
+	switch cfg.ProviderType {
+	case providerTypeOpenAI:
+		return newOpenAIChatModel(ctx, cfg)
+	case providerTypeClaude:
+		return newClaudeChatModel(ctx, cfg)
+	default:
+		return nil, fmt.Errorf("不支持的 AI 提供商类型: %s", cfg.ProviderType)
+	}
+}
+
+// newOpenAIChatModel 创建 OpenAI 协议的 Eino ChatModel。
+// 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
+func newOpenAIChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseChatModel, error) {
 	modelConfig := &einoopenai.ChatModelConfig{
 		APIKey:  cfg.APIKey,
 		BaseURL: cfg.BaseURL,
@@ -249,80 +198,27 @@ func (f *EinoAgentRuntimeFactory) newChatModel(ctx context.Context, cfg ModelCon
 	return model, nil
 }
 
-// newAgenticModel 创建 schema.AgenticMessage 路径使用的 Eino AgenticModel。
+// newClaudeChatModel 创建 Claude 协议的 Eino ChatModel。
 // 参数 ctx 表示请求上下文；参数 cfg 表示模型创建配置。
-func (f *EinoAgentRuntimeFactory) newAgenticModel(ctx context.Context, cfg ModelConfig, retry RuntimeRetryConfig) (einomodel.AgenticModel, error) {
-	_ = f
-	switch cfg.ProviderType {
-	case providerTypeOpenAI:
-		timeout := defaultTimeout
-		maxRetries := retry.MaxRetries
-		modelConfig := &agenticopenai.ResponsesConfig{
-			APIKey:     cfg.APIKey,
-			BaseURL:    cfg.BaseURL,
-			Model:      cfg.Model,
-			Timeout:    &timeout,
-			MaxRetries: &maxRetries,
-		}
-		httpClient, err := newModelHTTPClient(cfg, defaultTimeout)
-		if err != nil {
-			return nil, err
-		}
-		modelConfig.HTTPClient = httpClient
-		model, err := agenticopenai.NewResponsesModel(ctx, modelConfig)
-		if err != nil {
-			return nil, err
-		}
-		return model, nil
-	case providerTypeClaude:
-		httpClient, err := newModelHTTPClient(cfg, defaultTimeout)
-		if err != nil {
-			return nil, err
-		}
-		model, err := agenticclaude.New(ctx, &agenticclaude.Config{
-			APIKey:     cfg.APIKey,
-			BaseURL:    cfg.BaseURL,
-			Model:      cfg.Model,
-			MaxTokens:  defaultMaxTokens,
-			HTTPClient: httpClient,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return model, nil
-	case providerTypeGemini:
-		timeout := defaultTimeout
-		clientConfig := &genai.ClientConfig{
-			APIKey: cfg.APIKey,
-			HTTPOptions: genai.HTTPOptions{
-				BaseURL:    normalizeGeminiBaseURL(cfg.BaseURL),
-				APIVersion: "v1beta",
-				Timeout:    &timeout,
-			},
-		}
-		httpClient, err := newModelHTTPClient(cfg, defaultTimeout)
-		if err != nil {
-			return nil, err
-		}
-		clientConfig.HTTPClient = httpClient
-		client, err := genai.NewClient(ctx, clientConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		maxTokens := defaultMaxTokens
-		model, err := agenticgemini.New(ctx, &agenticgemini.Config{
-			Client:    client,
-			Model:     cfg.Model,
-			MaxTokens: &maxTokens,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return model, nil
-	default:
-		return nil, fmt.Errorf("不支持的 Agentic AI 提供商类型: %s", cfg.ProviderType)
+func newClaudeChatModel(ctx context.Context, cfg ModelConfig) (einomodel.BaseChatModel, error) {
+	httpClient, err := newModelHTTPClient(cfg, defaultTimeout)
+	if err != nil {
+		return nil, err
 	}
+	modelConfig := &einoclaude.Config{
+		APIKey:     cfg.APIKey,
+		Model:      cfg.Model,
+		MaxTokens:  defaultMaxTokens,
+		HTTPClient: httpClient,
+	}
+	if strings.TrimSpace(cfg.BaseURL) != "" {
+		modelConfig.BaseURL = &cfg.BaseURL
+	}
+	model, err := einoclaude.NewChatModel(ctx, modelConfig)
+	if err != nil {
+		return nil, err
+	}
+	return model, nil
 }
 
 // newChatChildModels 创建启用子 Agent 的 ChatModel 覆盖集合。
@@ -340,35 +236,6 @@ func (f *EinoAgentRuntimeFactory) newChatChildModels(ctx context.Context, config
 		models[name] = model
 	}
 	return models, nil
-}
-
-// newAgenticChildModels 创建启用子 Agent 的 AgenticModel 覆盖集合。
-// 参数 ctx 表示请求上下文；参数 configs 表示按子 Agent 名称索引的模型覆盖配置。
-func (f *EinoAgentRuntimeFactory) newAgenticChildModels(ctx context.Context, configs map[string]ModelConfig, retry RuntimeRetryConfig) (map[string]einomodel.AgenticModel, error) {
-	if len(configs) == 0 {
-		return nil, nil
-	}
-	models := make(map[string]einomodel.AgenticModel, len(configs))
-	for name, cfg := range configs {
-		model, err := f.newAgenticModel(ctx, cfg, retry)
-		if err != nil {
-			return nil, fmt.Errorf("创建子 Agent %s 自定义模型失败: %w", name, err)
-		}
-		models[name] = model
-	}
-	return models, nil
-}
-
-// normalizeGeminiBaseURL 将系统保存的 Gemini API 根地址转换为 genai 客户端可用的基础地址。
-// 参数 baseURL 表示配置中的 Gemini Base URL。
-func normalizeGeminiBaseURL(baseURL string) string {
-	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	for _, suffix := range []string{"/v1beta", "/v1"} {
-		if strings.HasSuffix(baseURL, suffix) {
-			return strings.TrimSuffix(baseURL, suffix)
-		}
-	}
-	return baseURL
 }
 
 // normalizeRuntimeModelConfig 标准化一次 Agent 运行中的所有模型配置。
@@ -459,51 +326,35 @@ func isGPTModel(model string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(model)), "gpt")
 }
 
-// modelPathForConfig 判断模型配置使用的 Eino 消息路径。
+// validateRuntimeModelConfig 校验一次运行中的模型配置。
 // 参数 cfg 表示模型创建配置。
-func modelPathForConfig(cfg ModelConfig) (string, error) {
-	switch cfg.ProviderType {
-	case providerTypeOpenAI:
-		switch cfg.APIType {
-		case "", apiTypeCompletions:
-			return modelPathChat, nil
-		case apiTypeResponse:
-			return modelPathAgentic, nil
-		default:
-			return "", fmt.Errorf("不支持的 OpenAI API 类型: %s", cfg.APIType)
-		}
-	case providerTypeClaude, providerTypeGemini:
-		return modelPathAgentic, nil
-	default:
-		return "", fmt.Errorf("不支持的 AI 提供商类型: %s", cfg.ProviderType)
+func validateRuntimeModelConfig(cfg RuntimeModelConfig) error {
+	if err := validateModelConfig("入口 Agent", cfg.Default); err != nil {
+		return err
 	}
-}
-
-// validateRuntimeModelPath 校验自定义模型是否与入口模型使用相同 Eino 消息路径。
-// 参数 defaultPath 表示入口模型路径；参数 cfg 表示一次运行中的模型配置集合。
-func validateRuntimeModelPath(defaultPath string, cfg RuntimeModelConfig) error {
 	if cfg.Supervisor != nil {
-		if err := validateModelPath("顶层 Agent", defaultPath, *cfg.Supervisor); err != nil {
+		if err := validateModelConfig("顶层 Agent", *cfg.Supervisor); err != nil {
 			return err
 		}
 	}
 	for name, childCfg := range cfg.Children {
-		if err := validateModelPath("子 Agent "+name, defaultPath, childCfg); err != nil {
+		if err := validateModelConfig("子 Agent "+name, childCfg); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// validateModelPath 校验单个自定义模型路径是否兼容入口模型路径。
-// 参数 label 表示错误提示中的 Agent 名称；参数 defaultPath 表示入口模型路径；参数 cfg 表示自定义模型配置。
-func validateModelPath(label string, defaultPath string, cfg ModelConfig) error {
-	path, err := modelPathForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("%w: %s 自定义模型协议无效: %v", ErrAgentConfigInvalid, label, err)
+// validateModelConfig 校验单个 Agent 模型配置。
+// 参数 label 表示错误提示中的 Agent 名称；参数 cfg 表示需要校验的模型配置。
+func validateModelConfig(label string, cfg ModelConfig) error {
+	switch cfg.ProviderType {
+	case providerTypeOpenAI, providerTypeClaude:
+	default:
+		return fmt.Errorf("%w: %s 模型提供商类型仅支持 openai 或 claude", ErrAgentConfigInvalid, label)
 	}
-	if path != defaultPath {
-		return fmt.Errorf("%w: %s 自定义模型路径 %s 与入口模型路径 %s 不兼容", ErrAgentConfigInvalid, label, path, defaultPath)
+	if cfg.APIType != "" && cfg.APIType != apiTypeCompletions {
+		return fmt.Errorf("%w: %s 模型接口类型仅支持 completions", ErrAgentConfigInvalid, label)
 	}
 	return nil
 }
@@ -695,113 +546,6 @@ func (r chatAgentRuntime) GenerateConversationTitle(ctx context.Context, cfg *ap
 	return normalizeConversationTitleContent(output.Content)
 }
 
-// agenticAgentRuntime 表示基于 schema.AgenticMessage 的 Eino ADK 多层 Agent 运行时。
-type agenticAgentRuntime struct {
-	// model 表示 Eino AgenticModel。
-	model einomodel.AgenticModel
-	// supervisorModel 表示顶层 Agent 实际使用的 Eino AgenticModel。
-	supervisorModel einomodel.AgenticModel
-	// childModels 表示启用子 Agent 的自定义 AgenticModel，未配置的子 Agent 使用入口模型。
-	childModels map[string]einomodel.AgenticModel
-	// modelConfigs 表示 Agent 名称到实际模型配置的查询表。
-	modelConfigs agentModelConfigRegistry
-	// chapterReader 表示 get_content 工具读取章节正文所需的数据依赖。
-	chapterReader agenttools.ChapterReader
-	// novelSummaryStore 表示小说滚动总结工具读写总结所需的数据依赖。
-	novelSummaryStore agenttools.NovelSummaryStore
-	// novelOutlineStore 表示小说大纲工具读写大纲所需的数据依赖。
-	novelOutlineStore agenttools.NovelOutlineStore
-	// characterStore 表示角色信息工具读写角色卡数据所需的数据依赖。
-	characterStore agenttools.CharacterStore
-	// relationshipGraphStore 表示角色关系图工具读取直接关系所需的数据依赖。
-	relationshipGraphStore agenttools.RelationshipGraphStore
-}
-
-// Stream 流式执行基于 schema.AgenticMessage 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 control 表示 checkpoint 控制参数；参数 emit 表示文本增量回调。
-func (r agenticAgentRuntime) Stream(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, control AgentRunControl, emit func(delta AgentDelta) error) (AgentResult, error) {
-	agentCfg, err := newAgentRuntimeConfig(cfg)
-	if err != nil {
-		return AgentResult{Task: taskDirect}, err
-	}
-
-	agent, err := newAgenticSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader, r.novelSummaryStore, r.novelOutlineStore, r.characterStore, r.relationshipGraphStore)
-	if err != nil {
-		return AgentResult{Task: taskDirect}, err
-	}
-
-	runner := adk.NewTypedRunner(adk.TypedRunnerConfig[*schema.AgenticMessage]{
-		Agent:           agent,
-		EnableStreaming: true,
-		CheckPointStore: control.CheckPointStore,
-	})
-	result, err := streamAgenticAgentEvents(runner.Run(ctx, agenticRunMessages(req, memory), agentRunOptions(control)...), control.CheckPointID, agentCfg.taskByAgent, emit)
-	if err != nil {
-		return result, err
-	}
-	return applyResultModelInfo(result, agentCfg.supervisor.name, r.modelConfigs), nil
-}
-
-// Resume 从人工审核中断点恢复基于 schema.AgenticMessage 的小说写作 Agent。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 req 表示原始流式聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆；参数 control 表示 checkpoint 控制参数；参数 approval 表示用户审核决策；参数 emit 表示文本增量回调。
-func (r agenticAgentRuntime) Resume(ctx context.Context, cfg *appconfig.AppConfig, req ChatRequest, memory AgentMemoryInput, control AgentRunControl, approval ToolApprovalResumeData, emit func(delta AgentDelta) error) (AgentResult, error) {
-	agentCfg, err := newAgentRuntimeConfig(cfg)
-	if err != nil {
-		return AgentResult{Task: taskDirect}, err
-	}
-
-	agent, err := newAgenticSupervisorAgent(ctx, r.model, r.supervisorModel, r.childModels, agentCfg, req, r.chapterReader, r.novelSummaryStore, r.novelOutlineStore, r.characterStore, r.relationshipGraphStore)
-	if err != nil {
-		return AgentResult{Task: taskDirect}, err
-	}
-
-	runner := adk.NewTypedRunner(adk.TypedRunnerConfig[*schema.AgenticMessage]{
-		Agent:           agent,
-		EnableStreaming: true,
-		CheckPointStore: control.CheckPointStore,
-	})
-	iterator, err := runner.ResumeWithParams(ctx, control.CheckPointID, &adk.ResumeParams{
-		Targets: map[string]any{control.InterruptID: approval},
-	})
-	if err != nil {
-		return AgentResult{Task: taskDirect}, err
-	}
-	result, err := streamAgenticAgentEvents(iterator, control.CheckPointID, agentCfg.taskByAgent, emit)
-	if err != nil {
-		return result, err
-	}
-	return applyResultModelInfo(result, agentCfg.supervisor.name, r.modelConfigs), nil
-}
-
-// Summarize 使用 schema.AgenticMessage 模型生成会话级 Agent 滚动摘要。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示需要压缩进摘要的历史上下文。
-func (r agenticAgentRuntime) Summarize(ctx context.Context, cfg *appconfig.AppConfig, input AgentSummaryInput) (string, error) {
-	messages := []*schema.AgenticMessage{
-		schema.SystemAgenticMessage(summarySystemPrompt),
-		schema.UserAgenticMessage(summaryUserPrompt(input)),
-	}
-	output, err := r.model.Generate(ctx, messages)
-	if err != nil {
-		return "", err
-	}
-	return normalizeSummaryContent(agenticMessageText(output))
-}
-
-// GenerateConversationTitle 使用 schema.AgenticMessage 模型生成新 Agent 会话标题。
-// 参数 ctx 表示请求上下文；参数 cfg 表示当前配置快照；参数 input 表示标题生成输入。
-func (r agenticAgentRuntime) GenerateConversationTitle(ctx context.Context, cfg *appconfig.AppConfig, input AgentConversationTitleInput) (string, error) {
-	_ = cfg
-	messages := []*schema.AgenticMessage{
-		schema.SystemAgenticMessage(conversationTitleSystemPrompt),
-		schema.UserAgenticMessage(conversationTitleUserPrompt(input)),
-	}
-	output, err := r.model.Generate(ctx, messages)
-	if err != nil {
-		return "", err
-	}
-	return normalizeConversationTitleContent(agenticMessageText(output))
-}
-
 // chatRunMessages 构造 schema.Message 路径的 Agent 输入消息列表。
 // 参数 req 表示本轮聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆。
 func chatRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Message {
@@ -825,29 +569,6 @@ func chatRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.Message
 	return messages
 }
 
-// agenticRunMessages 构造 schema.AgenticMessage 路径的 Agent 输入消息列表。
-// 参数 req 表示本轮聊天请求；参数 memory 表示需要注入模型上下文的会话级记忆。
-func agenticRunMessages(req ChatRequest, memory AgentMemoryInput) []*schema.AgenticMessage {
-	messages := make([]*schema.AgenticMessage, 0, len(memory.Messages)+3)
-	if prompt := memorySummaryPrompt(memory.Summary); prompt != "" {
-		messages = append(messages, schema.SystemAgenticMessage(prompt))
-	}
-	for _, item := range memory.Messages {
-		content := strings.TrimSpace(item.Content)
-		if content == "" {
-			continue
-		}
-		switch item.Role {
-		case MessageRoleUser:
-			messages = append(messages, schema.UserAgenticMessage(item.Content))
-		case MessageRoleAssistant, MessageRoleFunctionCall, MessageRoleFunctionResult:
-			messages = append(messages, assistantAgenticMessage(item.Content))
-		}
-	}
-	messages = append(messages, schema.UserAgenticMessage(req.Message))
-	return messages
-}
-
 // agentRunOptions 构造 Agent Runner 运行选项。
 // 参数 control 表示本轮运行的 checkpoint 控制参数。
 func agentRunOptions(control AgentRunControl) []adk.AgentRunOption {
@@ -855,17 +576,6 @@ func agentRunOptions(control AgentRunControl) []adk.AgentRunOption {
 		return nil
 	}
 	return []adk.AgentRunOption{adk.WithCheckPointID(control.CheckPointID)}
-}
-
-// assistantAgenticMessage 创建 AgenticMessage 路径使用的助手历史消息。
-// 参数 content 表示助手历史消息正文。
-func assistantAgenticMessage(content string) *schema.AgenticMessage {
-	return &schema.AgenticMessage{
-		Role: schema.AgenticRoleTypeAssistant,
-		ContentBlocks: []*schema.ContentBlock{
-			schema.NewContentBlock(&schema.AssistantGenText{Text: content}),
-		},
-	}
 }
 
 // agentFunctionToolCall 表示可写入记忆的函数工具调用摘要。
@@ -1116,81 +826,6 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 	})
 }
 
-// newAgenticSupervisorAgent 创建基于 schema.AgenticMessage 的顶层 Agent，并把配置中的子 Agent 包装为 tool。
-// 参数 ctx 表示请求上下文；参数 defaultModel 表示入口 AgenticModel；参数 supervisorModel 表示顶层 Agent 使用的 AgenticModel；参数 childModels 表示子 Agent 自定义 AgenticModel；参数 cfg 表示运行时 Agent 配置；参数 req 表示流式聊天请求；参数 chapterReader 表示章节读取依赖；参数 novelSummaryStore 表示小说滚动总结读写依赖；参数 novelOutlineStore 表示小说大纲读写依赖；参数 characterStore 表示角色信息读写依赖；参数 relationshipGraphStore 表示角色关系图读取依赖。
-func newAgenticSupervisorAgent(ctx context.Context, defaultModel einomodel.AgenticModel, supervisorModel einomodel.AgenticModel, childModels map[string]einomodel.AgenticModel, cfg runtimeAgentConfig, req ChatRequest, chapterReader agenttools.ChapterReader, novelSummaryStore agenttools.NovelSummaryStore, novelOutlineStore agenttools.NovelOutlineStore, characterStore agenttools.CharacterStore, relationshipGraphStore agenttools.RelationshipGraphStore) (*adk.TypedChatModelAgent[*schema.AgenticMessage], error) {
-	if err := adk.SetLanguage(adk.LanguageChinese); err != nil {
-		return nil, err
-	}
-	if err := validateAgenticChildHistorySharing(cfg); err != nil {
-		return nil, err
-	}
-
-	supervisorTools, err := configuredAgentTools(req, cfg.supervisor, cfg.tools, chapterReader, novelSummaryStore, novelOutlineStore, characterStore, relationshipGraphStore)
-	if err != nil {
-		return nil, err
-	}
-
-	tools := make([]tool.BaseTool, 0, len(supervisorTools)+len(cfg.children))
-	tools = append(tools, supervisorTools...)
-	returnDirectly := make(map[string]bool, len(cfg.children))
-	for _, child := range cfg.children {
-		childTools, err := configuredAgentTools(req, child, cfg.tools, chapterReader, novelSummaryStore, novelOutlineStore, characterStore, relationshipGraphStore)
-		if err != nil {
-			return nil, err
-		}
-		childModel := defaultModel
-		if configuredModel, ok := childModels[child.name]; ok {
-			childModel = configuredModel
-		}
-		childHandlers, err := agenticAgentHandlers(ctx, childModel, cfg.memory)
-		if err != nil {
-			return nil, fmt.Errorf("创建子 Agent %s 上下文压缩中间件失败: %w", child.name, err)
-		}
-		childAgent, err := adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
-			Name:             child.name,
-			Description:      child.description,
-			Instruction:      instructionWithRequestContext(child.instruction, req),
-			Model:            childModel,
-			ToolsConfig:      childToolsConfig(childTools),
-			Handlers:         childHandlers,
-			MaxIterations:    child.maxIterations,
-			ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("创建子 Agent %s 失败: %w", child.name, err)
-		}
-		tools = append(tools, adk.NewTypedAgentTool[*schema.AgenticMessage](
-			ctx,
-			childAgent,
-			adk.WithAgentInputSchema(schema.NewParamsOneOfByParams(child.parameters)),
-		))
-		returnDirectly[child.name] = true
-	}
-
-	supervisorHandlers, err := agenticAgentHandlers(ctx, supervisorModel, cfg.memory)
-	if err != nil {
-		return nil, fmt.Errorf("创建顶层 Agent 上下文压缩中间件失败: %w", err)
-	}
-	return adk.NewTypedChatModelAgent(ctx, &adk.TypedChatModelAgentConfig[*schema.AgenticMessage]{
-		Name:        cfg.supervisor.name,
-		Description: cfg.supervisor.description,
-		Instruction: instructionWithRequestContext(cfg.supervisor.instruction, req),
-		Model:       supervisorModel,
-		ToolsConfig: adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools:               tools,
-				ExecuteSequentially: true,
-			},
-			EmitInternalEvents: true,
-			ReturnDirectly:     returnDirectly,
-		},
-		Handlers:         supervisorHandlers,
-		MaxIterations:    cfg.supervisor.maxIterations,
-		ModelRetryConfig: agenticModelRetryConfig(cfg.retry),
-	})
-}
-
 // toolErrorResult 表示返回给模型的工具错误结果。
 type toolErrorResult struct {
 	// OK 表示工具是否成功执行。
@@ -1325,35 +960,6 @@ func chatAgentHandlers(ctx context.Context, model einomodel.BaseChatModel, memor
 	return handlers, nil
 }
 
-// agenticAgentHandlers 创建 schema.AgenticMessage 路径 Agent 使用的中间件列表。
-// 参数 ctx 表示创建中间件的上下文；参数 model 表示摘要生成使用的模型；参数 memory 表示上下文压缩配置。
-func agenticAgentHandlers(ctx context.Context, model einomodel.AgenticModel, memory RuntimeMemoryConfig) ([]adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage], error) {
-	mw, err := summarization.NewTyped(ctx, &summarization.TypedConfig[*schema.AgenticMessage]{
-		Model: model,
-		Trigger: &summarization.TriggerCondition{
-			ContextTokens: memory.ContextTokens,
-		},
-		TokenCounter: tokenCounterForAgenticMessages,
-	})
-	if err != nil {
-		return nil, err
-	}
-	handlers := []adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage]{mw}
-	handlers = append(handlers, safeToolErrorHandlers[*schema.AgenticMessage]()...)
-	return handlers, nil
-}
-
-// validateAgenticChildHistorySharing 校验 Agentic 路径是否包含当前 Eino 不支持的子 Agent 历史共享配置。
-// 参数 cfg 表示本次请求使用的运行时 Agent 配置。
-func validateAgenticChildHistorySharing(cfg runtimeAgentConfig) error {
-	for _, child := range cfg.children {
-		if child.shareChatHistory {
-			return fmt.Errorf("%w: 子 Agent %s 开启了记忆共享，但当前模型路径暂不支持，请使用 Chat 路径模型或关闭该开关", ErrAgentConfigInvalid, child.name)
-		}
-	}
-	return nil
-}
-
 // chatModelRetryConfig 创建 schema.Message 路径使用的 ADK 模型重试配置。
 // 参数 retry 表示当前 Agent 运行使用的模型失败重试配置。
 func chatModelRetryConfig(retry RuntimeRetryConfig) *adk.ModelRetryConfig {
@@ -1363,19 +969,6 @@ func chatModelRetryConfig(retry RuntimeRetryConfig) *adk.ModelRetryConfig {
 	return &adk.ModelRetryConfig{
 		MaxRetries:  retry.MaxRetries,
 		ShouldRetry: shouldRetryModelError[*schema.Message],
-		BackoffFunc: fixedRetryBackoff(retry.Backoff),
-	}
-}
-
-// agenticModelRetryConfig 创建 schema.AgenticMessage 路径使用的 ADK 模型重试配置。
-// 参数 retry 表示当前 Agent 运行使用的模型失败重试配置。
-func agenticModelRetryConfig(retry RuntimeRetryConfig) *adk.TypedModelRetryConfig[*schema.AgenticMessage] {
-	if retry.MaxRetries <= 0 {
-		return nil
-	}
-	return &adk.TypedModelRetryConfig[*schema.AgenticMessage]{
-		MaxRetries:  retry.MaxRetries,
-		ShouldRetry: shouldRetryModelError[*schema.AgenticMessage],
 		BackoffFunc: fixedRetryBackoff(retry.Backoff),
 	}
 }
@@ -1591,42 +1184,6 @@ func streamChatAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*sch
 	return result, nil
 }
 
-// streamAgenticAgentEvents 将 schema.AgenticMessage Agent 事件转换为统一文本结果。
-// 参数 iterator 表示 Eino ADK 事件迭代器；参数 checkPointID 表示本轮运行使用的 checkpoint 标识；参数 taskByAgent 表示子 Agent 名称到任务标识的映射；参数 emit 表示文本增量回调。
-func streamAgenticAgentEvents(iterator *adk.AsyncIterator[*adk.TypedAgentEvent[*schema.AgenticMessage]], checkPointID string, taskByAgent map[string]string, emit func(delta AgentDelta) error) (AgentResult, error) {
-	result := AgentResult{Task: taskDirect}
-	var full strings.Builder
-	nextReplyIndex := 0
-	childSeen := false
-	for {
-		event, ok := iterator.Next()
-		if !ok {
-			break
-		}
-		if event.Err != nil {
-			return result, event.Err
-		}
-		if event.Action != nil && event.Action.Interrupted != nil {
-			return result, agentInterruptedErrorFromInfo(checkPointID, event.Action.Interrupted)
-		}
-		if event.Output == nil || event.Output.MessageOutput == nil {
-			continue
-		}
-
-		task := taskForAgent(event.AgentName, taskByAgent)
-		if task != taskDirect {
-			childSeen = true
-		}
-		if task == taskDirect && childSeen {
-			continue
-		}
-		if err := emitAgenticMessageVariant(event.AgentName, task, event.Output.MessageOutput, &nextReplyIndex, &full, &result, emit); err != nil {
-			return result, err
-		}
-	}
-	return result, nil
-}
-
 // emitChatMessageVariant 输出 schema.Message 事件中的助手文本。
 // 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 nextReplyIndex 表示下一段可见助手回复序号；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
 func emitChatMessageVariant(agentName string, task string, variant *adk.TypedMessageVariant[*schema.Message], nextReplyIndex *int, full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
@@ -1672,51 +1229,6 @@ func emitChatMessageVariant(agentName string, task string, variant *adk.TypedMes
 	return nil
 }
 
-// emitAgenticMessageVariant 输出 schema.AgenticMessage 事件中的助手文本。
-// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 nextReplyIndex 表示下一段可见助手回复序号；参数 full 表示完整内容构建器；参数 result 表示最终结果；参数 emit 表示文本增量回调。
-func emitAgenticMessageVariant(agentName string, task string, variant *adk.TypedMessageVariant[*schema.AgenticMessage], nextReplyIndex *int, full *strings.Builder, result *AgentResult, emit func(delta AgentDelta) error) error {
-	if variant.IsStreaming {
-		if variant.MessageStream == nil {
-			return nil
-		}
-		defer variant.MessageStream.Close()
-		chunks := make([]*schema.AgenticMessage, 0, 8)
-		replyIndex := 0
-		for {
-			chunk, err := variant.MessageStream.Recv()
-			if errors.Is(err, io.EOF) {
-				if msg := concatAgenticMessageChunks(chunks); msg != nil {
-					appendAgenticMessageMemoryEvents(agentName, task, variant, msg, result)
-				}
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			if chunk != nil {
-				chunks = append(chunks, chunk)
-			}
-			if !isAssistantAgenticMessage(variant, chunk) {
-				continue
-			}
-			if replyIndex == 0 {
-				replyIndex = allocateAgentReplyIndex(nextReplyIndex)
-			}
-			if err := emitTextDelta(agentName, task, replyIndex, agenticMessageText(chunk), full, result, emit); err != nil {
-				return err
-			}
-		}
-	}
-
-	if isAssistantAgenticMessage(variant, variant.Message) {
-		if err := emitTextDelta(agentName, task, allocateAgentReplyIndex(nextReplyIndex), agenticMessageText(variant.Message), full, result, emit); err != nil {
-			return err
-		}
-	}
-	appendAgenticMessageMemoryEvents(agentName, task, variant, variant.Message, result)
-	return nil
-}
-
 // concatChatMessageChunks 合并 schema.Message 流式片段，用于在流结束后提取完整工具事件。
 // 参数 chunks 表示同一条流式消息的所有片段。
 func concatChatMessageChunks(chunks []*schema.Message) *schema.Message {
@@ -1727,22 +1239,6 @@ func concatChatMessageChunks(chunks []*schema.Message) *schema.Message {
 		return chunks[0]
 	}
 	msg, err := schema.ConcatMessages(chunks)
-	if err != nil {
-		return nil
-	}
-	return msg
-}
-
-// concatAgenticMessageChunks 合并 schema.AgenticMessage 流式片段，用于在流结束后提取完整工具事件。
-// 参数 chunks 表示同一条流式 Agentic 消息的所有片段。
-func concatAgenticMessageChunks(chunks []*schema.AgenticMessage) *schema.AgenticMessage {
-	if len(chunks) == 0 {
-		return nil
-	}
-	if len(chunks) == 1 {
-		return chunks[0]
-	}
-	msg, err := schema.ConcatAgenticMessages(chunks)
 	if err != nil {
 		return nil
 	}
@@ -1798,76 +1294,6 @@ func appendChatMessageMemoryEvents(agentName string, task string, variant *adk.T
 	}
 }
 
-// appendAgenticMessageMemoryEvents 从 schema.AgenticMessage 事件中提取需要入库的记忆事件。
-// 参数 agentName 表示 Eino 事件来源 Agent 名称；参数 task 表示事件对应任务；参数 variant 表示 Eino 消息事件；参数 msg 表示完整消息；参数 result 表示最终结果。
-func appendAgenticMessageMemoryEvents(agentName string, task string, variant *adk.TypedMessageVariant[*schema.AgenticMessage], msg *schema.AgenticMessage, result *AgentResult) {
-	if msg == nil || result == nil {
-		return
-	}
-	if isAssistantAgenticMessage(variant, msg) {
-		appendAgentMemoryEvent(result, AgentMemoryEvent{
-			Role:      MessageRoleAssistant,
-			Task:      task,
-			Content:   agenticMessageText(msg),
-			AgentName: strings.TrimSpace(agentName),
-		})
-	}
-	calls := make([]agentFunctionToolCall, 0)
-	results := make([]agentFunctionToolResult, 0)
-	for _, block := range msg.ContentBlocks {
-		if block == nil {
-			continue
-		}
-		if block.FunctionToolCall != nil {
-			calls = append(calls, agentFunctionToolCall{
-				Name: strings.TrimSpace(block.FunctionToolCall.Name),
-			})
-		}
-		if block.FunctionToolResult != nil {
-			results = append(results, agentFunctionToolResult{
-				ID:      strings.TrimSpace(block.FunctionToolResult.CallID),
-				Content: functionToolResultContentText(block.FunctionToolResult.Content),
-			})
-		}
-	}
-	if content, ok := encodeFunctionCallMemoryContent(calls); ok {
-		appendAgentMemoryEvent(result, AgentMemoryEvent{
-			Role:      MessageRoleFunctionCall,
-			Task:      task,
-			Content:   content,
-			AgentName: strings.TrimSpace(agentName),
-		})
-	}
-	if content, ok := encodeFunctionResultMemoryContent(results); ok {
-		appendAgentMemoryEvent(result, AgentMemoryEvent{
-			Role:      MessageRoleFunctionResult,
-			Task:      task,
-			Content:   content,
-			AgentName: strings.TrimSpace(agentName),
-		})
-	}
-}
-
-// functionToolResultContentText 将 Agentic 工具结果内容块转换为可写入记忆的文本。
-// 参数 blocks 表示 Eino Agentic 工具结果的多模态内容块。
-func functionToolResultContentText(blocks []*schema.FunctionToolResultContentBlock) string {
-	if len(blocks) == 0 {
-		return ""
-	}
-	var builder strings.Builder
-	for _, block := range blocks {
-		if block == nil {
-			continue
-		}
-		if block.Type == schema.FunctionToolResultContentBlockTypeText && block.Text != nil {
-			builder.WriteString(block.Text.Text)
-			continue
-		}
-		builder.WriteString(block.String())
-	}
-	return builder.String()
-}
-
 // appendAgentMemoryEvent 将一个非空内部记忆事件追加到运行结果。
 // 参数 result 表示 Agent 最终结果；参数 event 表示需要追加的记忆事件。
 func appendAgentMemoryEvent(result *AgentResult, event AgentMemoryEvent) {
@@ -1893,19 +1319,6 @@ func isAssistantChatMessage(variant *adk.TypedMessageVariant[*schema.Message], m
 		return false
 	}
 	return (variant.Role == "" || variant.Role == schema.Assistant || msg.Role == schema.Assistant) && msg.Content != ""
-}
-
-// isAssistantAgenticMessage 判断 schema.AgenticMessage 是否为可展示的助手文本。
-// 参数 variant 表示 Eino 消息事件；参数 msg 表示待判断消息。
-func isAssistantAgenticMessage(variant *adk.TypedMessageVariant[*schema.AgenticMessage], msg *schema.AgenticMessage) bool {
-	if msg == nil {
-		return false
-	}
-	role := msg.Role
-	if role == "" {
-		role = variant.AgenticRole
-	}
-	return role == schema.AgenticRoleTypeAssistant && agenticMessageText(msg) != ""
 }
 
 // emitTextDelta 写出文本增量并累积完整结果。
@@ -1965,23 +1378,4 @@ func taskForAgent(agentName string, taskByAgent map[string]string) string {
 		return task
 	}
 	return taskDirect
-}
-
-// agenticMessageText 从 AgenticMessage 中提取模型生成文本。
-// 参数 msg 表示 Eino AgenticMessage 流式片段。
-func agenticMessageText(msg *schema.AgenticMessage) string {
-	if msg == nil {
-		return ""
-	}
-
-	var builder strings.Builder
-	for _, block := range msg.ContentBlocks {
-		if block == nil {
-			continue
-		}
-		if block.AssistantGenText != nil {
-			builder.WriteString(block.AssistantGenText.Text)
-		}
-	}
-	return builder.String()
 }

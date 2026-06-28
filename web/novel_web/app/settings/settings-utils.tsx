@@ -17,10 +17,7 @@ import type {
   AIProviderFormMode,
   ChapterSummaryAgentFormState,
 } from "./types";
-import {
-  aiProviderAPITypeOptions,
-  aiProviderTypeOptions,
-} from "./settings-constants";
+import { aiProviderTypeOptions } from "./settings-constants";
 
 const defaultAIProviderFormState: AIProviderFormState = {
   name: "",
@@ -720,7 +717,7 @@ export function providerToAIProviderFormState(
     httpProxy: provider.http_proxy || "",
     defaultModel: provider.default_model,
     priority: String(provider.priority ?? 0),
-    apiType: provider.provider_type === "openai" ? "completions" : provider.api_type,
+    apiType: "completions",
     enabled: provider.enabled,
   };
 }
@@ -738,7 +735,7 @@ export function validateAIProviderForm(
     return "AI 提供商类型不能为空";
   }
   if (!isAIProviderType(form.providerType)) {
-    return "AI 提供商类型只能是 openai、claude 或 gemini";
+    return "AI 提供商类型只能是 openai 或 claude";
   }
   if (mode === "create" && !form.apiKey.trim()) {
     return "AI 提供商 API Key 不能为空";
@@ -750,7 +747,7 @@ export function validateAIProviderForm(
       : "优先级必须是非负整数";
   }
   if (!isAIProviderAPIType(form.apiType)) {
-    return "AI 接口类型只能是 response 或 completions";
+    return "AI 接口类型只能是 completions";
   }
   if (!isValidHTTPProxy(form.httpProxy)) {
     return "HTTP 代理地址格式无效";
@@ -764,10 +761,6 @@ export function toAIProviderUpsertParams(
   form: AIProviderFormState,
 ): AIProviderUpsertParams {
   const providerType = form.providerType.trim() as AIProviderType;
-  const apiType =
-    providerType === "openai"
-      ? "completions"
-      : (form.apiType.trim() as AIProviderAPIType);
 
   return {
     name: form.name.trim(),
@@ -777,7 +770,7 @@ export function toAIProviderUpsertParams(
     http_proxy: form.httpProxy.trim(),
     default_model: form.defaultModel.trim(),
     priority: parseAIProviderPriority(form.priority) ?? 0,
-    api_type: apiType,
+    api_type: "completions",
     enabled: form.enabled,
   };
 }
@@ -843,11 +836,7 @@ export function isAIProviderType(value: string): value is AIProviderType {
 // isAIProviderAPIType 判断前端表单中的 AI 接口类型是否为允许值。
 // 参数 value 表示需要校验的 AI 接口类型文本。
 export function isAIProviderAPIType(value: string): value is AIProviderAPIType {
-  return aiProviderAPITypeOptions.some(
-    function matchAIProviderAPIType(option) {
-      return option.value === value;
-    },
-  );
+  return value === "completions";
 }
 
 // isValidHTTPProxy 判断 HTTP 代理地址是否为空或有效。

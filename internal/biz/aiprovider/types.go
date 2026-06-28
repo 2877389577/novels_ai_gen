@@ -8,8 +8,8 @@ type Provider struct {
 	ID uint64 `json:"id" gorm:"column:id;primaryKey;autoIncrement;comment:AI提供商主键ID" example:"1"`
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" gorm:"column:name;type:varchar(255);not null;uniqueIndex:ux_ai_providers_name;comment:AI提供商名称，不能为空且唯一" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
-	ProviderType string `json:"provider_type" gorm:"column:provider_type;type:varchar(64);not null;comment:AI提供商类型，只能是openai、claude、gemini" example:"openai"`
+	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
+	ProviderType string `json:"provider_type" gorm:"column:provider_type;type:varchar(64);not null;comment:AI提供商类型，只能是openai、claude" example:"openai"`
 	// APIKeyCiphertext 表示加密后的 API Key 密文，接口不回显。
 	APIKeyCiphertext string `json:"-" gorm:"column:api_key_ciphertext;type:text;not null;comment:加密后的API Key密文，接口不回显"`
 	// APIKeyMask 表示 API Key 掩码，仅用于列表和详情展示。
@@ -22,8 +22,8 @@ type Provider struct {
 	DefaultModel string `json:"default_model" gorm:"column:default_model;type:varchar(255);comment:模型列表不可用时使用的默认模型标识，可以为空" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" gorm:"column:priority;not null;default:0;index:idx_ai_providers_priority;comment:AI提供商排序优先级，0最低，数值越大优先级越高" example:"1"`
-	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
-	APIType string `json:"api_type" gorm:"column:api_type;type:varchar(64);not null;default:completions;comment:AI接口类型，只能是response或completions，OpenAI提供商固定使用completions" example:"completions"`
+	// APIType 表示 AI 接口类型，固定为 completions。
+	APIType string `json:"api_type" gorm:"column:api_type;type:varchar(64);not null;default:completions;comment:AI接口类型，固定为completions" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。
 	Enabled bool `json:"enabled" gorm:"column:enabled;not null;default:true;index:idx_ai_providers_enabled;comment:是否启用该AI提供商" example:"true"`
 	// CreatedAt 表示创建时间。
@@ -41,7 +41,7 @@ func (Provider) TableName() string {
 type CreateRequest struct {
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" binding:"required" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示 AI 提供商 API Key，创建时不能为空。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
@@ -53,7 +53,7 @@ type CreateRequest struct {
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型，只能是 response 或 completions；OpenAI 提供商固定使用 completions。
+	// APIType 表示 AI 接口类型，只能是 completions。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；nil 表示默认启用。
 	Enabled *bool `json:"enabled" example:"true"`
@@ -63,7 +63,7 @@ type CreateRequest struct {
 type UpdateRequest struct {
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" binding:"required" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。
 	APIKey string `json:"api_key" example:"sk-xxx"`
@@ -75,7 +75,7 @@ type UpdateRequest struct {
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型，只能是 response 或 completions；为空时保留原值。
+	// APIType 表示 AI 接口类型，只能是 completions；为空时保存为 completions。
 	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；nil 表示保留原值。
 	Enabled *bool `json:"enabled" example:"true"`
@@ -131,7 +131,7 @@ type ListResponse struct {
 
 // ModelListRequest 表示根据 AI 提供商官方协议查询模型列表的请求参数。
 type ModelListRequest struct {
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude、gemini。
+	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示用于请求官方模型列表接口的 API Key。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
@@ -151,7 +151,7 @@ type ModelInfo struct {
 	OwnedBy string `json:"owned_by" example:"openai"`
 	// CreatedAt 表示模型创建时间；官方未提供时为空。
 	CreatedAt string `json:"created_at" example:"2026-06-18T12:00:00Z"`
-	// SupportedGenerationMethods 表示 Gemini 等协议返回的模型生成能力。
+	// SupportedGenerationMethods 表示协议返回的模型生成能力。
 	SupportedGenerationMethods []string `json:"supported_generation_methods"`
 }
 
