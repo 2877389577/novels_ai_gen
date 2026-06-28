@@ -53,13 +53,9 @@ definitions:
     type: object
   aiprovider.ProviderData:
     properties:
-      api_type:
-        description: APIType 表示 AI 接口类型。
-        example: completions
-        type: string
       base_url:
-        description: BaseURL 表示 AI 提供商接口基础地址。
-        example: https://api.openai.com/v1
+        description: BaseURL 表示 AI 提供商服务根地址。
+        example: https://api.example.com
         type: string
       created_at:
         description: CreatedAt 表示创建时间。
@@ -93,10 +89,6 @@ definitions:
         description: Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
         example: 1
         type: integer
-      provider_type:
-        description: ProviderType 表示 AI 提供商类型。
-        example: openai
-        type: string
       updated_at:
         description: UpdatedAt 表示更新时间。
         example: "2026-06-18T12:00:00+08:00"
@@ -185,6 +177,15 @@ definitions:
         description: RequestID 表示本次请求的追踪标识。
         example: 8f2d6c6d0cf2473e9f8e24d9d0ab3d81
         type: string
+    type: object
+  aiprovider.SavedProviderModelListRequest:
+    properties:
+      provider_type:
+        description: ProviderType 表示本次模型列表查询使用的 API 协议，只能是 openai、claude。
+        example: openai
+        type: string
+    required:
+    - provider_type
     type: object
   auth.ErrorBody:
     properties:
@@ -1240,13 +1241,9 @@ definitions:
         description: APIKey 表示 AI 提供商 API Key，创建时不能为空。
         example: sk-xxx
         type: string
-      api_type:
-        description: APIType 表示 AI 接口类型，只能是 completions。
-        example: completions
-        type: string
       base_url:
-        description: BaseURL 表示 AI 提供商接口基础地址，可以为空。
-        example: https://api.openai.com/v1
+        description: BaseURL 表示 AI 提供商服务根地址，可以为空。
+        example: https://api.example.com
         type: string
       default_model:
         description: DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
@@ -1268,14 +1265,9 @@ definitions:
         description: Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
         example: 1
         type: integer
-      provider_type:
-        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude。
-        example: openai
-        type: string
     required:
     - api_key
     - name
-    - provider_type
     type: object
   internal_api_handler_aiprovider.ModelListRequest:
     properties:
@@ -1284,15 +1276,15 @@ definitions:
         example: sk-xxx
         type: string
       base_url:
-        description: BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。
-        example: https://api.openai.com/v1
+        description: BaseURL 表示 AI 提供商服务根地址；为空时按协议使用默认地址。
+        example: https://api.example.com
         type: string
       http_proxy:
         description: HTTPProxy 表示请求官方模型列表时使用的 HTTP 代理地址；为空时不使用代理。
         example: http://127.0.0.1:7890
         type: string
       provider_type:
-        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude。
+        description: ProviderType 表示本次模型列表查询使用的 API 协议，只能是 openai、claude。
         example: openai
         type: string
     required:
@@ -1305,13 +1297,9 @@ definitions:
         description: APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。
         example: sk-xxx
         type: string
-      api_type:
-        description: APIType 表示 AI 接口类型，只能是 completions；为空时保存为 completions。
-        example: completions
-        type: string
       base_url:
-        description: BaseURL 表示 AI 提供商接口基础地址，可以为空。
-        example: https://api.openai.com/v1
+        description: BaseURL 表示 AI 提供商服务根地址，可以为空。
+        example: https://api.example.com
         type: string
       default_model:
         description: DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
@@ -1333,13 +1321,8 @@ definitions:
         description: Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
         example: 1
         type: integer
-      provider_type:
-        description: ProviderType 表示 AI 提供商类型，只能是 openai、claude。
-        example: openai
-        type: string
     required:
     - name
-    - provider_type
     type: object
   internal_api_handler_auth.LoginRequest:
     properties:
@@ -3376,13 +3359,20 @@ paths:
     post:
       consumes:
       - application/json
-      description: 根据 AI 提供商 ID 读取本地加密密钥并在后端按官方协议查询模型列表，API Key 不会回显到前端。
+      description: 根据 AI 提供商 ID 读取本地加密密钥，并按请求体 provider_type 指定的 API 协议查询模型列表，API
+        Key 不会回显到前端。
       parameters:
       - description: AI 提供商 ID
         in: path
         name: id
         required: true
         type: integer
+      - description: 模型列表查询协议
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/aiprovider.SavedProviderModelListRequest'
       produces:
       - application/json
       responses:
@@ -3419,7 +3409,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: 根据 provider_type、api_key 和 base_url 直接请求对应 AI 提供商官方模型列表接口，不读取本地数据库。
+      description: 根据 provider_type、api_key 和 base_url 服务根地址直接请求对应协议的官方模型列表接口，不读取本地数据库。
       parameters:
       - description: 模型列表查询请求
         in: body

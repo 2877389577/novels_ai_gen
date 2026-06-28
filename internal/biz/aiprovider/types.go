@@ -8,22 +8,18 @@ type Provider struct {
 	ID uint64 `json:"id" gorm:"column:id;primaryKey;autoIncrement;comment:AI提供商主键ID" example:"1"`
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" gorm:"column:name;type:varchar(255);not null;uniqueIndex:ux_ai_providers_name;comment:AI提供商名称，不能为空且唯一" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
-	ProviderType string `json:"provider_type" gorm:"column:provider_type;type:varchar(64);not null;comment:AI提供商类型，只能是openai、claude" example:"openai"`
 	// APIKeyCiphertext 表示加密后的 API Key 密文，接口不回显。
 	APIKeyCiphertext string `json:"-" gorm:"column:api_key_ciphertext;type:text;not null;comment:加密后的API Key密文，接口不回显"`
 	// APIKeyMask 表示 API Key 掩码，仅用于列表和详情展示。
 	APIKeyMask string `json:"masked_api_key" gorm:"column:api_key_mask;type:varchar(255);not null;comment:API Key掩码，仅用于列表和详情展示" example:"sk-p...abcd"`
-	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
-	BaseURL string `json:"base_url" gorm:"column:base_url;type:varchar(1000);comment:AI提供商接口基础地址，可以为空" example:"https://api.openai.com/v1"`
+	// BaseURL 表示 AI 提供商服务根地址，可以为空。
+	BaseURL string `json:"base_url" gorm:"column:base_url;type:varchar(1000);comment:AI提供商服务根地址，可以为空" example:"https://api.example.com"`
 	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
 	HTTPProxy string `json:"http_proxy" gorm:"column:http_proxy;type:varchar(1000);comment:AI提供商网络请求使用的HTTP代理地址，可以为空" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" gorm:"column:default_model;type:varchar(255);comment:模型列表不可用时使用的默认模型标识，可以为空" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" gorm:"column:priority;not null;default:0;index:idx_ai_providers_priority;comment:AI提供商排序优先级，0最低，数值越大优先级越高" example:"1"`
-	// APIType 表示 AI 接口类型，固定为 completions。
-	APIType string `json:"api_type" gorm:"column:api_type;type:varchar(64);not null;default:completions;comment:AI接口类型，固定为completions" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。
 	Enabled bool `json:"enabled" gorm:"column:enabled;not null;default:true;index:idx_ai_providers_enabled;comment:是否启用该AI提供商" example:"true"`
 	// CreatedAt 表示创建时间。
@@ -41,20 +37,16 @@ func (Provider) TableName() string {
 type CreateRequest struct {
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" binding:"required" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
-	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示 AI 提供商 API Key，创建时不能为空。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
-	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
-	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// BaseURL 表示 AI 提供商服务根地址，可以为空。
+	BaseURL string `json:"base_url" example:"https://api.example.com"`
 	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
 	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型，只能是 completions。
-	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；nil 表示默认启用。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -63,20 +55,16 @@ type CreateRequest struct {
 type UpdateRequest struct {
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" binding:"required" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
-	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。
 	APIKey string `json:"api_key" example:"sk-xxx"`
-	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
-	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// BaseURL 表示 AI 提供商服务根地址，可以为空。
+	BaseURL string `json:"base_url" example:"https://api.example.com"`
 	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
 	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型，只能是 completions；为空时保存为 completions。
-	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；nil 表示保留原值。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -95,20 +83,16 @@ type ProviderResponse struct {
 	ID uint64 `json:"id" example:"1"`
 	// Name 表示 AI 提供商名称。
 	Name string `json:"name" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型。
-	ProviderType string `json:"provider_type" example:"openai"`
 	// MaskedAPIKey 表示 API Key 掩码。
 	MaskedAPIKey string `json:"masked_api_key" example:"sk-p...abcd"`
-	// BaseURL 表示 AI 提供商接口基础地址。
-	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// BaseURL 表示 AI 提供商服务根地址。
+	BaseURL string `json:"base_url" example:"https://api.example.com"`
 	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址。
 	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型。
-	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。
 	Enabled bool `json:"enabled" example:"true"`
 	// CreatedAt 表示创建时间。
@@ -129,14 +113,14 @@ type ListResponse struct {
 	PageSize int `json:"page_size" example:"20"`
 }
 
-// ModelListRequest 表示根据 AI 提供商官方协议查询模型列表的请求参数。
+// ModelListRequest 表示根据模型 API 协议查询模型列表的请求参数。
 type ModelListRequest struct {
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
+	// ProviderType 表示本次模型列表查询使用的 API 协议，只能是 openai、claude。
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示用于请求官方模型列表接口的 API Key。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
-	// BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。
-	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// BaseURL 表示 AI 提供商服务根地址；为空时按协议使用默认地址。
+	BaseURL string `json:"base_url" example:"https://api.example.com"`
 	// HTTPProxy 表示请求官方模型列表时使用的 HTTP 代理地址；为空时不使用代理。
 	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 }

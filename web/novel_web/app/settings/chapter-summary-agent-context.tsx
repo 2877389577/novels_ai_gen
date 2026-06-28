@@ -12,12 +12,15 @@ import {
 import type { ChapterSummaryAgentFormState, ChapterSummaryAgentSettingsPanelProps } from "./types";
 import {
   agentModelOptionsForProvider,
+  agentProviderModelCacheKey,
   buildChapterSummaryAgentConfigFromForm,
   chapterSummaryAgentConfigToFormState,
   createDefaultChapterSummaryAgentFormState,
   formatTime,
   getErrorMessage,
   isAbortError,
+  isAIProviderType,
+  normalizeAgentProviderType,
   validateChapterSummaryAgentForm,
 } from "./settings-utils";
 
@@ -51,6 +54,8 @@ export interface ChapterSummaryAgentActions {
   changeTextField: (field: ChapterSummaryAgentTextField, value: string) => void;
   // changeProvider 修改章节概要 Agent 模型提供商。
   changeProvider: (providerId: string) => void;
+  // changeProviderType 修改章节概要 Agent 模型 API 协议。
+  changeProviderType: (providerType: string) => void;
   // changeModel 修改章节概要 Agent 模型标识。
   changeModel: (model: string) => void;
   // changeReasoningEffort 修改 GPT 推理强度。
@@ -87,6 +92,7 @@ export type ChapterSummaryAgentTextField =
   | "description"
   | "instruction"
   | "maxIterations"
+  | "providerType"
   | "userAgent"
   | "retryMaxRetries"
   | "retryBackoffMS";
@@ -126,11 +132,16 @@ export function ChapterSummaryAgentSettingsProvider(
   const providerId = form.providerId.trim();
   const modelOptions = agentModelOptionsForProvider(
     providerId,
+    form.providerType,
     form.model,
     providers,
     modelOptionsByProvider,
   );
-  const modelLoading = providerId ? modelLoadingByProvider[providerId] === true : false;
+  const modelLoading = providerId
+    ? modelLoadingByProvider[
+        agentProviderModelCacheKey(providerId, form.providerType)
+      ] === true
+    : false;
 
   const handleUnauthorized = useCallback(
     // handleUnauthorized 通知应用层登录态已经失效。
@@ -145,22 +156,31 @@ export function ChapterSummaryAgentSettingsProvider(
   );
 
   const loadModelOptions = useCallback(
-    // loadModelOptions 加载指定提供商的模型列表。
-    async function loadModelOptions(targetProviderId: string) {
+    // loadModelOptions 加载指定提供商和 API 协议的模型列表。
+    async function loadModelOptions(targetProviderId: string, targetProviderType: string) {
       const normalizedProviderId = targetProviderId.trim();
-      if (!normalizedProviderId || modelOptionsByProvider[normalizedProviderId]) {
+      const normalizedProviderType = normalizeAgentProviderType(targetProviderType);
+      if (!isAIProviderType(normalizedProviderType)) {
+        return;
+      }
+      const cacheKey = agentProviderModelCacheKey(
+        normalizedProviderId,
+        normalizedProviderType,
+      );
+      if (!normalizedProviderId || modelOptionsByProvider[cacheKey]) {
         return;
       }
 
       setModelLoadingByProvider(function markModelLoading(current) {
-        return { ...current, [normalizedProviderId]: true };
+        return { ...current, [cacheKey]: true };
       });
       try {
         const data = await fetchAIProviderModelsByProviderID(
           Number.parseInt(normalizedProviderId, 10),
+          normalizedProviderType,
         );
         setModelOptionsByProvider(function storeModelOptions(current) {
-          return { ...current, [normalizedProviderId]: data.items ?? [] };
+          return { ...current, [cacheKey]: data.items ?? [] };
         });
       } catch (error) {
         if (!handleUnauthorized(error)) {
@@ -168,7 +188,7 @@ export function ChapterSummaryAgentSettingsProvider(
         }
       } finally {
         setModelLoadingByProvider(function clearModelLoading(current) {
-          return { ...current, [normalizedProviderId]: false };
+          return { ...current, [cacheKey]: false };
         });
       }
     },
@@ -296,7 +316,18 @@ export function ChapterSummaryAgentSettingsProvider(
                 userAgent: "",
               };
             });
-            void loadModelOptions(nextProviderId);
+            void loadModelOptions(nextProviderId, form.providerType);
+          },
+          changeProviderType(nextProviderType) {
+            setForm(function updateProviderType(current) {
+              return {
+                ...current,
+                providerType: nextProviderType,
+                model: "",
+                userAgent: "",
+              };
+            });
+            void loadModelOptions(form.providerId, nextProviderType);
           },
           changeModel(model) {
             setForm(function updateModel(current) {
@@ -309,7 +340,7 @@ export function ChapterSummaryAgentSettingsProvider(
             });
           },
           focusModelSelect() {
-            void loadModelOptions(form.providerId);
+            void loadModelOptions(form.providerId, form.providerType);
           },
         },
         meta: {

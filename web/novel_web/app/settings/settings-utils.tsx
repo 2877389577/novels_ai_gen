@@ -3,7 +3,6 @@ import type {
   AgentDefinition,
   AgentParameterDefinition,
   AgentToolConfig,
-  AIProviderAPIType,
   AIProviderItem,
   AIProviderModelItem,
   AIProviderType,
@@ -17,17 +16,15 @@ import type {
   AIProviderFormMode,
   ChapterSummaryAgentFormState,
 } from "./types";
-import { aiProviderTypeOptions } from "./settings-constants";
+import { agentProviderTypeOptions } from "./settings-constants";
 
 const defaultAIProviderFormState: AIProviderFormState = {
   name: "",
-  providerType: "openai",
   apiKey: "",
   baseURL: "",
   httpProxy: "",
   defaultModel: "",
   priority: "0",
-  apiType: "completions",
   enabled: true,
 };
 const defaultAgentSettingsFormState: AgentSettingsFormState = {
@@ -44,6 +41,7 @@ const defaultAgentSettingsFormState: AgentSettingsFormState = {
     maxIterations: "8",
     toolNames: [],
     providerId: "",
+    providerType: "openai",
     model: "",
     reasoningEffort: "",
     userAgent: "",
@@ -57,6 +55,7 @@ const defaultChapterSummaryAgentFormState: ChapterSummaryAgentFormState = {
   instruction: "",
   maxIterations: "1",
   providerId: "",
+  providerType: "openai",
   model: "",
   reasoningEffort: "",
   userAgent: "",
@@ -96,6 +95,7 @@ export function createDefaultAgentChildFormState(): AgentChildFormState {
     maxIterations: "6",
     toolNames: [],
     providerId: "",
+    providerType: "openai",
     model: "",
     reasoningEffort: "",
     userAgent: "",
@@ -191,6 +191,7 @@ export function agentConfigToFormState(agent: AgentConfig): AgentSettingsFormSta
         Number(agent.supervisor?.provider_id ?? 0) > 0
           ? String(agent.supervisor?.provider_id ?? "")
           : "",
+      providerType: normalizeAgentProviderType(agent.supervisor?.provider_type),
       model: agent.supervisor?.model ?? "",
       reasoningEffort: agent.supervisor?.reasoning_effort ?? "",
       userAgent: agent.supervisor?.user_agent ?? "",
@@ -225,6 +226,7 @@ export function agentDefinitionToChildFormState(
       Number(definition.provider_id ?? 0) > 0
         ? String(definition.provider_id ?? "")
         : "",
+    providerType: normalizeAgentProviderType(definition.provider_type),
     model: definition.model ?? "",
     reasoningEffort: definition.reasoning_effort ?? "",
     userAgent: definition.user_agent ?? "",
@@ -324,6 +326,7 @@ export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
   }
   const supervisorModel = parseAgentCustomModel(
     form.supervisor.providerId,
+    form.supervisor.providerType,
     form.supervisor.model,
     "顶层 Agent",
   );
@@ -385,6 +388,7 @@ export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
     }
     const childModel = parseAgentCustomModel(
       child.providerId,
+      child.providerType,
       child.model,
       `第 ${index + 1} 个子 Agent`,
     );
@@ -405,6 +409,7 @@ export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
       enabled: child.enabled,
       share_chat_history: child.shareChatHistory,
       provider_id: childModel.providerId,
+      provider_type: childModel.providerType,
       model: childModel.model,
       reasoning_effort: child.reasoningEffort.trim(),
       user_agent: child.userAgent.trim(),
@@ -440,6 +445,7 @@ export function buildAgentConfigFromForm(form: AgentSettingsFormState): {
       supervisor: {
         name: supervisorName,
         provider_id: supervisorModel.providerId,
+        provider_type: supervisorModel.providerType,
         model: supervisorModel.model,
         reasoning_effort: form.supervisor.reasoningEffort.trim(),
         user_agent: form.supervisor.userAgent.trim(),
@@ -472,6 +478,7 @@ export function chapterSummaryAgentConfigToFormState(
       Number(agent?.provider_id ?? 0) > 0
         ? String(agent?.provider_id ?? "")
         : "",
+    providerType: normalizeAgentProviderType(agent?.provider_type),
     model: agent?.model ?? "",
     reasoningEffort: agent?.reasoning_effort ?? "",
     userAgent: agent?.user_agent ?? "",
@@ -526,8 +533,18 @@ export function buildChapterSummaryAgentConfigFromForm(
     ? Number.parseInt(form.providerId.trim(), 10)
     : 0;
   const model = form.enabled
-    ? parseAgentCustomModel(form.providerId, form.model, "章节概要 Agent")
-    : { providerId: disabledProviderId, model: form.model.trim(), error: "" };
+    ? parseAgentCustomModel(
+        form.providerId,
+        form.providerType,
+        form.model,
+        "章节概要 Agent",
+      )
+    : {
+        providerId: disabledProviderId,
+        providerType: normalizeAgentProviderType(form.providerType),
+        model: form.model.trim(),
+        error: "",
+      };
   if (model.error) {
     return { config: null, error: model.error };
   }
@@ -543,6 +560,7 @@ export function buildChapterSummaryAgentConfigFromForm(
         enabled: form.enabled,
         share_chat_history: false,
         provider_id: model.providerId,
+        provider_type: model.providerType,
         model: model.model,
         reasoning_effort: form.reasoningEffort.trim(),
         user_agent: form.userAgent.trim(),
@@ -625,25 +643,53 @@ export function normalizeSelectedAgentTools(
 }
 
 // parseAgentCustomModel 将 Agent 模型表单字段转换为后端字段。
-// 参数 providerId 表示提供商 ID 文本；参数 model 表示模型标识文本；参数 label 表示错误提示使用的 Agent 名称。
+// 参数 providerId 表示提供商 ID 文本；参数 providerType 表示模型 API 协议文本；参数 model 表示模型标识文本；参数 label 表示错误提示使用的 Agent 名称。
 export function parseAgentCustomModel(
   providerId: string,
+  providerType: string,
   model: string,
   label: string,
-): { providerId: number; model: string; error: string } {
+): { providerId: number; providerType: AIProviderType; model: string; error: string } {
+  const normalizedProviderType = normalizeAgentProviderType(providerType);
+  if (!isAIProviderType(normalizedProviderType)) {
+    return {
+      providerId: 0,
+      providerType: "openai",
+      model: "",
+      error: `${label} API 协议只能是 openai 或 claude`,
+    };
+  }
   const normalizedProviderID = providerId.trim();
   if (!/^[1-9]\d*$/.test(normalizedProviderID)) {
-    return { providerId: 0, model: "", error: `${label} 必须选择模型提供商` };
+    return {
+      providerId: 0,
+      providerType: normalizedProviderType,
+      model: "",
+      error: `${label} 必须选择模型提供商`,
+    };
   }
   const normalizedModel = model.trim();
   if (!normalizedModel) {
-    return { providerId: 0, model: "", error: `${label} 必须选择模型` };
+    return {
+      providerId: 0,
+      providerType: normalizedProviderType,
+      model: "",
+      error: `${label} 必须选择模型`,
+    };
   }
   return {
     providerId: Number.parseInt(normalizedProviderID, 10),
+    providerType: normalizedProviderType,
     model: normalizedModel,
     error: "",
   };
+}
+
+// normalizeAgentProviderType 标准化 Agent 模型使用的 API 协议文本。
+// 参数 value 表示表单或配置中的 provider_type 字段，空值默认 openai。
+export function normalizeAgentProviderType(value?: string | null): string {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized || "openai";
 }
 
 // parseAgentParametersText 解析子 Agent 参数 JSON 文本。
@@ -711,13 +757,11 @@ export function providerToAIProviderFormState(
 ): AIProviderFormState {
   return {
     name: provider.name,
-    providerType: provider.provider_type,
     apiKey: "",
     baseURL: provider.base_url,
     httpProxy: provider.http_proxy || "",
     defaultModel: provider.default_model,
     priority: String(provider.priority ?? 0),
-    apiType: "completions",
     enabled: provider.enabled,
   };
 }
@@ -731,12 +775,6 @@ export function validateAIProviderForm(
   if (!form.name.trim()) {
     return "AI 提供商名称不能为空";
   }
-  if (!form.providerType.trim()) {
-    return "AI 提供商类型不能为空";
-  }
-  if (!isAIProviderType(form.providerType)) {
-    return "AI 提供商类型只能是 openai 或 claude";
-  }
   if (mode === "create" && !form.apiKey.trim()) {
     return "AI 提供商 API Key 不能为空";
   }
@@ -745,9 +783,6 @@ export function validateAIProviderForm(
     return form.priority.trim().startsWith("-")
       ? "优先级不能小于 0"
       : "优先级必须是非负整数";
-  }
-  if (!isAIProviderAPIType(form.apiType)) {
-    return "AI 接口类型只能是 completions";
   }
   if (!isValidHTTPProxy(form.httpProxy)) {
     return "HTTP 代理地址格式无效";
@@ -760,32 +795,15 @@ export function validateAIProviderForm(
 export function toAIProviderUpsertParams(
   form: AIProviderFormState,
 ): AIProviderUpsertParams {
-  const providerType = form.providerType.trim() as AIProviderType;
-
   return {
     name: form.name.trim(),
-    provider_type: providerType,
     api_key: form.apiKey.trim(),
     base_url: form.baseURL.trim(),
     http_proxy: form.httpProxy.trim(),
     default_model: form.defaultModel.trim(),
     priority: parseAIProviderPriority(form.priority) ?? 0,
-    api_type: "completions",
     enabled: form.enabled,
   };
-}
-
-// isProviderConnectionUnchanged 判断编辑表单中的模型列表连接配置是否仍与已保存提供商一致。
-// 参数 form 表示 AI 提供商表单状态；参数 provider 表示当前正在编辑的已保存 AI 提供商。
-export function isProviderConnectionUnchanged(
-  form: AIProviderFormState,
-  provider: AIProviderItem,
-): boolean {
-  return (
-    form.providerType.trim() === provider.provider_type &&
-    form.baseURL.trim() === provider.base_url.trim() &&
-    form.httpProxy.trim() === (provider.http_proxy || "").trim()
-  );
 }
 
 // uniqueAIProviderModelOptions 对模型列表按模型标识去重并过滤空标识。
@@ -823,20 +841,14 @@ export function parseAIProviderPriority(value: string): number | null {
   return Number.parseInt(text, 10);
 }
 
-// isAIProviderType 判断前端表单中的 AI 提供商类型是否为允许值。
-// 参数 value 表示需要校验的 AI 提供商类型文本。
+// isAIProviderType 判断前端表单中的模型 API 协议是否为允许值。
+// 参数 value 表示需要校验的模型 API 协议文本。
 export function isAIProviderType(value: string): value is AIProviderType {
-  return aiProviderTypeOptions.some(
+  return agentProviderTypeOptions.some(
     function matchAIProviderType(option) {
       return option.value === value;
     },
   );
-}
-
-// isAIProviderAPIType 判断前端表单中的 AI 接口类型是否为允许值。
-// 参数 value 表示需要校验的 AI 接口类型文本。
-export function isAIProviderAPIType(value: string): value is AIProviderAPIType {
-  return value === "completions";
 }
 
 // isValidHTTPProxy 判断 HTTP 代理地址是否为空或有效。
@@ -900,10 +912,20 @@ export function modelsWithDefaultAgentModel(
   return [defaultAgentModelOption(normalizedDefaultModel), ...items];
 }
 
-// agentModelOptionsForProvider 返回指定提供商在表单中可选的模型列表。
-// 参数 providerId 表示当前选择的 AI 提供商 ID 文本；参数 configuredModel 表示配置文件中已保存的模型；参数 providers 表示 AI 提供商列表；参数 optionsByProvider 表示已加载的模型选项缓存。
+// agentProviderModelCacheKey 返回模型列表缓存键。
+// 参数 providerId 表示当前选择的 AI 提供商 ID 文本；参数 providerType 表示当前选择的模型 API 协议。
+export function agentProviderModelCacheKey(
+  providerId: string,
+  providerType: string,
+): string {
+  return `${providerId.trim()}::${normalizeAgentProviderType(providerType)}`;
+}
+
+// agentModelOptionsForProvider 返回指定提供商和 API 协议在表单中可选的模型列表。
+// 参数 providerId 表示当前选择的 AI 提供商 ID 文本；参数 providerType 表示当前选择的模型 API 协议；参数 configuredModel 表示配置文件中已保存的模型；参数 providers 表示 AI 提供商列表；参数 optionsByProvider 表示已加载的模型选项缓存。
 export function agentModelOptionsForProvider(
   providerId: string,
+  providerType: string,
   configuredModel: string,
   providers: AIProviderItem[],
   optionsByProvider: Record<string, AIProviderModelItem[]>,
@@ -912,7 +934,10 @@ export function agentModelOptionsForProvider(
   if (!normalizedProviderID) {
     return [];
   }
-  let items = optionsByProvider[normalizedProviderID] ?? [];
+  let items =
+    optionsByProvider[
+      agentProviderModelCacheKey(normalizedProviderID, providerType)
+    ] ?? [];
   items = modelsWithDefaultAgentModel(
     items,
     defaultModelForAgentProvider(providers, normalizedProviderID),

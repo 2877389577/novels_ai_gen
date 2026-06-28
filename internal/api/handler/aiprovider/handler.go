@@ -20,20 +20,16 @@ type Handler struct {
 type CreateRequest struct {
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" binding:"required" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
-	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示 AI 提供商 API Key，创建时不能为空。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
-	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
-	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// BaseURL 表示 AI 提供商服务根地址，可以为空。
+	BaseURL string `json:"base_url" example:"https://api.example.com"`
 	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
 	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型，只能是 completions。
-	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时默认 true。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -42,20 +38,16 @@ type CreateRequest struct {
 type UpdateRequest struct {
 	// Name 表示 AI 提供商名称，不能为空且唯一。
 	Name string `json:"name" binding:"required" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
-	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示新的 AI 提供商 API Key；为空时保留原密钥。
 	APIKey string `json:"api_key" example:"sk-xxx"`
-	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
-	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// BaseURL 表示 AI 提供商服务根地址，可以为空。
+	BaseURL string `json:"base_url" example:"https://api.example.com"`
 	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
 	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型，只能是 completions；为空时保存为 completions。
-	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商；未传时保留原值。
 	Enabled *bool `json:"enabled" example:"true"`
 }
@@ -66,20 +58,16 @@ type ProviderData struct {
 	ID uint64 `json:"id" example:"1"`
 	// Name 表示 AI 提供商名称。
 	Name string `json:"name" example:"默认 OpenAI"`
-	// ProviderType 表示 AI 提供商类型。
-	ProviderType string `json:"provider_type" example:"openai"`
 	// MaskedAPIKey 表示 API Key 掩码。
 	MaskedAPIKey string `json:"masked_api_key" example:"sk-p...abcd"`
-	// BaseURL 表示 AI 提供商接口基础地址。
-	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// BaseURL 表示 AI 提供商服务根地址。
+	BaseURL string `json:"base_url" example:"https://api.example.com"`
 	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址。
 	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
 	Priority int `json:"priority" example:"1"`
-	// APIType 表示 AI 接口类型。
-	APIType string `json:"api_type" example:"completions"`
 	// Enabled 表示是否启用该 AI 提供商。
 	Enabled bool `json:"enabled" example:"true"`
 	// CreatedAt 表示创建时间。
@@ -142,16 +130,22 @@ type ProviderDeleteSuccessResponse struct {
 	Data ProviderDeleteData `json:"data"`
 }
 
-// ModelListRequest 表示 Swagger 文档中的 AI 提供商模型列表查询请求参数。
+// ModelListRequest 表示 Swagger 文档中的模型列表查询请求参数。
 type ModelListRequest struct {
-	// ProviderType 表示 AI 提供商类型，只能是 openai、claude。
+	// ProviderType 表示本次模型列表查询使用的 API 协议，只能是 openai、claude。
 	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 	// APIKey 表示用于请求官方模型列表接口的 API Key。
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
-	// BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。
-	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// BaseURL 表示 AI 提供商服务根地址；为空时按协议使用默认地址。
+	BaseURL string `json:"base_url" example:"https://api.example.com"`
 	// HTTPProxy 表示请求官方模型列表时使用的 HTTP 代理地址；为空时不使用代理。
 	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
+}
+
+// SavedProviderModelListRequest 表示使用已保存提供商查询模型列表时的请求参数。
+type SavedProviderModelListRequest struct {
+	// ProviderType 表示本次模型列表查询使用的 API 协议，只能是 openai、claude。
+	ProviderType string `json:"provider_type" binding:"required" example:"openai"`
 }
 
 // ModelData 表示 Swagger 文档中的 AI 模型数据。
@@ -260,7 +254,7 @@ func (h *Handler) List(c *gin.Context) {
 // 参数 c 表示 Gin 请求上下文。
 //
 // @Summary 查询 AI 提供商官方模型列表
-// @Description 根据 provider_type、api_key 和 base_url 直接请求对应 AI 提供商官方模型列表接口，不读取本地数据库。
+// @Description 根据 provider_type、api_key 和 base_url 服务根地址直接请求对应协议的官方模型列表接口，不读取本地数据库。
 // @Tags ai-providers
 // @Accept json
 // @Produce json
@@ -292,12 +286,13 @@ func (h *Handler) ListModels(c *gin.Context) {
 // 参数 c 表示 Gin 请求上下文。
 //
 // @Summary 根据已保存 AI 提供商查询官方模型列表
-// @Description 根据 AI 提供商 ID 读取本地加密密钥并在后端按官方协议查询模型列表，API Key 不会回显到前端。
+// @Description 根据 AI 提供商 ID 读取本地加密密钥，并按请求体 provider_type 指定的 API 协议查询模型列表，API Key 不会回显到前端。
 // @Tags ai-providers
 // @Accept json
 // @Produce json
 // @Security Bearer
 // @Param id path int true "AI 提供商 ID"
+// @Param request body SavedProviderModelListRequest true "模型列表查询协议"
 // @Success 200 {object} ModelListSuccessResponse "查询成功"
 // @Failure 400 {object} response.ErrorBody "请求参数错误"
 // @Failure 401 {object} response.ErrorBody "未登录或登录已过期"
@@ -311,7 +306,13 @@ func (h *Handler) ListModelsByProviderID(c *gin.Context) {
 		return
 	}
 
-	data, err := h.service.ListModelsByProviderID(c.Request.Context(), id)
+	var req SavedProviderModelListRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "请求参数错误")
+		return
+	}
+
+	data, err := h.service.ListModelsByProviderID(c.Request.Context(), id, req.ProviderType)
 	if err != nil {
 		writeServiceError(c, err)
 		return
@@ -438,17 +439,15 @@ func writeServiceError(c *gin.Context, err error) {
 	case errors.Is(err, bizaiprovider.ErrNameRequired):
 		response.Error(c, http.StatusBadRequest, "AI 提供商名称不能为空")
 	case errors.Is(err, bizaiprovider.ErrProviderTypeRequired):
-		response.Error(c, http.StatusBadRequest, "AI 提供商类型不能为空")
+		response.Error(c, http.StatusBadRequest, "AI API 协议不能为空")
 	case errors.Is(err, bizaiprovider.ErrInvalidProviderType):
-		response.Error(c, http.StatusBadRequest, "AI 提供商类型只能是 openai 或 claude")
+		response.Error(c, http.StatusBadRequest, "AI API 协议只能是 openai 或 claude")
 	case errors.Is(err, bizaiprovider.ErrAPIKeyRequired):
 		response.Error(c, http.StatusBadRequest, "AI 提供商 API Key 不能为空")
-	case errors.Is(err, bizaiprovider.ErrInvalidAPIType):
-		response.Error(c, http.StatusBadRequest, "AI 接口类型只能是 completions")
 	case errors.Is(err, bizaiprovider.ErrInvalidPriority):
 		response.Error(c, http.StatusBadRequest, "AI 提供商优先级不能小于 0")
 	case errors.Is(err, bizaiprovider.ErrInvalidBaseURL):
-		response.Error(c, http.StatusBadRequest, "AI 提供商 Base URL 格式无效")
+		response.Error(c, http.StatusBadRequest, "AI 提供商服务根地址格式无效")
 	case errors.Is(err, bizaiprovider.ErrInvalidHTTPProxy):
 		response.Error(c, http.StatusBadRequest, "AI 提供商 HTTP 代理地址格式无效")
 	case errors.Is(err, bizaiprovider.ErrModelListUnavailable):

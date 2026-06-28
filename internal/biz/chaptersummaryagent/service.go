@@ -267,10 +267,10 @@ func (s *Service) modelConfig(ctx context.Context, agentCfg runtimeChapterSummar
 
 	return biznovelagent.ModelConfig{
 		ProviderID:      provider.ID,
-		ProviderType:    provider.ProviderType,
-		APIType:         provider.APIType,
+		ProviderType:    agentCfg.providerType,
 		APIKey:          apiKey,
 		BaseURL:         provider.BaseURL,
+		HTTPProxy:       provider.HTTPProxy,
 		Model:           agentCfg.model,
 		ReasoningEffort: agentCfg.reasoningEffort,
 		UserAgent:       agentCfg.userAgent,

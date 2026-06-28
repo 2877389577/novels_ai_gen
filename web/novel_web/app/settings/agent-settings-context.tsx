@@ -28,7 +28,7 @@ export interface AgentSettingsContextState {
   modelProviders: AIProviderItem[];
   // modelOptionsByProvider 表示按 AI 提供商缓存的模型选项。
   modelOptionsByProvider: Record<string, AIProviderModelItem[]>;
-  // modelLoadingByProvider 表示按 AI 提供商记录的模型列表加载状态。
+  // modelLoadingByProvider 表示按 AI 提供商和 API 协议记录的模型列表加载状态。
   modelLoadingByProvider: Record<string, boolean>;
 }
 
@@ -67,6 +67,8 @@ export interface AgentSettingsContextActions {
   changeSupervisorTool: (toolName: string, enabled: boolean) => void;
   // changeSupervisorModelProvider 表示更新顶层 Agent 模型提供商。
   changeSupervisorModelProvider: (event: ChangeEvent<HTMLSelectElement>) => void;
+  // changeSupervisorProviderType 表示更新顶层 Agent 模型 API 协议。
+  changeSupervisorProviderType: (event: ChangeEvent<HTMLSelectElement>) => void;
   // changeSupervisorModel 表示更新顶层 Agent 模型。
   changeSupervisorModel: (event: ChangeEvent<HTMLSelectElement>) => void;
   // changeSupervisorReasoningEffort 表示更新顶层 Agent GPT 推理强度。
@@ -87,6 +89,8 @@ export interface AgentSettingsContextActions {
   changeChildTool: (index: number, toolName: string, enabled: boolean) => void;
   // changeChildModelProvider 表示更新子 Agent 模型提供商。
   changeChildModelProvider: (index: number, providerId: string) => void;
+  // changeChildProviderType 表示更新子 Agent 模型 API 协议。
+  changeChildProviderType: (index: number, providerType: string) => void;
   // changeChildModel 表示更新子 Agent 模型。
   changeChildModel: (index: number, model: string) => void;
   // changeEditingChildReasoningEffort 表示更新当前编辑子 Agent 的 GPT 推理强度。
@@ -94,7 +98,7 @@ export interface AgentSettingsContextActions {
     event: ChangeEvent<HTMLSelectElement>,
   ) => void;
   // focusAgentModelSelect 表示模型下拉框聚焦时按需加载模型列表。
-  focusAgentModelSelect: (providerId: string) => void;
+  focusAgentModelSelect: (providerId: string, providerType: string) => void;
   // moveChildAgent 表示移动子 Agent 顺序。
   moveChildAgent: (index: number, direction: -1 | 1) => void;
   // removeChildAgent 表示删除指定子 Agent。

@@ -6,16 +6,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"novels_ai_gen/internal/aihttp"
+	"novels_ai_gen/internal/aiurl"
 	"strings"
 	"time"
 )
 
 const (
 	defaultModelListTimeout = 15 * time.Second
-	defaultOpenAIBaseURL    = "https://api.openai.com/v1"
-	defaultClaudeBaseURL    = "https://api.anthropic.com/v1"
 	anthropicVersion        = "2023-06-01"
 	maxModelListBodyBytes   = 4 << 20
 )
@@ -53,7 +51,7 @@ func (c *ModelClient) ListModels(ctx context.Context, req ModelListRequest) (Mod
 // listOpenAIModels 按 OpenAI 官方协议查询模型列表。
 // 参数 ctx 表示请求上下文；参数 req 表示模型列表查询请求参数。
 func (c *ModelClient) listOpenAIModels(ctx context.Context, req ModelListRequest) (ModelListResponse, error) {
-	endpoint, err := modelEndpointURL(req.BaseURL, defaultOpenAIBaseURL, "models")
+	endpoint, err := openAIModelEndpointURL(req.BaseURL)
 	if err != nil {
 		return ModelListResponse{}, err
 	}
@@ -88,7 +86,7 @@ func (c *ModelClient) listOpenAIModels(ctx context.Context, req ModelListRequest
 // listClaudeModels 按 Anthropic Claude 官方协议查询模型列表。
 // 参数 ctx 表示请求上下文；参数 req 表示模型列表查询请求参数。
 func (c *ModelClient) listClaudeModels(ctx context.Context, req ModelListRequest) (ModelListResponse, error) {
-	endpoint, err := modelEndpointURL(req.BaseURL, defaultClaudeBaseURL, "models")
+	endpoint, err := claudeModelEndpointURL(req.BaseURL)
 	if err != nil {
 		return ModelListResponse{}, err
 	}
@@ -163,23 +161,24 @@ func (c *ModelClient) clientForProxy(httpProxy string) (*http.Client, error) {
 	})
 }
 
-// modelEndpointURL 拼接模型列表接口地址。
-// 参数 baseURL 表示用户填写的基础地址；参数 defaultBaseURL 表示协议默认基础地址；参数 pathElem 表示模型列表路径片段。
-func modelEndpointURL(baseURL string, defaultBaseURL string, pathElem string) (string, error) {
-	base := strings.TrimSpace(baseURL)
-	if base == "" {
-		base = defaultBaseURL
-	}
-
-	parsed, err := url.Parse(base)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return "", ErrInvalidBaseURL
-	}
-	joined, err := url.JoinPath(strings.TrimRight(parsed.String(), "/"), pathElem)
+// openAIModelEndpointURL 拼接 OpenAI 兼容协议的模型列表接口地址。
+// 参数 baseURL 表示用户填写的服务根地址或 OpenAI 兼容 /v1 地址。
+func openAIModelEndpointURL(baseURL string) (string, error) {
+	endpoint, err := aiurl.OpenAIModelListURL(baseURL)
 	if err != nil {
 		return "", ErrInvalidBaseURL
 	}
-	return joined, nil
+	return endpoint, nil
+}
+
+// claudeModelEndpointURL 拼接 Claude 协议的模型列表接口地址。
+// 参数 baseURL 表示用户填写的 Claude 服务根地址。
+func claudeModelEndpointURL(baseURL string) (string, error) {
+	endpoint, err := aiurl.ClaudeModelListURL(baseURL)
+	if err != nil {
+		return "", ErrInvalidBaseURL
+	}
+	return endpoint, nil
 }
 
 // unixSecondsToTime 将 Unix 秒时间戳转换为 RFC3339 文本。

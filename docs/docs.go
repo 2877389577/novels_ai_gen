@@ -799,7 +799,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "根据 provider_type、api_key 和 base_url 直接请求对应 AI 提供商官方模型列表接口，不读取本地数据库。",
+                "description": "根据 provider_type、api_key 和 base_url 服务根地址直接请求对应协议的官方模型列表接口，不读取本地数据库。",
                 "consumes": [
                     "application/json"
                 ],
@@ -1056,7 +1056,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "根据 AI 提供商 ID 读取本地加密密钥并在后端按官方协议查询模型列表，API Key 不会回显到前端。",
+                "description": "根据 AI 提供商 ID 读取本地加密密钥，并按请求体 provider_type 指定的 API 协议查询模型列表，API Key 不会回显到前端。",
                 "consumes": [
                     "application/json"
                 ],
@@ -1074,6 +1074,15 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "模型列表查询协议",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/aiprovider.SavedProviderModelListRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -4686,15 +4695,10 @@ const docTemplate = `{
         "aiprovider.ProviderData": {
             "type": "object",
             "properties": {
-                "api_type": {
-                    "description": "APIType 表示 AI 接口类型。",
-                    "type": "string",
-                    "example": "completions"
-                },
                 "base_url": {
-                    "description": "BaseURL 表示 AI 提供商接口基础地址。",
+                    "description": "BaseURL 表示 AI 提供商服务根地址。",
                     "type": "string",
-                    "example": "https://api.openai.com/v1"
+                    "example": "https://api.example.com"
                 },
                 "created_at": {
                     "description": "CreatedAt 表示创建时间。",
@@ -4735,11 +4739,6 @@ const docTemplate = `{
                     "description": "Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。",
                     "type": "integer",
                     "example": 1
-                },
-                "provider_type": {
-                    "description": "ProviderType 表示 AI 提供商类型。",
-                    "type": "string",
-                    "example": "openai"
                 },
                 "updated_at": {
                     "description": "UpdatedAt 表示更新时间。",
@@ -4866,6 +4865,19 @@ const docTemplate = `{
                     "description": "RequestID 表示本次请求的追踪标识。",
                     "type": "string",
                     "example": "8f2d6c6d0cf2473e9f8e24d9d0ab3d81"
+                }
+            }
+        },
+        "aiprovider.SavedProviderModelListRequest": {
+            "type": "object",
+            "required": [
+                "provider_type"
+            ],
+            "properties": {
+                "provider_type": {
+                    "description": "ProviderType 表示本次模型列表查询使用的 API 协议，只能是 openai、claude。",
+                    "type": "string",
+                    "example": "openai"
                 }
             }
         },
@@ -6309,8 +6321,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "api_key",
-                "name",
-                "provider_type"
+                "name"
             ],
             "properties": {
                 "api_key": {
@@ -6318,15 +6329,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "sk-xxx"
                 },
-                "api_type": {
-                    "description": "APIType 表示 AI 接口类型，只能是 completions。",
-                    "type": "string",
-                    "example": "completions"
-                },
                 "base_url": {
-                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
+                    "description": "BaseURL 表示 AI 提供商服务根地址，可以为空。",
                     "type": "string",
-                    "example": "https://api.openai.com/v1"
+                    "example": "https://api.example.com"
                 },
                 "default_model": {
                     "description": "DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。",
@@ -6352,11 +6358,6 @@ const docTemplate = `{
                     "description": "Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。",
                     "type": "integer",
                     "example": 1
-                },
-                "provider_type": {
-                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude。",
-                    "type": "string",
-                    "example": "openai"
                 }
             }
         },
@@ -6373,9 +6374,9 @@ const docTemplate = `{
                     "example": "sk-xxx"
                 },
                 "base_url": {
-                    "description": "BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。",
+                    "description": "BaseURL 表示 AI 提供商服务根地址；为空时按协议使用默认地址。",
                     "type": "string",
-                    "example": "https://api.openai.com/v1"
+                    "example": "https://api.example.com"
                 },
                 "http_proxy": {
                     "description": "HTTPProxy 表示请求官方模型列表时使用的 HTTP 代理地址；为空时不使用代理。",
@@ -6383,7 +6384,7 @@ const docTemplate = `{
                     "example": "http://127.0.0.1:7890"
                 },
                 "provider_type": {
-                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude。",
+                    "description": "ProviderType 表示本次模型列表查询使用的 API 协议，只能是 openai、claude。",
                     "type": "string",
                     "example": "openai"
                 }
@@ -6392,8 +6393,7 @@ const docTemplate = `{
         "internal_api_handler_aiprovider.UpdateRequest": {
             "type": "object",
             "required": [
-                "name",
-                "provider_type"
+                "name"
             ],
             "properties": {
                 "api_key": {
@@ -6401,15 +6401,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "sk-xxx"
                 },
-                "api_type": {
-                    "description": "APIType 表示 AI 接口类型，只能是 completions；为空时保存为 completions。",
-                    "type": "string",
-                    "example": "completions"
-                },
                 "base_url": {
-                    "description": "BaseURL 表示 AI 提供商接口基础地址，可以为空。",
+                    "description": "BaseURL 表示 AI 提供商服务根地址，可以为空。",
                     "type": "string",
-                    "example": "https://api.openai.com/v1"
+                    "example": "https://api.example.com"
                 },
                 "default_model": {
                     "description": "DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。",
@@ -6435,11 +6430,6 @@ const docTemplate = `{
                     "description": "Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。",
                     "type": "integer",
                     "example": 1
-                },
-                "provider_type": {
-                    "description": "ProviderType 表示 AI 提供商类型，只能是 openai、claude。",
-                    "type": "string",
-                    "example": "openai"
                 }
             }
         },

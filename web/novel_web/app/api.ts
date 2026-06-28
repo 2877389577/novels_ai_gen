@@ -557,6 +557,8 @@ export interface AgentDefinition {
   share_chat_history?: boolean | null;
   // provider_id 表示该 Agent 使用的 AI 提供商 ID，保存时必须大于 0。
   provider_id: number;
+  // provider_type 表示该 Agent 模型使用的 API 协议，空值由后端按 openai 处理。
+  provider_type?: AIProviderType | string;
   // model 表示该 Agent 使用的模型标识，保存时不能为空。
   model: string;
   // reasoning_effort 表示 GPT 类模型使用的推理强度。
@@ -647,11 +649,8 @@ export interface SystemUpdateData {
   restarting: boolean;
 }
 
-// AIProviderType 表示前端允许提交的 AI 提供商类型。
+// AIProviderType 表示前端允许选择的模型 API 协议。
 export type AIProviderType = "openai" | "claude";
-
-// AIProviderAPIType 表示前端允许提交的 AI 接口类型。
-export type AIProviderAPIType = "completions";
 
 // AIProviderItem 表示 AI 提供商列表和详情中的单条记录。
 export interface AIProviderItem {
@@ -659,11 +658,9 @@ export interface AIProviderItem {
   id: number;
   // name 表示 AI 提供商名称。
   name: string;
-  // provider_type 表示 AI 提供商类型。
-  provider_type: AIProviderType;
   // masked_api_key 表示 API Key 掩码，不包含明文密钥。
   masked_api_key: string;
-  // base_url 表示 AI 提供商接口基础地址。
+  // base_url 表示 AI 提供商服务根地址。
   base_url: string;
   // http_proxy 表示 AI 提供商网络请求使用的 HTTP 代理地址。
   http_proxy: string;
@@ -671,8 +668,6 @@ export interface AIProviderItem {
   default_model: string;
   // priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
   priority: number;
-  // api_type 表示 AI 接口类型。
-  api_type: AIProviderAPIType;
   // enabled 表示是否启用该 AI 提供商。
   enabled: boolean;
   // created_at 表示创建时间。
@@ -707,11 +702,9 @@ export interface AIProviderListParams {
 export interface AIProviderUpsertParams {
   // name 表示 AI 提供商名称。
   name: string;
-  // provider_type 表示 AI 提供商类型。
-  provider_type: AIProviderType;
   // api_key 表示 AI 提供商 API Key，更新时为空表示保留旧密钥。
   api_key: string;
-  // base_url 表示 AI 提供商接口基础地址。
+  // base_url 表示 AI 提供商服务根地址。
   base_url: string;
   // http_proxy 表示 AI 提供商网络请求使用的 HTTP 代理地址。
   http_proxy: string;
@@ -719,8 +712,6 @@ export interface AIProviderUpsertParams {
   default_model: string;
   // priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
   priority: number;
-  // api_type 表示 AI 接口类型。
-  api_type: AIProviderAPIType;
   // enabled 表示是否启用该 AI 提供商。
   enabled: boolean;
 }
@@ -747,11 +738,11 @@ export interface AIProviderModelListData {
 
 // AIProviderModelListParams 表示查询官方模型列表时提交的参数。
 export interface AIProviderModelListParams {
-  // provider_type 表示 AI 提供商类型。
+  // provider_type 表示本次查询使用的模型 API 协议。
   provider_type: AIProviderType;
   // api_key 表示用于请求官方模型列表接口的 API Key。
   api_key: string;
-  // base_url 表示 AI 提供商接口基础地址。
+  // base_url 表示 AI 提供商服务根地址。
   base_url: string;
   // http_proxy 表示请求官方模型列表时使用的 HTTP 代理地址。
   http_proxy: string;
@@ -1801,7 +1792,7 @@ export async function updateAIProvider(
 }
 
 // fetchAIProviderModels 调用后端接口按官方协议查询 AI 提供商模型列表。
-// 参数 params 表示查询模型列表时需要提交的提供商类型、API Key 和 Base URL。
+// 参数 params 表示查询模型列表时需要提交的提供商类型、API Key 和服务根地址。
 export async function fetchAIProviderModels(
   params: AIProviderModelListParams,
 ): Promise<AIProviderModelListData> {
@@ -1833,9 +1824,10 @@ export async function fetchAIProviderModels(
 }
 
 // fetchAIProviderModelsByProviderID 使用已保存 AI 提供商配置查询官方模型列表。
-// 参数 providerId 表示 AI 提供商主键 ID；参数 signal 表示用于取消请求的浏览器 AbortSignal。
+// 参数 providerId 表示 AI 提供商主键 ID；参数 providerType 表示本次查询使用的模型 API 协议；参数 signal 表示用于取消请求的浏览器 AbortSignal。
 export async function fetchAIProviderModelsByProviderID(
   providerId: number,
+  providerType: AIProviderType,
   signal?: AbortSignal,
 ): Promise<AIProviderModelListData> {
   const authData = readAuthData();
@@ -1847,7 +1839,9 @@ export async function fetchAIProviderModelsByProviderID(
     method: "POST",
     headers: {
       Authorization: formatAuthorizationHeader(authData),
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({ provider_type: providerType }),
     signal,
   });
   const payload = await parseApiResponse<AIProviderModelListData>(response);

@@ -223,13 +223,11 @@ type EventWriter interface {
 type ModelConfig struct {
 	// ProviderID 表示 AI 提供商主键 ID。
 	ProviderID uint64
-	// ProviderType 表示 AI 提供商类型。
+	// ProviderType 表示该模型使用的 API 协议。
 	ProviderType string
-	// APIType 表示 AI 接口类型。
-	APIType string
 	// APIKey 表示解密后的 AI 提供商 API Key。
 	APIKey string
-	// BaseURL 表示 AI 提供商接口基础地址。
+	// BaseURL 表示 AI 提供商服务根地址。
 	BaseURL string
 	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，空值表示不使用代理。
 	HTTPProxy string

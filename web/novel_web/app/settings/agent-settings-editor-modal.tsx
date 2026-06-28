@@ -1,11 +1,15 @@
 import JsonViewer from "@douyinfe/semi-ui-19/lib/es/jsonViewer";
 import Modal from "@douyinfe/semi-ui-19/lib/es/modal";
 import Switch from "@douyinfe/semi-ui-19/lib/es/switch";
-import { agentReasoningEffortOptions } from "./settings-constants";
+import {
+  agentProviderTypeOptions,
+  agentReasoningEffortOptions,
+} from "./settings-constants";
 import { useAgentSettingsContext } from "./agent-settings-context";
 import type { AgentParameterJsonViewerRef } from "./types";
 import {
   agentModelOptionsForProvider,
+  agentProviderModelCacheKey,
   formatAgentModelOption,
   formatAgentProviderOption,
   renderReasoningEffortOption,
@@ -117,6 +121,25 @@ function SupervisorAgentEditor() {
             </select>
           </label>
           <label className="ai-provider-field">
+            <span>API 协议</span>
+            <select
+              name="providerType"
+              value={state.form.supervisor.providerType}
+              disabled={state.loading || state.saving}
+              onChange={actions.changeSupervisorProviderType}
+            >
+              {agentProviderTypeOptions.map(function renderProviderTypeOption(
+                option,
+              ) {
+                return (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <label className="ai-provider-field">
             <span>模型</span>
             <select
               value={state.form.supervisor.model}
@@ -126,17 +149,26 @@ function SupervisorAgentEditor() {
                 !state.form.supervisor.providerId
               }
               onFocus={function handleSupervisorModelSelectFocus() {
-                actions.focusAgentModelSelect(state.form.supervisor.providerId);
+                actions.focusAgentModelSelect(
+                  state.form.supervisor.providerId,
+                  state.form.supervisor.providerType,
+                );
               }}
               onChange={actions.changeSupervisorModel}
             >
               <option value="">
-                {state.modelLoadingByProvider[state.form.supervisor.providerId]
+                {state.modelLoadingByProvider[
+                  agentProviderModelCacheKey(
+                    state.form.supervisor.providerId,
+                    state.form.supervisor.providerType,
+                  )
+                ]
                   ? "正在加载模型..."
                   : "选择模型"}
               </option>
               {agentModelOptionsForProvider(
                 state.form.supervisor.providerId,
+                state.form.supervisor.providerType,
                 state.form.supervisor.model,
                 state.modelProviders,
                 state.modelOptionsByProvider,
@@ -446,12 +478,38 @@ function ChildAgentModelFields() {
         </select>
       </label>
       <label className="ai-provider-field">
+        <span>API 协议</span>
+        <select
+          value={editingChild.providerType}
+          disabled={state.saving}
+          onChange={function handleChildProviderTypeSelect(event) {
+            actions.changeChildProviderType(
+              state.editingChildIndex,
+              event.target.value,
+            );
+          }}
+        >
+          {agentProviderTypeOptions.map(function renderProviderTypeOption(
+            option,
+          ) {
+            return (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            );
+          })}
+        </select>
+      </label>
+      <label className="ai-provider-field">
         <span>模型</span>
         <select
           value={editingChild.model}
           disabled={state.saving || !editingChild.providerId}
           onFocus={function handleChildModelSelectFocus() {
-            actions.focusAgentModelSelect(editingChild.providerId);
+            actions.focusAgentModelSelect(
+              editingChild.providerId,
+              editingChild.providerType,
+            );
           }}
           onChange={function handleChildModelSelect(event) {
             actions.changeChildModel(
@@ -461,12 +519,18 @@ function ChildAgentModelFields() {
           }}
         >
           <option value="">
-            {state.modelLoadingByProvider[editingChild.providerId]
+            {state.modelLoadingByProvider[
+              agentProviderModelCacheKey(
+                editingChild.providerId,
+                editingChild.providerType,
+              )
+            ]
               ? "正在加载模型..."
               : "选择模型"}
           </option>
           {agentModelOptionsForProvider(
             editingChild.providerId,
+            editingChild.providerType,
             editingChild.model,
             state.modelProviders,
             state.modelOptionsByProvider,

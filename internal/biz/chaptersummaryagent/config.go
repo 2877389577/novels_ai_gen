@@ -18,6 +18,8 @@ type runtimeChapterSummaryAgentConfig struct {
 	name string
 	// providerID 表示章节概要 Agent 使用的 AI 提供商 ID。
 	providerID uint64
+	// providerType 表示章节概要 Agent 模型使用的 API 协议。
+	providerType string
 	// model 表示章节概要 Agent 使用的模型标识。
 	model string
 	// reasoningEffort 表示 GPT 类模型使用的推理强度。
@@ -54,6 +56,10 @@ func newRuntimeChapterSummaryAgentConfig(cfg appconfig.ChapterSummaryAgentConfig
 	description := strings.TrimSpace(def.Description)
 	instruction := strings.TrimSpace(def.Instruction)
 	model := strings.TrimSpace(def.Model)
+	providerType, err := biznovelagent.NormalizeModelProviderType(def.ProviderType)
+	if err != nil {
+		return runtimeChapterSummaryAgentConfig{}, fmt.Errorf("%w: 章节概要 Agent provider_type 仅支持 openai 或 claude", ErrChapterSummaryAgentConfigInvalid)
+	}
 	reasoningEffort := strings.ToLower(strings.TrimSpace(def.ReasoningEffort))
 	userAgent := strings.TrimSpace(def.UserAgent)
 
@@ -83,6 +89,7 @@ func newRuntimeChapterSummaryAgentConfig(cfg appconfig.ChapterSummaryAgentConfig
 		enabled:         enabled,
 		name:            name,
 		providerID:      def.ProviderID,
+		providerType:    providerType,
 		model:           model,
 		reasoningEffort: reasoningEffort,
 		userAgent:       userAgent,
@@ -136,6 +143,7 @@ func isEmptyChapterSummaryAgentDefinition(def appconfig.AgentDefinition) bool {
 		strings.TrimSpace(def.Description) == "" &&
 		strings.TrimSpace(def.Instruction) == "" &&
 		strings.TrimSpace(def.Model) == "" &&
+		strings.TrimSpace(def.ProviderType) == "" &&
 		strings.TrimSpace(def.ReasoningEffort) == "" &&
 		strings.TrimSpace(def.UserAgent) == "" &&
 		def.ProviderID == 0 &&

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import Modal from "@douyinfe/semi-ui-19/lib/es/modal";
 import Toast from "@douyinfe/semi-ui-19/lib/es/toast";
-import { createAIProvider, deleteAIProvider, fetchAIProviderModels, fetchAIProviderModelsByProviderID, fetchAIProviders, updateAIProvider, UnauthorizedError, type AIProviderItem, type AIProviderModelItem } from "../api";
-import { aiProviderDefaultPage, aiProviderPageSize, aiProviderTypeOptions } from "./settings-constants";
+import { createAIProvider, deleteAIProvider, fetchAIProviders, updateAIProvider, UnauthorizedError, type AIProviderItem } from "../api";
+import { aiProviderDefaultPage, aiProviderPageSize } from "./settings-constants";
 import { AIProviderContext } from "./ai-provider-context";
 import type { AIProviderFormMode, AIProviderFormState, AIProviderSettingsPanelProps } from "./types";
-import { createDefaultAIProviderFormState, formatAgentModelOption, formatOptionalText, formatTime, getErrorMessage, isAbortError, isAIProviderType, isProviderConnectionUnchanged, providerToAIProviderFormState, toAIProviderUpsertParams, uniqueAIProviderModelOptions, validateAIProviderForm } from "./settings-utils";
+import { createDefaultAIProviderFormState, formatOptionalText, formatTime, getErrorMessage, isAbortError, providerToAIProviderFormState, toAIProviderUpsertParams, validateAIProviderForm } from "./settings-utils";
 
 // AIProviderSettingsPanel 渲染 AI 提供商管理面板。
 // 参数 props 表示 AI 提供商面板需要的外部回调。
@@ -24,11 +24,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
   const [form, setForm] = useState<AIProviderFormState>(
     createDefaultAIProviderFormState,
   );
-  const [providerModelOptions, setProviderModelOptions] = useState<
-    AIProviderModelItem[]
-  >([]);
-  const [providerModelLoading, setProviderModelLoading] = useState(false);
-  const [providerModelError, setProviderModelError] = useState("");
 
   const totalPages = Math.max(1, Math.ceil(total / aiProviderPageSize));
   const pageSummary =
@@ -101,7 +96,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
     setEditingProvider(null);
     setForm(createDefaultAIProviderFormState());
     setErrorMessage("");
-    clearProviderModelOptions();
     setProviderModalVisible(true);
   }
 
@@ -112,7 +106,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
     setEditingProvider(provider);
     setForm(providerToAIProviderFormState(provider));
     setErrorMessage("");
-    clearProviderModelOptions();
     setProviderModalVisible(true);
   }
 
@@ -126,33 +119,16 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
     setEditingProvider(null);
     setForm(createDefaultAIProviderFormState());
     setErrorMessage("");
-    clearProviderModelOptions();
-  }
-
-  // clearProviderModelOptions 清空 AI 提供商表单中已加载的模型候选。
-  function clearProviderModelOptions() {
-    setProviderModelOptions([]);
-    setProviderModelError("");
   }
 
   // handleFormInputChange 处理 AI 提供商文本或数字字段输入变化。
   // 参数 event 表示输入框变化事件。
   function handleFormInputChange(event: ChangeEvent<HTMLInputElement>) {
     const { name, value } = event.target;
-    const shouldClearModelOptions =
-      name === "providerType" ||
-      name === "apiKey" ||
-      name === "baseURL" ||
-      name === "httpProxy";
-    if (shouldClearModelOptions) {
-      clearProviderModelOptions();
-    }
     setForm(function updateForm(current) {
       switch (name) {
         case "name":
           return { ...current, name: value };
-        case "providerType":
-          return { ...current, providerType: value, apiType: "completions" };
         case "apiKey":
           return { ...current, apiKey: value };
         case "baseURL":
@@ -167,11 +143,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
           return current;
       }
     });
-  }
-
-  // handleProviderModelListClick 处理默认模型候选列表获取按钮点击。
-  function handleProviderModelListClick() {
-    void loadProviderModelOptions();
   }
 
   // handleEnabledChange 处理 AI 提供商启用状态变化。
@@ -250,7 +221,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
       setEditingProvider(null);
       setForm(createDefaultAIProviderFormState());
       setProviderModalVisible(false);
-      clearProviderModelOptions();
 
       const nextPage =
         formMode === "create" ? aiProviderDefaultPage : page;
@@ -269,67 +239,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
       Toast.error(message);
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  // loadProviderModelOptions 获取当前 AI 提供商表单可用的模型候选。
-  async function loadProviderModelOptions() {
-    const providerType = form.providerType.trim();
-    if (!isAIProviderType(providerType)) {
-      const message = "AI 提供商类型只能是 openai 或 claude";
-      setProviderModelError(message);
-      Toast.error(message);
-      return;
-    }
-
-    const apiKey = form.apiKey.trim();
-    const baseURL = form.baseURL.trim();
-    const httpProxy = form.httpProxy.trim();
-    const canUseSavedProvider =
-      formMode === "edit" &&
-      editingProvider !== null &&
-      !apiKey &&
-      isProviderConnectionUnchanged(form, editingProvider);
-
-    if (!apiKey && !canUseSavedProvider) {
-      const message =
-        formMode === "edit" && editingProvider !== null
-          ? "请输入 API Key 后获取当前配置的模型列表"
-          : "请输入 API Key 后获取模型列表";
-      setProviderModelError(message);
-      Toast.warning(message);
-      return;
-    }
-
-    setProviderModelLoading(true);
-    setProviderModelError("");
-
-    try {
-      const data = canUseSavedProvider
-        ? await fetchAIProviderModelsByProviderID(editingProvider.id)
-        : await fetchAIProviderModels({
-          provider_type: providerType,
-          api_key: apiKey,
-          base_url: baseURL,
-          http_proxy: httpProxy,
-        });
-      const options = uniqueAIProviderModelOptions(data.items);
-      setProviderModelOptions(options);
-      if (options.length === 0) {
-        Toast.info("未获取到模型列表，可手动填写默认模型");
-        return;
-      }
-      Toast.success("模型列表已获取");
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        props.onUnauthorized();
-        return;
-      }
-      const message = getErrorMessage(error, "AI 模型列表获取失败，请稍后再试");
-      setProviderModelError(message);
-      Toast.error(message);
-    } finally {
-      setProviderModelLoading(false);
     }
   }
 
@@ -470,7 +379,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                   <div className="ai-provider-card-heading">
                     <div>
                       <h3>{provider.name}</h3>
-                      <p>{provider.provider_type}</p>
                     </div>
                     <span
                       className={
@@ -485,15 +393,11 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
 
                   <dl className="ai-provider-card-meta">
                     <div>
-                      <dt>API 类型</dt>
-                      <dd>{provider.api_type || "未设置"}</dd>
-                    </div>
-                    <div>
                       <dt>Key</dt>
                       <dd>{provider.masked_api_key || "未设置"}</dd>
                     </div>
                     <div>
-                      <dt>Base URL</dt>
+                      <dt>服务根地址</dt>
                       <dd title={provider.base_url}>
                         {formatOptionalText(provider.base_url)}
                       </dd>
@@ -586,24 +490,6 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
                 onChange={handleFormInputChange}
               />
             </label>
-            <fieldset className="ai-provider-choice-field">
-              <legend>提供商类型</legend>
-              <div className="ai-provider-choice-list">
-                {aiProviderTypeOptions.map((option) => (
-                  <label className="ai-provider-choice" key={option.value}>
-                    <input
-                      type="radio"
-                      name="providerType"
-                      value={option.value}
-                      checked={form.providerType === option.value}
-                      disabled={submitting}
-                      onChange={handleFormInputChange}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
             <label className="ai-provider-field">
               <span>API Key</span>
               <input
@@ -618,12 +504,12 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
               />
             </label>
             <label className="ai-provider-field ai-provider-field-wide">
-              <span>Base URL</span>
+              <span>服务根地址</span>
               <input
                 name="baseURL"
                 value={form.baseURL}
                 disabled={submitting}
-                placeholder="https://api.openai.com/v1"
+                placeholder="https://api.example.com"
                 onChange={handleFormInputChange}
               />
             </label>
@@ -639,42 +525,13 @@ export function AIProviderSettingsPanel(props: AIProviderSettingsPanelProps) {
             </label>
             <div className="ai-provider-field ai-provider-field-wide">
               <span>默认模型</span>
-              <div className="ai-provider-model-picker">
-                <input
-                  name="defaultModel"
-                  list="ai-provider-default-model-options"
-                  value={form.defaultModel}
-                  disabled={submitting}
-                  placeholder="例如 gpt-5 或 claude-sonnet-4-5"
-                  onChange={handleFormInputChange}
-                />
-                <button
-                  type="button"
-                  className="settings-secondary-button"
-                  disabled={submitting || providerModelLoading}
-                  onClick={handleProviderModelListClick}
-                >
-                  {providerModelLoading ? "获取中..." : "获取模型列表"}
-                </button>
-              </div>
-              <datalist id="ai-provider-default-model-options">
-                {providerModelOptions.map(function renderProviderModelOption(
-                  model,
-                ) {
-                  return (
-                    <option
-                      key={model.id}
-                      value={model.id}
-                      label={formatAgentModelOption(model)}
-                    />
-                  );
-                })}
-              </datalist>
-              {providerModelError ? (
-                <small className="ai-provider-model-message">
-                  {providerModelError}
-                </small>
-              ) : null}
+              <input
+                name="defaultModel"
+                value={form.defaultModel}
+                disabled={submitting}
+                placeholder="例如 gpt-5 或 claude-sonnet-4-5"
+                onChange={handleFormInputChange}
+              />
             </div>
             <label className="ai-provider-field">
               <span>优先级</span>
