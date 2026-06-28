@@ -27,6 +27,7 @@ const defaultAIProviderFormState: AIProviderFormState = {
   providerType: "openai",
   apiKey: "",
   baseURL: "",
+  httpProxy: "",
   defaultModel: "",
   priority: "0",
   apiType: "completions",
@@ -716,6 +717,7 @@ export function providerToAIProviderFormState(
     providerType: provider.provider_type,
     apiKey: "",
     baseURL: provider.base_url,
+    httpProxy: provider.http_proxy || "",
     defaultModel: provider.default_model,
     priority: String(provider.priority ?? 0),
     apiType: provider.provider_type === "openai" ? "completions" : provider.api_type,
@@ -750,6 +752,9 @@ export function validateAIProviderForm(
   if (!isAIProviderAPIType(form.apiType)) {
     return "AI 接口类型只能是 response 或 completions";
   }
+  if (!isValidHTTPProxy(form.httpProxy)) {
+    return "HTTP 代理地址格式无效";
+  }
   return "";
 }
 
@@ -769,6 +774,7 @@ export function toAIProviderUpsertParams(
     provider_type: providerType,
     api_key: form.apiKey.trim(),
     base_url: form.baseURL.trim(),
+    http_proxy: form.httpProxy.trim(),
     default_model: form.defaultModel.trim(),
     priority: parseAIProviderPriority(form.priority) ?? 0,
     api_type: apiType,
@@ -784,7 +790,8 @@ export function isProviderConnectionUnchanged(
 ): boolean {
   return (
     form.providerType.trim() === provider.provider_type &&
-    form.baseURL.trim() === provider.base_url.trim()
+    form.baseURL.trim() === provider.base_url.trim() &&
+    form.httpProxy.trim() === (provider.http_proxy || "").trim()
   );
 }
 
@@ -841,6 +848,24 @@ export function isAIProviderAPIType(value: string): value is AIProviderAPIType {
       return option.value === value;
     },
   );
+}
+
+// isValidHTTPProxy 判断 HTTP 代理地址是否为空或有效。
+// 参数 value 表示需要校验的 HTTP 代理地址。
+export function isValidHTTPProxy(value: string): boolean {
+  const text = value.trim();
+  if (!text) {
+    return true;
+  }
+  try {
+    const parsed = new URL(text);
+    return (
+      Boolean(parsed.hostname) &&
+      (parsed.protocol === "http:" || parsed.protocol === "https:")
+    );
+  } catch {
+    return false;
+  }
 }
 
 // defaultAgentModelOption 根据模型标识创建智能体设置页的模型选项。

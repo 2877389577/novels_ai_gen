@@ -90,6 +90,7 @@ func (r *Repository) Update(ctx context.Context, provider *bizaiprovider.Provide
 			"api_key_ciphertext": provider.APIKeyCiphertext,
 			"api_key_mask":       provider.APIKeyMask,
 			"base_url":           provider.BaseURL,
+			"http_proxy":         provider.HTTPProxy,
 			"default_model":      provider.DefaultModel,
 			"priority":           provider.Priority,
 			"api_type":           provider.APIType,

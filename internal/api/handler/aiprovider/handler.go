@@ -26,6 +26,8 @@ type CreateRequest struct {
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
+	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
@@ -46,6 +48,8 @@ type UpdateRequest struct {
 	APIKey string `json:"api_key" example:"sk-xxx"`
 	// BaseURL 表示 AI 提供商接口基础地址，可以为空。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址，可以为空。
+	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识，可以为空。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
@@ -68,6 +72,8 @@ type ProviderData struct {
 	MaskedAPIKey string `json:"masked_api_key" example:"sk-p...abcd"`
 	// BaseURL 表示 AI 提供商接口基础地址。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// HTTPProxy 表示 AI 提供商网络请求使用的 HTTP 代理地址。
+	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 	// DefaultModel 表示模型列表不可用时使用的默认模型标识。
 	DefaultModel string `json:"default_model" example:"gpt-5"`
 	// Priority 表示 AI 提供商排序优先级，0 最低，数值越大优先级越高。
@@ -144,6 +150,8 @@ type ModelListRequest struct {
 	APIKey string `json:"api_key" binding:"required" example:"sk-xxx"`
 	// BaseURL 表示 AI 提供商接口基础地址；为空时按协议使用默认地址。
 	BaseURL string `json:"base_url" example:"https://api.openai.com/v1"`
+	// HTTPProxy 表示请求官方模型列表时使用的 HTTP 代理地址；为空时不使用代理。
+	HTTPProxy string `json:"http_proxy" example:"http://127.0.0.1:7890"`
 }
 
 // ModelData 表示 Swagger 文档中的 AI 模型数据。
@@ -441,6 +449,8 @@ func writeServiceError(c *gin.Context, err error) {
 		response.Error(c, http.StatusBadRequest, "AI 提供商优先级不能小于 0")
 	case errors.Is(err, bizaiprovider.ErrInvalidBaseURL):
 		response.Error(c, http.StatusBadRequest, "AI 提供商 Base URL 格式无效")
+	case errors.Is(err, bizaiprovider.ErrInvalidHTTPProxy):
+		response.Error(c, http.StatusBadRequest, "AI 提供商 HTTP 代理地址格式无效")
 	case errors.Is(err, bizaiprovider.ErrModelListUnavailable):
 		response.Error(c, http.StatusBadGateway, "官方模型列表接口暂时不可用")
 	case errors.Is(err, bizaiprovider.ErrModelListInvalid):
