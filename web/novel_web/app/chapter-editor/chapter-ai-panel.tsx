@@ -10,9 +10,10 @@ import {
   bindChapterAiPairConversation,
   clearChapterAiApprovalInList,
   collapseAssistantRepliesToStatusInList,
+  markChapterAiPairFailedInList,
   removeAssistantRepliesNotInList,
   removeChapterAiLoadingMessageFromList,
-  resetChapterAiRequestForRetryInList,
+  removeChapterAiPairInList,
   setChapterAiApprovalInList,
   updateAssistantReplyMessageInList,
   updateChapterAiApprovalStatusInList,
@@ -484,9 +485,9 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     });
   }
 
-  // handleRetryAssistantMessage 重新发送指定用户消息对应的 AI 请求。
+  // handleRetryAssistantMessage 将失败用户消息回填到输入框并移除本地失败气泡。
   // 参数 message 表示触发重试的用户消息。
-  async function handleRetryAssistantMessage(message: ChapterAiMessage) {
+  function handleRetryAssistantMessage(message: ChapterAiMessage) {
     if (assistantSending) {
       Toast.info("AI 正在回复，请稍后再重试");
       return;
@@ -499,46 +500,14 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       return;
     }
 
-    const assistantMessage = chats.find(function findPairAssistantMessage(chat) {
-      return chat.role === "assistant" && chat.chapterAiPairID === pairID;
+    setInputValue(retryPayload.message);
+    setChats(function removeFailedPair(currentChats) {
+      return removeChapterAiPairInList(currentChats, pairID);
     });
-    const assistantMessageID = assistantMessage?.chapterAiSourceID ?? assistantMessage?.id;
-    if (!assistantMessageID || typeof assistantMessageID !== "string") {
-      Toast.warning("未找到可重试的 AI 回复");
-      return;
-    }
-
-    setAssistantSending(true);
-    let requestContext: ChapterAiRequestContext | null;
-    try {
-      requestContext = await props.prepareRequestContext();
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        setAssistantSending(false);
-        onUnauthorized();
-        return;
-      }
-      Toast.error(
-        getErrorMessage(
-          error,
-          props.prepareRequestErrorMessage || "AI 请求准备失败，请稍后再试",
-        ),
-      );
-      setAssistantSending(false);
-      return;
-    }
-    if (requestContext === null) {
-      setAssistantSending(false);
-      return;
-    }
-
-    resetChapterAiRequestForRetry(pairID, assistantMessageID);
-    await runChapterAiStream({
-      pairID,
-      assistantMessageID,
-      requestContext,
-      retryPayload,
-    });
+    window.setTimeout(function focusRetryMessageInput() {
+      assistantInputRef.current?.focus();
+      syncChapterAiInputHeight(assistantInputRef.current);
+    }, 0);
   }
 
   // handleApproveToolApproval 批准当前助手消息等待中的工具调用。
@@ -697,11 +666,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         return;
       }
       handledFailure = true;
-      markChapterAiRequestFailed(
-        request.pairID,
-        request.assistantMessageID,
-        errorMessage,
-      );
+      markChapterAiRequestFailed(request.pairID, errorMessage);
       Toast.error(errorMessage);
     }
 
@@ -883,16 +848,12 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     }
   }
 
-  // markChapterAiRequestFailed 标记指定 AI 请求失败并允许用户消息重试。
-  // 参数 pairID 表示失败请求的消息配对 ID；参数 assistantMessageID 表示助手消息基础 ID；参数 errorMessage 表示失败说明。
-  function markChapterAiRequestFailed(
-    pairID: string,
-    assistantMessageID: string,
-    errorMessage: string,
-  ) {
-    removeChapterAiLoadingMessage(pairID);
-    updateChapterAiPairRetryable(pairID, true);
-    collapseAssistantRepliesToStatus(assistantMessageID, errorMessage, "failed");
+  // markChapterAiRequestFailed 将失败状态落在本轮用户消息上，并移除同轮助手消息。
+  // 参数 pairID 表示失败请求的消息配对 ID；参数 errorMessage 表示失败说明。
+  function markChapterAiRequestFailed(pairID: string, errorMessage: string) {
+    setChats(function markFailedPair(currentChats) {
+      return markChapterAiPairFailedInList(currentChats, pairID, errorMessage);
+    });
   }
 
   // upsertChapterAiConversation 将后端返回的会话信息写入本地会话列表。
@@ -963,18 +924,6 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
   function clearChapterAiApproval(sourceMessageID: string) {
     setChats(function clearApproval(currentChats) {
       return clearChapterAiApprovalInList(currentChats, sourceMessageID);
-    });
-  }
-
-  // resetChapterAiRequestForRetry 重置指定配对的助手消息，使重试复用原对话位置。
-  // 参数 pairID 表示需要重试的消息配对 ID；参数 assistantMessageID 表示助手消息基础 ID。
-  function resetChapterAiRequestForRetry(pairID: string, assistantMessageID: string) {
-    setChats(function resetRetryMessages(currentChats) {
-      return resetChapterAiRequestForRetryInList(
-        currentChats,
-        pairID,
-        assistantMessageID,
-      );
     });
   }
 

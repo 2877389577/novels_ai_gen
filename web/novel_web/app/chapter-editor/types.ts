@@ -65,6 +65,8 @@ export interface ChapterAiMessage extends Message {
   chapterAiRetryable?: boolean;
   // chapterAiRetryPayload 表示该用户消息重试时复用的原始发送参数。
   chapterAiRetryPayload?: ChapterAiRetryPayload;
+  // chapterAiFailureMessage 表示本地失败消息的失败原因，用于提示和可访问说明。
+  chapterAiFailureMessage?: string;
   // chapterAiLoading 表示该消息是前端本地生成的临时加载占位消息。
   chapterAiLoading?: boolean;
   // chapterAiApproval 表示该助手消息当前等待用户审核的工具调用信息。

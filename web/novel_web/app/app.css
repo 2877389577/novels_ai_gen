@@ -9660,6 +9660,49 @@ html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-user
   color: #f1ffe9;
 }
 
+.chapter-ai-failure-indicator {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #ef4444 11%, transparent);
+  color: #b91c1c;
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 18px;
+  padding: 3px 8px;
+  text-align: left;
+  text-indent: 0;
+}
+
+.chapter-ai-failure-indicator svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.chapter-ai-retry-action.semi-button {
+  min-width: 68px;
+  height: 28px;
+  border-radius: 6px;
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  padding-inline: 10px;
+}
+
+.chapter-ai-retry-action .semi-button-content {
+  gap: 4px;
+}
+
+html[data-theme="dark"] .chapter-ai-failure-indicator {
+  background: color-mix(in srgb, #f87171 16%, transparent);
+  color: #fecaca;
+}
+
 .chapter-ai-approval-panel {
   display: grid;
   min-width: 0;

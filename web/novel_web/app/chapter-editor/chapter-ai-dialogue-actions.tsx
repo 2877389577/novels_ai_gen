@@ -1,4 +1,11 @@
-import { IconClose, IconDeleteStroked, IconEditStroked, IconRedoStroked, IconTick } from "@douyinfe/semi-icons";
+import {
+  IconAlertTriangle,
+  IconClose,
+  IconDeleteStroked,
+  IconEditStroked,
+  IconRedoStroked,
+  IconTick,
+} from "@douyinfe/semi-icons";
 import { Button } from "@douyinfe/semi-ui-19";
 import type {
   DialogueRenderConfig,
@@ -60,6 +67,16 @@ function ChapterAiDialogueContent(props: ChapterAiDialogueContentProps) {
           <span className="semi-ai-chat-dialogue-content-loading-text">
             加载中
           </span>
+        </span>
+      ) : null}
+      {shouldRenderChapterAiFailure(message) ? (
+        <span
+          aria-label={message.chapterAiFailureMessage || "消息发送失败"}
+          className="chapter-ai-failure-indicator"
+          title={message.chapterAiFailureMessage || "消息发送失败"}
+        >
+          <IconAlertTriangle aria-hidden="true" />
+          <span>发送失败</span>
         </span>
       ) : null}
       {message && approval ? (
@@ -130,6 +147,14 @@ function shouldRenderChapterAiLoading(
   return content.length === 0 && outputText.length === 0;
 }
 
+// shouldRenderChapterAiFailure 判断自定义内容渲染中是否需要显示用户消息失败标识。
+// 参数 message 表示当前需要渲染的章节 AI 消息。
+function shouldRenderChapterAiFailure(
+  message: ChapterAiMessage | undefined,
+): message is ChapterAiMessage {
+  return message?.role === "user" && message.status === "failed";
+}
+
 // readChapterAiOutputText 读取 Semi 消息对象中可能存在的输出文本字段。
 // 参数 message 表示当前需要渲染的章节 AI 消息。
 function readChapterAiOutputText(message: ChapterAiMessage): string {
@@ -171,10 +196,10 @@ function ChapterAiDialogueAction(props: ChapterAiDialogueActionProps) {
   return (
     <div className={props.actionProps.className}>
       {copyNode}
-      {message.chapterAiRetryable === true ? (
+      {message.chapterAiRetryable === true && message.status === "failed" ? (
         <Button
-          aria-label="重试用户消息"
-          className="semi-ai-chat-dialogue-action-btn"
+          aria-label="将失败消息重新填入输入框"
+          className="semi-ai-chat-dialogue-action-btn chapter-ai-retry-action"
           htmlType="button"
           icon={<IconRedoStroked aria-hidden="true" />}
           onClick={function retryChapterAiMessage(event) {
@@ -182,10 +207,13 @@ function ChapterAiDialogueAction(props: ChapterAiDialogueActionProps) {
             event.stopPropagation();
             props.retry(message);
           }}
-          theme="borderless"
+          size="small"
+          theme="outline"
           title="重试"
-          type="tertiary"
-        />
+          type="danger"
+        >
+          重试
+        </Button>
       ) : null}
       <Button
         aria-label="修改用户消息"

@@ -51,6 +51,40 @@ export function updateChapterAiPairRetryableInList(
   });
 }
 
+// markChapterAiPairFailedInList 将指定配对标记为本地失败状态，只保留用户消息并移除同轮助手消息。
+// 参数 chats 表示当前章节 AI 消息列表；参数 pairID 表示需要标记失败的消息配对 ID；参数 failureMessage 表示失败原因。
+export function markChapterAiPairFailedInList(
+  chats: ChapterAiMessage[],
+  pairID: string,
+  failureMessage: string,
+): ChapterAiMessage[] {
+  return chats.flatMap(function markFailedPairMessage(chat) {
+    if (chat.chapterAiPairID !== pairID) {
+      return [chat];
+    }
+    if (chat.role !== "user") {
+      return [];
+    }
+    return [{
+      ...chat,
+      status: "failed",
+      chapterAiRetryable: true,
+      chapterAiFailureMessage: failureMessage,
+    }];
+  });
+}
+
+// removeChapterAiPairInList 移除指定配对下的用户消息和同轮残留消息。
+// 参数 chats 表示当前章节 AI 消息列表；参数 pairID 表示需要移除的消息配对 ID。
+export function removeChapterAiPairInList(
+  chats: ChapterAiMessage[],
+  pairID: string,
+): ChapterAiMessage[] {
+  return chats.filter(function keepOtherPairMessage(chat) {
+    return chat.chapterAiPairID !== pairID;
+  });
+}
+
 // setChapterAiApprovalInList 将指定助手消息更新为等待工具人工审核状态。
 // 参数 chats 表示当前章节 AI 消息列表；参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 approval 表示需要展示并用于恢复的审核状态。
 export function setChapterAiApprovalInList(
@@ -118,46 +152,6 @@ export function clearChapterAiApprovalInList(
       ...chat,
       chapterAiApproval: undefined,
     };
-  });
-}
-
-// resetChapterAiRequestForRetryInList 重置指定配对的助手消息，使重试复用原对话位置。
-// 参数 chats 表示当前章节 AI 消息列表；参数 pairID 表示需要重试的消息配对 ID；参数 assistantMessageID 表示助手消息基础 ID。
-export function resetChapterAiRequestForRetryInList(
-  chats: ChapterAiMessage[],
-  pairID: string,
-  assistantMessageID: string,
-): ChapterAiMessage[] {
-  let assistantReset = false;
-  return chats.flatMap(function resetRetryMessage(chat) {
-    if (chat.chapterAiPairID !== pairID) {
-      return [chat];
-    }
-    if (chat.role === "user") {
-      return [{
-        ...chat,
-        chapterAiRetryable: false,
-      }];
-    }
-    if (chat.role === "assistant") {
-      if (chat.chapterAiLoading) {
-        return [];
-      }
-      if (assistantReset) {
-        return [];
-      }
-      assistantReset = true;
-      return [{
-        ...chat,
-        id: assistantMessageID,
-        chapterAiSourceID: assistantMessageID,
-        chapterAiReplyIndex: 1,
-        chapterAiApproval: undefined,
-        content: "",
-        status: "in_progress",
-      }];
-    }
-    return [chat];
   });
 }
 
