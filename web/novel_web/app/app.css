@@ -7032,6 +7032,7 @@ html[data-theme="dark"] .chapter-editor-page {
 }
 
 .chapter-editor-back,
+.chapter-editor-preview,
 .chapter-editor-save,
 .chapter-editor-cancel,
 .chapter-editor-error button {
@@ -9234,6 +9235,7 @@ html[data-theme="dark"] .chapter-editor-page {
 }
 
 .chapter-editor-back,
+.chapter-editor-preview,
 .chapter-editor-save,
 .chapter-editor-error button {
   display: inline-flex;
@@ -10129,6 +10131,30 @@ html[data-theme="dark"] .chapter-ai-input-shell:focus-within {
   letter-spacing: 0;
 }
 
+.chapter-editor-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.chapter-editor-preview {
+  min-width: 112px;
+  border: 1px solid color-mix(in srgb, var(--color-outline-variant) 54%, transparent);
+  background: color-mix(in srgb, var(--color-paper) 82%, var(--color-surface));
+  color: var(--color-on-surface-variant);
+  padding: 11px 22px;
+}
+
+.chapter-editor-preview:hover,
+.chapter-editor-preview:focus-visible {
+  border-color: color-mix(in srgb, var(--color-secondary) 64%, var(--color-primary));
+  background: color-mix(in srgb, var(--color-primary-container) 22%, var(--color-surface));
+  color: var(--color-primary);
+  outline: none;
+  transform: translateY(-1px);
+}
+
 .chapter-editor-save {
   position: relative;
   min-width: 116px;
@@ -10171,6 +10197,165 @@ html[data-theme="dark"] .chapter-ai-input-shell:focus-within {
 .chapter-editor-save:disabled {
   cursor: progress;
   opacity: 0.62;
+}
+
+.chapter-mobile-preview-modal {
+  max-width: calc(100vw - 24px);
+}
+
+.chapter-mobile-preview-modal .semi-modal-content {
+  overflow: visible;
+  border: 0;
+  border-radius: 34px;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.chapter-mobile-preview-modal .semi-modal-body {
+  padding: 0;
+}
+
+.chapter-mobile-preview-wrap {
+  position: relative;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.chapter-mobile-preview-close {
+  position: absolute;
+  z-index: 3;
+  top: -18px;
+  right: -18px;
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  color: #1b1d23;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(15, 18, 24, 0.28);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.chapter-mobile-preview-close:hover,
+.chapter-mobile-preview-close:focus-visible {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.chapter-mobile-preview-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.chapter-mobile-preview-frame {
+  position: relative;
+  width: min(360px, calc(100vw - 48px));
+  height: min(720px, calc(100vh - 96px));
+  margin: 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 38px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.13), transparent 34%),
+    #11141b;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 28px 74px rgba(15, 18, 24, 0.34);
+  padding: 17px 12px 14px;
+}
+
+.chapter-mobile-preview-speaker {
+  position: absolute;
+  z-index: 1;
+  top: 9px;
+  left: 50%;
+  width: 74px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  transform: translateX(-50%);
+}
+
+.chapter-mobile-preview-screen {
+  height: 100%;
+  overflow-y: auto;
+  border-radius: 29px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), transparent 24%),
+    color-mix(in srgb, var(--color-paper) 91%, #f4f7f1);
+  color: var(--color-on-surface);
+  padding: 54px 25px 36px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.chapter-mobile-preview-screen::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.chapter-mobile-preview-number {
+  margin: 0 0 10px;
+  color: color-mix(in srgb, var(--color-on-surface-variant) 78%, transparent);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  text-align: center;
+}
+
+.chapter-mobile-preview-title {
+  margin: 0 0 30px;
+  color: var(--color-on-surface);
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 32px;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.chapter-mobile-preview-content {
+  padding-bottom: 12px;
+}
+
+.chapter-mobile-preview-paragraph {
+  min-height: 31px;
+  margin: 0 0 14px;
+  color: color-mix(in srgb, var(--color-on-surface) 82%, var(--color-on-surface-variant));
+  font-family: "Noto Serif", ui-serif, Georgia, serif;
+  font-size: 17px;
+  line-height: 31px;
+  letter-spacing: 0;
+  text-align: justify;
+  text-indent: 2em;
+  word-break: break-word;
+}
+
+.chapter-mobile-preview-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+html[data-theme="dark"] .chapter-mobile-preview-screen {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 24%),
+    color-mix(in srgb, var(--color-surface) 88%, #10131a);
+}
+
+html[data-theme="dark"] .chapter-mobile-preview-close {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(30, 34, 42, 0.92);
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .chapter-editor-error {
@@ -10528,9 +10713,52 @@ html[data-theme="dark"] .chapter-ai-input-shell:focus-within {
     padding: 10px;
   }
 
+  .chapter-editor-footer-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .chapter-editor-preview,
   .chapter-editor-save,
   .chapter-editor-back {
     width: 100%;
+  }
+
+  .chapter-mobile-preview-frame {
+    width: min(328px, calc(100vw - 36px));
+    height: min(640px, calc(100vh - 80px));
+    border-radius: 32px;
+    padding: 14px 10px 12px;
+  }
+
+  .chapter-mobile-preview-speaker {
+    top: 8px;
+    width: 64px;
+  }
+
+  .chapter-mobile-preview-screen {
+    border-radius: 25px;
+    padding: 48px 20px 30px;
+  }
+
+  .chapter-mobile-preview-title {
+    margin-bottom: 24px;
+    font-size: 21px;
+    line-height: 30px;
+  }
+
+  .chapter-mobile-preview-paragraph {
+    min-height: 29px;
+    font-size: 16px;
+    line-height: 29px;
+  }
+
+  .chapter-mobile-preview-close {
+    top: -12px;
+    right: -10px;
+    width: 40px;
+    height: 40px;
   }
 
   .chapter-ai-assistant-panel {

@@ -1,5 +1,5 @@
-import { IconAIEditLevel1 } from "@douyinfe/semi-icons";
-import { Button, FloatButton, Toast } from "@douyinfe/semi-ui-19";
+import { IconAIEditLevel1, IconClose } from "@douyinfe/semi-icons";
+import { Button, FloatButton, Modal, Toast } from "@douyinfe/semi-ui-19";
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type ChangeEvent, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { UnauthorizedError, createChapter, fetchChapterDetail, fetchNextChapterNumber, updateChapter, type ChapterDetailItem, type ChapterUpdateParams } from "../api";
 import { normalizeText } from "../novel-utils";
@@ -33,6 +33,9 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     useState<ChapterSelectionAIAction | null>(null);
   const [aiPrefillMessage, setAiPrefillMessage] =
     useState<ChapterAiPrefillMessage | null>(null);
+  const [mobilePreviewVisible, setMobilePreviewVisible] = useState(false);
+  const [mobilePreviewValues, setMobilePreviewValues] =
+    useState<ChapterFormValues>(emptyChapterFormValues);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLDivElement | null>(null);
   const aiPrefillMessageIDRef = useRef(0);
@@ -556,6 +559,22 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     setAiPanelOpen(false);
   }
 
+  // handleMobilePreviewOpen 打开手机预览弹窗并捕获当前编辑器内容。
+  function handleMobilePreviewOpen() {
+    hideSelectionAIAction();
+    const values = readCurrentChapterValues();
+    setMobilePreviewValues({
+      title: values.title,
+      content: values.content,
+    });
+    setMobilePreviewVisible(true);
+  }
+
+  // handleMobilePreviewClose 关闭手机预览弹窗。
+  function handleMobilePreviewClose() {
+    setMobilePreviewVisible(false);
+  }
+
   // handleAiAssistantTriggerKeyDown 处理悬浮按钮键盘触发。
   // 参数 event 表示悬浮按钮外层容器接收到的键盘事件。
   function handleAiAssistantTriggerKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -741,6 +760,13 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
   }
 
   const displayedChapterNumber = formatChapterNumber(chapterNumber);
+  const mobilePreviewParagraphs = useMemo(
+    // buildMobilePreviewParagraphs 将预览正文拆分为手机阅读段落。
+    function buildMobilePreviewParagraphs() {
+      return splitEditorTextLines(mobilePreviewValues.content);
+    },
+    [mobilePreviewValues.content],
+  );
   const chapterEditorContextValue = useMemo(
     // buildChapterEditorContextValue 创建章节编辑页的组合式上下文值。
     function buildChapterEditorContextValue() {
@@ -867,13 +893,22 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
                 <span className="chapter-word-count" aria-live="polite">
                   字数: {liveWordCount.toLocaleString("zh-CN")}
                 </span>
-                <button
-                  type="submit"
-                  className="chapter-editor-save"
-                  disabled={submitting}
-                >
-                  {submitting ? "保存中..." : "保存"}
-                </button>
+                <div className="chapter-editor-footer-actions">
+                  <button
+                    type="button"
+                    className="chapter-editor-preview"
+                    onClick={handleMobilePreviewOpen}
+                  >
+                    手机预览
+                  </button>
+                  <button
+                    type="submit"
+                    className="chapter-editor-save"
+                    disabled={submitting}
+                  >
+                    {submitting ? "保存中..." : "保存"}
+                  </button>
+                </div>
               </footer>
             </form>
           ) : null}
@@ -890,6 +925,14 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
           />
         ) : null}
       </div>
+
+      <ChapterMobilePreviewModal
+        visible={mobilePreviewVisible}
+        chapterNumber={displayedChapterNumber}
+        title={mobilePreviewValues.title}
+        paragraphs={mobilePreviewParagraphs}
+        onClose={handleMobilePreviewClose}
+      />
 
       {selectionAIAction ? (
         <Button
@@ -932,5 +975,73 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
       </div>
       </main>
     </ChapterEditorContext>
+  );
+}
+
+// ChapterMobilePreviewModalProps 表示手机预览弹窗需要的数据和回调。
+interface ChapterMobilePreviewModalProps {
+  // visible 表示手机预览弹窗是否可见。
+  visible: boolean;
+  // chapterNumber 表示手机预览中展示的章节号文本。
+  chapterNumber: string;
+  // title 表示手机预览中展示的章节标题。
+  title: string;
+  // paragraphs 表示手机预览中按段落拆分后的正文内容。
+  paragraphs: string[];
+  // onClose 表示点击关闭按钮时执行的回调。
+  onClose: () => void;
+}
+
+// ChapterMobilePreviewModal 渲染模拟手机阅读界面的章节预览弹窗。
+// 参数 props 表示手机预览弹窗需要展示的数据和关闭回调。
+function ChapterMobilePreviewModal(props: ChapterMobilePreviewModalProps) {
+  return (
+    <Modal
+      centered
+      className="chapter-mobile-preview-modal"
+      closeOnEsc={false}
+      closable={false}
+      footer={null}
+      header={null}
+      maskClosable={false}
+      onCancel={props.onClose}
+      visible={props.visible}
+      width={420}
+    >
+      <div className="chapter-mobile-preview-wrap">
+        <button
+          type="button"
+          className="chapter-mobile-preview-close"
+          aria-label="关闭手机预览"
+          onClick={props.onClose}
+        >
+          <IconClose aria-hidden="true" />
+        </button>
+        <div className="chapter-mobile-preview-frame">
+          <span className="chapter-mobile-preview-speaker" aria-hidden="true" />
+          <article className="chapter-mobile-preview-screen">
+            <p className="chapter-mobile-preview-number">
+              {props.chapterNumber}
+            </p>
+            <h2 className="chapter-mobile-preview-title">{props.title}</h2>
+            <div className="chapter-mobile-preview-content">
+              {props.paragraphs.map(function renderPreviewParagraph(
+                paragraph,
+                index,
+              ) {
+                return (
+                  <p
+                    className="chapter-mobile-preview-paragraph"
+                    key={`chapter-mobile-preview-${index}`}
+                  >
+                    {paragraph}
+                  </p>
+                );
+              })}
+            </div>
+          </article>
+        </div>
+      </div>
+    </Modal>
   );
 }
