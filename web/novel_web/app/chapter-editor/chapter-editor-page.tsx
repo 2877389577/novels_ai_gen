@@ -809,10 +809,6 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
         }`}
       >
       <header className="chapter-editor-nav">
-        <button type="button" className="chapter-editor-back" onClick={handleBack}>
-          <span aria-hidden="true">←</span>
-          <span>返回作品详情</span>
-        </button>
         <div className="chapter-editor-title">
           <p>{isEditMode ? "Edit Chapter" : "New Chapter"}</p>
           <h1>{isEditMode ? "修改章节" : "新增章节"}</h1>
@@ -890,9 +886,19 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
               </div>
 
               <footer className="chapter-editor-footer">
-                <span className="chapter-word-count" aria-live="polite">
-                  字数: {liveWordCount.toLocaleString("zh-CN")}
-                </span>
+                <div className="chapter-editor-footer-meta">
+                  <button
+                    type="button"
+                    className="chapter-editor-back"
+                    onClick={handleBack}
+                  >
+                    <span aria-hidden="true">←</span>
+                    <span>返回作品详情</span>
+                  </button>
+                  <span className="chapter-word-count" aria-live="polite">
+                    字数: {liveWordCount.toLocaleString("zh-CN")}
+                  </span>
+                </div>
                 <div className="chapter-editor-footer-actions">
                   <button
                     type="button"
