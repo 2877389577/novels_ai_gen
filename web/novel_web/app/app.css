@@ -9228,7 +9228,7 @@ html[data-theme="dark"] .chapter-editor-page {
   display: flex;
   width: min(100%, 1160px);
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 24px;
   margin: 0 auto;
   padding: 38px 56px 0;
@@ -10165,7 +10165,15 @@ html[data-theme="dark"] .chapter-ai-input-shell:focus-within {
   width: min(calc(50vw - 72px), 760px);
 }
 
+.chapter-editor-footer-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
 .chapter-word-count {
+  flex: 0 0 auto;
   color: var(--color-on-surface-variant);
   font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
   font-size: 13px;
@@ -10754,6 +10762,13 @@ html[data-theme="dark"] .chapter-mobile-preview-close {
     flex-direction: column;
     width: calc(100vw - 32px);
     padding: 10px;
+  }
+
+  .chapter-editor-footer-meta {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .chapter-editor-footer-actions {
