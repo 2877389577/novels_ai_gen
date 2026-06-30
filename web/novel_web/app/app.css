@@ -2896,13 +2896,12 @@ html[data-theme="dark"] .novel-detail-page {
   border-radius: 2px;
   background: transparent;
   color: var(--color-on-surface);
-  cursor: not-allowed;
+  cursor: pointer;
   padding: 8px 22px;
   font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
   font-size: 14px;
   font-weight: 800;
   line-height: 20px;
-  opacity: 0.62;
 }
 
 .character-card-actions button:last-child {
@@ -2912,6 +2911,11 @@ html[data-theme="dark"] .novel-detail-page {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: var(--color-on-primary);
+}
+
+.character-card-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .novel-summary-panel {

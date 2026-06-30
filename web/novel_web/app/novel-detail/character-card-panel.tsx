@@ -49,6 +49,15 @@ import { CharacterDetailView } from "./character-detail-view";
 
 const coverUploadMaxSizeKB = 20 * 1024;
 const characterPageSize = 40;
+const characterGenderOptions: Array<{
+  // label 表示性别选项展示给用户的文本。
+  label: string;
+  // value 表示提交给后端的角色性别值。
+  value: string;
+}> = [
+  { label: "男", value: "男" },
+  { label: "女", value: "女" },
+];
 
 // CharacterListState 表示角色卡列表的数据加载状态。
 type CharacterListState = "loading" | "ready" | "error";
@@ -770,11 +779,13 @@ function CharacterDetailForm(props: CharacterDetailFormProps) {
               rules={[{ required: true, message: "请输入角色姓名" }]}
               validator={validateCharacterName}
             />
-            <Form.Input
+            <Form.Select
               field="gender"
               label="性别"
-              placeholder="例如：男、女、未知"
-              trigger="blur"
+              placeholder="选择角色性别"
+              optionList={characterGenderOptions}
+              trigger="change"
+              rules={[{ required: true, message: "请选择角色性别" }]}
             />
           </div>
           <Form.TagInput
