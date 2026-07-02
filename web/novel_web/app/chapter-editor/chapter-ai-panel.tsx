@@ -9,8 +9,8 @@ import {
   appendChapterAiLoadingMessageToList,
   bindChapterAiPairConversation,
   clearChapterAiApprovalInList,
-  collapseAssistantRepliesToStatusInList,
   markChapterAiPairFailedInList,
+  markAssistantRepliesCancelledInList,
   removeAssistantRepliesNotInList,
   removeChapterAiLoadingMessageFromList,
   removeChapterAiPairInList,
@@ -202,7 +202,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         controller.abort();
       };
     },
-    [assistantSending, onUnauthorized, props.novelId, selectedConversationID],
+    [onUnauthorized, props.novelId, selectedConversationID],
   );
 
   useEffect(
@@ -776,10 +776,9 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       if (event.type === "cancelled") {
         updateChapterAiPairRetryable(request.pairID, false);
         removeChapterAiLoadingMessage(request.pairID);
-        collapseAssistantRepliesToStatus(
+        markAssistantRepliesCancelled(
           request.assistantMessageID,
           event.message || "本次 AI 回复已取消。",
-          "cancelled",
         );
         currentRunIDRef.current = null;
       }
@@ -990,19 +989,17 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     });
   }
 
-  // collapseAssistantRepliesToStatus 将本次请求的多个助手气泡折叠为一个状态气泡。
-  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 content 表示状态气泡文本；参数 status 表示消息状态。
-  function collapseAssistantRepliesToStatus(
+  // markAssistantRepliesCancelled 将当前流式回复标记为已取消并保留已展示内容。
+  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 content 表示尚无内容时展示的取消说明。
+  function markAssistantRepliesCancelled(
     sourceMessageID: string,
     content: string,
-    status: string,
   ) {
-    setChats(function collapseReplyMessages(currentChats) {
-      return collapseAssistantRepliesToStatusInList(
+    setChats(function markCancelledReplies(currentChats) {
+      return markAssistantRepliesCancelledInList(
         currentChats,
         sourceMessageID,
         content,
-        status,
       );
     });
   }

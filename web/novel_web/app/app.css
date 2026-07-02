@@ -677,6 +677,10 @@ html[data-theme="dark"] .bookshelf-page::before {
   display: none;
 }
 
+.bookshelf-actions > .bookshelf-mobile-settings {
+  display: none;
+}
+
 .bookshelf-menu-toggle,
 .detail-menu-toggle {
   width: 42px;

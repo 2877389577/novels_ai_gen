@@ -310,6 +310,69 @@ export function collapseAssistantRepliesToStatusInList(
   });
 }
 
+// markAssistantRepliesCancelledInList 将当前流式回复标记为已取消，并保留已经展示的助手内容。
+// 参数 chats 表示当前章节 AI 消息列表；参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 fallbackContent 表示尚无可见内容时展示的取消说明。
+export function markAssistantRepliesCancelledInList(
+  chats: ChapterAiMessage[],
+  sourceMessageID: string,
+  fallbackContent: string,
+): ChapterAiMessage[] {
+  const hasVisibleReply = chats.some(function hasReplyContent(chat) {
+    return (
+      chat.role === "assistant" &&
+      chat.chapterAiSourceID === sourceMessageID &&
+      typeof chat.content === "string" &&
+      chat.content.trim().length > 0
+    );
+  });
+  let fallbackMessageKept = false;
+
+  return chats.flatMap(function markReplyCancelled(chat) {
+    if (
+      chat.role !== "assistant" ||
+      chat.chapterAiSourceID !== sourceMessageID
+    ) {
+      return [chat];
+    }
+
+    if (hasVisibleReply) {
+      const content = typeof chat.content === "string" ? chat.content : "";
+      if (!content.trim()) {
+        return [];
+      }
+      return [{
+        ...chat,
+        id: createChapterAiRenderMessageID(
+          String(chat.id),
+          "cancelled",
+          content.length,
+        ),
+        chapterAiApproval: undefined,
+        content,
+        status: "cancelled",
+      }];
+    }
+
+    if (fallbackMessageKept) {
+      return [];
+    }
+    fallbackMessageKept = true;
+    return [{
+      ...chat,
+      id: createChapterAiRenderMessageID(
+        sourceMessageID,
+        "cancelled",
+        fallbackContent.length,
+      ),
+      chapterAiSourceID: sourceMessageID,
+      chapterAiReplyIndex: 1,
+      chapterAiApproval: undefined,
+      content: fallbackContent,
+      status: "cancelled",
+    }];
+  });
+}
+
 // removeAssistantRepliesNotInList 移除后端最终结果中不存在的临时助手分段气泡。
 // 参数 chats 表示当前章节 AI 消息列表；参数 sourceMessageID 表示本次 AI 回复的基础消息 ID；参数 replyIndexes 表示需要保留的回复段序号集合。
 export function removeAssistantRepliesNotInList(
