@@ -1,3 +1,5 @@
+import { useEffect, useId, useState } from "react";
+
 import type { AppTheme } from "../theme";
 import type { BookshelfNavTab } from "./types";
 
@@ -22,8 +24,76 @@ export interface BookshelfHeaderProps {
 // BookshelfHeader 渲染书架首页顶部导航。
 // 参数 props 表示书架顶部导航需要的外部状态和回调。
 export function BookshelfHeader(props: BookshelfHeaderProps) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuId = useId();
+
+  // closeMobileMenuOnRouteChange 在顶部导航切换页面后收起移动端菜单。
+  useEffect(
+    function closeMobileMenuOnRouteChange() {
+      setMobileMenuOpen(false);
+    },
+    [props.activeTab],
+  );
+
+  // installMobileMenuEscapeHandler 允许用户按 Escape 收起移动端菜单。
+  useEffect(
+    function installMobileMenuEscapeHandler() {
+      if (!mobileMenuOpen) {
+        return;
+      }
+
+      // handleEscapeKeydown 处理移动端菜单打开时的键盘关闭动作。
+      // 参数 event 表示浏览器键盘事件。
+      function handleEscapeKeydown(event: KeyboardEvent) {
+        if (event.key === "Escape") {
+          setMobileMenuOpen(false);
+        }
+      }
+
+      window.addEventListener("keydown", handleEscapeKeydown);
+      return function removeMobileMenuEscapeHandler() {
+        window.removeEventListener("keydown", handleEscapeKeydown);
+      };
+    },
+    [mobileMenuOpen],
+  );
+
+  // handleMobileMenuToggle 切换移动端汉堡菜单展开状态。
+  function handleMobileMenuToggle() {
+    setMobileMenuOpen(function toggleMobileMenu(open) {
+      return !open;
+    });
+  }
+
+  // handleOpenBookshelf 打开书架页并收起移动端菜单。
+  function handleOpenBookshelf() {
+    props.onOpenBookshelf();
+    setMobileMenuOpen(false);
+  }
+
+  // handleOpenInspiration 打开灵感社页并收起移动端菜单。
+  function handleOpenInspiration() {
+    props.onOpenInspiration();
+    setMobileMenuOpen(false);
+  }
+
+  // handleOpenSettings 打开设置中心并收起移动端菜单。
+  function handleOpenSettings() {
+    props.onOpenSettings();
+    setMobileMenuOpen(false);
+  }
+
+  // handleToggleTheme 切换主题并保持菜单状态方便用户确认变化。
+  function handleToggleTheme() {
+    props.onToggleTheme();
+  }
+
   return (
-    <header className="bookshelf-nav">
+    <header
+      className={`bookshelf-nav${
+        mobileMenuOpen ? " bookshelf-nav-menu-open" : ""
+      }`}
+    >
       <div className="bookshelf-nav-inner">
         <div className="bookshelf-brand" aria-label="墨香墨苑">
           <div className="bookshelf-seal" aria-hidden="true">
@@ -32,43 +102,73 @@ export function BookshelfHeader(props: BookshelfHeaderProps) {
           <span>墨香墨苑</span>
         </div>
 
-        <nav className="bookshelf-links" aria-label="主导航">
-          <button
-            type="button"
-            aria-current={props.activeTab === "bookshelf" ? "page" : undefined}
-            onClick={props.onOpenBookshelf}
-          >
-            藏书阁
-          </button>
-          <button
-            type="button"
-            aria-current={
-              props.activeTab === "inspiration" ? "page" : undefined
-            }
-            onClick={props.onOpenInspiration}
-          >
-            灵感社
-          </button>
-        </nav>
+        <button
+          type="button"
+          className="bookshelf-menu-toggle"
+          aria-controls={mobileMenuId}
+          aria-expanded={mobileMenuOpen}
+          aria-label={mobileMenuOpen ? "收起主菜单" : "展开主菜单"}
+          onClick={handleMobileMenuToggle}
+        >
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+        </button>
 
-        <div className="bookshelf-actions">
-          <button type="button" aria-label="搜索">
-            ⌕
-          </button>
-          <button
-            type="button"
-            aria-label={
-              props.currentTheme === "dark" ? "切换白色主题" : "切换黑色主题"
-            }
-            aria-pressed={props.currentTheme === "dark"}
-            title={
-              props.currentTheme === "dark" ? "切换白色主题" : "切换黑色主题"
-            }
-            onClick={props.onToggleTheme}
-          >
-            {props.currentTheme === "dark" ? "☾" : "☼"}
-          </button>
-          <BookshelfUserMenu onOpenSettings={props.onOpenSettings} />
+        <div
+          className="bookshelf-menu-panel"
+          id={mobileMenuId}
+        >
+          <nav className="bookshelf-links" aria-label="主导航">
+            <button
+              type="button"
+              aria-current={
+                props.activeTab === "bookshelf" ? "page" : undefined
+              }
+              onClick={handleOpenBookshelf}
+            >
+              藏书阁
+            </button>
+            <button
+              type="button"
+              aria-current={
+                props.activeTab === "inspiration" ? "page" : undefined
+              }
+              onClick={handleOpenInspiration}
+            >
+              灵感社
+            </button>
+          </nav>
+
+          <div className="bookshelf-actions">
+            <button type="button" aria-label="搜索">
+              ⌕
+            </button>
+            <button
+              type="button"
+              aria-label={
+                props.currentTheme === "dark"
+                  ? "切换白色主题"
+                  : "切换黑色主题"
+              }
+              aria-pressed={props.currentTheme === "dark"}
+              title={
+                props.currentTheme === "dark" ? "切换白色主题" : "切换黑色主题"
+              }
+              onClick={handleToggleTheme}
+            >
+              {props.currentTheme === "dark" ? "☾" : "☼"}
+            </button>
+            <BookshelfUserMenu onOpenSettings={handleOpenSettings} />
+            <button
+              type="button"
+              className="bookshelf-mobile-settings"
+              onClick={handleOpenSettings}
+            >
+              <span aria-hidden="true">⚙</span>
+              <span>设置中心</span>
+            </button>
+          </div>
         </div>
       </div>
 
