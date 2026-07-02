@@ -9747,27 +9747,40 @@ html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-user
   color: #f1ffe9;
 }
 
+.chapter-ai-dialogue-action-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  visibility: visible;
+}
+
 .chapter-ai-failure-indicator {
   display: inline-flex;
   width: fit-content;
+  max-width: 108px;
+  height: 26px;
   align-items: center;
+  flex: 0 0 auto;
   gap: 6px;
-  margin-top: 10px;
+  margin: 0 2px;
+  border: 1px solid color-mix(in srgb, #ef4444 34%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, #ef4444 11%, transparent);
+  background: color-mix(in srgb, #ef4444 9%, var(--color-paper));
   color: #b91c1c;
   font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
   font-size: 12px;
   font-weight: 800;
-  line-height: 18px;
-  padding: 3px 8px;
+  line-height: 16px;
+  padding: 0 8px;
   text-align: left;
   text-indent: 0;
+  white-space: nowrap;
 }
 
+.chapter-ai-failure-indicator .semi-icon,
 .chapter-ai-failure-indicator svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   flex: 0 0 auto;
 }
 
@@ -9786,7 +9799,8 @@ html[data-theme="dark"] .chapter-ai-dialogue .semi-ai-chat-dialogue-content-user
 }
 
 html[data-theme="dark"] .chapter-ai-failure-indicator {
-  background: color-mix(in srgb, #f87171 16%, transparent);
+  border-color: color-mix(in srgb, #f87171 34%, transparent);
+  background: color-mix(in srgb, #f87171 12%, var(--color-surface-container-high));
   color: #fecaca;
 }
 

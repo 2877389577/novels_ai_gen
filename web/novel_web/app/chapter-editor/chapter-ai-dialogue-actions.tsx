@@ -69,16 +69,6 @@ function ChapterAiDialogueContent(props: ChapterAiDialogueContentProps) {
           </span>
         </span>
       ) : null}
-      {shouldRenderChapterAiFailure(message) ? (
-        <span
-          aria-label={message.chapterAiFailureMessage || "消息发送失败"}
-          className="chapter-ai-failure-indicator"
-          title={message.chapterAiFailureMessage || "消息发送失败"}
-        >
-          <IconAlertTriangle aria-hidden="true" />
-          <span>发送失败</span>
-        </span>
-      ) : null}
       {message && approval ? (
         <div className="chapter-ai-approval-panel">
           <div className="chapter-ai-approval-meta">
@@ -189,13 +179,27 @@ interface ChapterAiDialogueActionProps {
 function ChapterAiDialogueAction(props: ChapterAiDialogueActionProps) {
   const copyNode = props.actionProps.defaultActionsObj?.copyNode ?? null;
   const message = props.actionProps.message as ChapterAiMessage | undefined;
+  const failed = shouldRenderChapterAiFailure(message);
+  const actionClassName = failed
+    ? `${props.actionProps.className} chapter-ai-dialogue-action-failed`
+    : props.actionProps.className;
   if (message?.role !== "user") {
     return <div className={props.actionProps.className}>{copyNode}</div>;
   }
 
   return (
-    <div className={props.actionProps.className}>
+    <div className={actionClassName}>
       {copyNode}
+      {failed ? (
+        <span
+          aria-label={message.chapterAiFailureMessage || "消息发送失败"}
+          className="chapter-ai-failure-indicator"
+          title={message.chapterAiFailureMessage || "消息发送失败"}
+        >
+          <IconAlertTriangle aria-hidden="true" />
+          <span>发送失败</span>
+        </span>
+      ) : null}
       {message.chapterAiRetryable === true && message.status === "failed" ? (
         <Button
           aria-label="将失败消息重新填入输入框"
