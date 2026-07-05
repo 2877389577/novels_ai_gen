@@ -39,6 +39,14 @@ export interface ChapterAiApprovalState {
   retryPayload: ChapterAiRetryPayload;
 }
 
+// ChapterAiExistingReply 表示工具人工审核恢复前已经展示的助手回复分段。
+export interface ChapterAiExistingReply {
+  // replyIndex 表示同一次 AI 请求中的助手回复段序号，从 1 开始。
+  replyIndex: number;
+  // content 表示该段助手回复在恢复流开始前已经展示的文本。
+  content: string;
+}
+
 // ChapterAiApprovalDecision 表示用户对一次工具人工审核的选择。
 export interface ChapterAiApprovalDecision {
   // checkpointId 表示后端恢复 Agent 执行所需的 checkpoint 标识。
@@ -47,8 +55,8 @@ export interface ChapterAiApprovalDecision {
   interruptId: string;
   // approved 表示用户是否允许执行该工具。
   approved: boolean;
-  // existingContent 表示恢复流继续追加前已经展示在助手消息中的文本。
-  existingContent: string;
+  // existingReplies 表示恢复流继续追加前已经展示在前端的助手回复分段。
+  existingReplies: ChapterAiExistingReply[];
 }
 
 // ChapterAiMessage 表示章节 AI 对话在前端本地增强后的消息。

@@ -20,7 +20,7 @@ import {
   updateChapterAiPairRetryableInList,
 } from "./chapter-ai-message-list-utils";
 import { ChapterAiAssistantShell } from "./chapter-ai-shell";
-import type { ChapterAiApprovalState, ChapterAiApprovalStatus, ChapterAiAssistantPanelProps, ChapterAiMessage, ChapterAiReplyDraft, ChapterAiRequestContext, ChapterAiRetryPayload, ChapterAiStreamRequest } from "./types";
+import type { ChapterAiApprovalState, ChapterAiApprovalStatus, ChapterAiAssistantPanelProps, ChapterAiExistingReply, ChapterAiMessage, ChapterAiReplyDraft, ChapterAiRequestContext, ChapterAiRetryPayload, ChapterAiStreamRequest } from "./types";
 import { createChapterAiMessageID, createChapterAiPairID, createChapterAiReplyMessageID, chapterAiMessageFromHistory, syncChapterAiInputHeight } from "./chapter-ai-utils";
 import { getErrorMessage } from "./content-editor-utils";
 
@@ -548,6 +548,8 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       return;
     }
 
+    const existingReplies =
+      getChapterAiApprovalExistingReplies(assistantMessageID);
     setAssistantSending(true);
     updateChapterAiApprovalStatus(assistantMessageID, "submitting");
     appendChapterAiLoadingMessage(pairID, approval.retryPayload.conversationId);
@@ -560,18 +562,44 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         checkpointId: approval.checkpointId,
         interruptId: approval.interruptId,
         approved,
-        existingContent: getChapterAiApprovalExistingContent(message),
+        existingReplies,
       },
     });
   }
 
-  // getChapterAiApprovalExistingContent 读取恢复流继续追加前已经展示的助手文本。
-  // 参数 message 表示承载人工审核状态的助手消息。
-  function getChapterAiApprovalExistingContent(message: ChapterAiMessage): string {
-    return typeof message.content === "string" &&
-      message.content !== "等待工具人工审核。"
-      ? message.content
-      : "";
+  // getChapterAiApprovalExistingReplies 读取恢复流继续追加前已经展示的助手分段。
+  // 参数 sourceMessageID 表示本次 AI 回复的基础消息 ID。
+  function getChapterAiApprovalExistingReplies(
+    sourceMessageID: string,
+  ): ChapterAiExistingReply[] {
+    const replies = new Map<number, string>();
+    for (const chat of chats) {
+      if (
+        chat.role !== "assistant" ||
+        chat.chapterAiLoading ||
+        chat.chapterAiSourceID !== sourceMessageID
+      ) {
+        continue;
+      }
+      const content = typeof chat.content === "string" ? chat.content : "";
+      if (!content.trim() || content === "等待工具人工审核。") {
+        continue;
+      }
+      const replyIndex =
+        Number.isSafeInteger(chat.chapterAiReplyIndex) &&
+        chat.chapterAiReplyIndex !== undefined &&
+        chat.chapterAiReplyIndex > 0
+          ? chat.chapterAiReplyIndex
+          : 1;
+      replies.set(replyIndex, content);
+    }
+    return Array.from(replies.entries())
+      .sort(function sortExistingReply(left, right) {
+        return left[0] - right[0];
+      })
+      .map(function mapExistingReply([replyIndex, content]) {
+        return { replyIndex, content };
+      });
   }
 
   // runChapterAiStream 执行章节 AI 流式请求并更新对应助手消息。
@@ -582,16 +610,34 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
     streamControllerRef.current = controller;
     currentRunIDRef.current = request.runId ?? null;
 
-    const initialAssistantContent =
-      request.approvalDecision?.existingContent ?? "";
-    let assistantContent = initialAssistantContent;
+    const existingApprovalReplies =
+      request.approvalDecision?.existingReplies ?? [];
     let handledFailure = false;
     let waitingForApproval = false;
     const assistantReplies = new Map<number, ChapterAiReplyDraft>();
-    assistantReplies.set(1, {
-      messageID: createChapterAiReplyMessageID(request.assistantMessageID, 1),
-      content: initialAssistantContent,
-    });
+    const existingApprovalContentByIndex = new Map<number, string>();
+    for (const reply of existingApprovalReplies) {
+      const replyIndex = normalizeReplyIndex(reply.replyIndex);
+      const content = reply.content ?? "";
+      if (!content.trim()) {
+        continue;
+      }
+      existingApprovalContentByIndex.set(replyIndex, content);
+      assistantReplies.set(replyIndex, {
+        messageID: createChapterAiReplyMessageID(
+          request.assistantMessageID,
+          replyIndex,
+        ),
+        content,
+      });
+    }
+    if (!assistantReplies.has(1)) {
+      assistantReplies.set(1, {
+        messageID: createChapterAiReplyMessageID(request.assistantMessageID, 1),
+        content: "",
+      });
+    }
+    let assistantContent = buildAssistantContentFromDrafts();
 
     // normalizeReplyIndex 标准化后端返回的回复段序号。
     // 参数 value 表示后端流事件中的 reply_index。
@@ -599,6 +645,18 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       return Number.isSafeInteger(value) && value !== undefined && value > 0
         ? value
         : 1;
+    }
+
+    // buildAssistantContentFromDrafts 按回复段序号合并当前本地助手草稿。
+    function buildAssistantContentFromDrafts(): string {
+      return Array.from(assistantReplies.keys())
+        .sort(function sortReplyIndex(left, right) {
+          return left - right;
+        })
+        .map(function mapReplyContent(index) {
+          return assistantReplies.get(index)?.content ?? "";
+        })
+        .join("");
     }
 
     // ensureAssistantReplyDraft 确保指定回复段已有本地气泡草稿。
@@ -625,12 +683,62 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       return draft;
     }
 
+    // mergeApprovalReplyContent 合并审批恢复前已有文本和后端最终分段文本。
+    // 参数 replyIndex 表示同一次 AI 请求中的助手回复段序号；参数 content 表示后端 done 事件返回的该段完整文本。
+    function mergeApprovalReplyContent(replyIndex: number, content: string): string {
+      if (!request.approvalDecision) {
+        return content;
+      }
+      const existingContent = existingApprovalContentByIndex.get(replyIndex);
+      if (!existingContent) {
+        return content;
+      }
+      if (!content) {
+        return assistantReplies.get(replyIndex)?.content ?? existingContent;
+      }
+      if (content.startsWith(existingContent)) {
+        return content;
+      }
+      return existingContent + content;
+    }
+
     // completeAssistantReplies 按后端最终分段结果收口所有助手气泡。
     // 参数 replies 表示后端 done 事件返回的完整分段回复列表。
     function completeAssistantReplies(
       replies: Array<{ reply_index: number; content: string }>,
     ) {
       if (replies.length === 0) {
+        if (request.approvalDecision) {
+          const completedReplyIndexes = new Set<number>();
+          for (const [replyIndex, draft] of assistantReplies) {
+            if (!draft.content.trim()) {
+              continue;
+            }
+            completedReplyIndexes.add(replyIndex);
+            updateAssistantReplyMessage(
+              request.assistantMessageID,
+              replyIndex,
+              draft.content,
+              "completed",
+            );
+          }
+          if (completedReplyIndexes.size === 0 && assistantContent.trim()) {
+            const draft = ensureAssistantReplyDraft(1);
+            draft.content = mergeApprovalReplyContent(1, assistantContent);
+            completedReplyIndexes.add(1);
+            updateAssistantReplyMessage(
+              request.assistantMessageID,
+              1,
+              draft.content,
+              "completed",
+            );
+          }
+          removeAssistantRepliesNotIn(
+            request.assistantMessageID,
+            completedReplyIndexes,
+          );
+          return;
+        }
         updateAssistantReplyMessage(
           request.assistantMessageID,
           1,
@@ -644,7 +752,10 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
       for (const reply of replies) {
         const replyIndex = normalizeReplyIndex(reply.reply_index);
         const draft = ensureAssistantReplyDraft(replyIndex);
-        draft.content = reply.content ?? "";
+        draft.content = mergeApprovalReplyContent(
+          replyIndex,
+          reply.content ?? "",
+        );
         completedReplyIndexes.add(replyIndex);
         updateAssistantReplyMessage(
           request.assistantMessageID,
@@ -652,6 +763,20 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
           draft.content,
           "completed",
         );
+      }
+      if (request.approvalDecision) {
+        for (const [replyIndex, draft] of assistantReplies) {
+          if (completedReplyIndexes.has(replyIndex) || !draft.content.trim()) {
+            continue;
+          }
+          completedReplyIndexes.add(replyIndex);
+          updateAssistantReplyMessage(
+            request.assistantMessageID,
+            replyIndex,
+            draft.content,
+            "completed",
+          );
+        }
       }
       removeAssistantRepliesNotIn(
         request.assistantMessageID,
@@ -709,14 +834,7 @@ export function ChapterAiAssistantPanel(props: ChapterAiAssistantPanelProps) {
         const replyIndex = normalizeReplyIndex(event.reply_index);
         const draft = ensureAssistantReplyDraft(replyIndex);
         draft.content += event.content ?? "";
-        assistantContent = Array.from(assistantReplies.keys())
-          .sort(function sortReplyIndex(left, right) {
-            return left - right;
-          })
-          .map(function mapReplyContent(index) {
-            return assistantReplies.get(index)?.content ?? "";
-          })
-          .join("");
+        assistantContent = buildAssistantContentFromDrafts();
         updateAssistantReplyMessage(
           request.assistantMessageID,
           replyIndex,
