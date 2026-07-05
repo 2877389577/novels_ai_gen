@@ -9397,11 +9397,9 @@ html[data-theme="dark"] .chapter-editor-page {
 }
 
 .chapter-editor-page-ai-open {
-  display: flex;
-  height: 100vh;
-  min-height: 0;
-  overflow: hidden;
-  flex-direction: column;
+  display: block;
+  min-height: 100vh;
+  overflow: visible;
 }
 
 .chapter-editor-workbench {
@@ -9416,15 +9414,14 @@ html[data-theme="dark"] .chapter-editor-page {
   flex: 1 1 auto;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-height: 0;
-  align-items: stretch;
+  align-items: start;
 }
 
 .chapter-editor-workbench-ai-open .chapter-editor-shell {
-  height: 100%;
   width: 100%;
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: visible;
   margin: 0;
   padding: 36px clamp(28px, 3vw, 56px) 148px;
 }
@@ -9444,10 +9441,12 @@ html[data-theme="dark"] .chapter-editor-page {
 }
 
 .chapter-ai-assistant-panel {
-  position: relative;
+  position: sticky;
+  top: 36px;
+  align-self: start;
   min-width: 0;
-  height: calc(100% - 60px);
-  max-height: calc(100% - 60px);
+  height: calc(100vh - 60px);
+  max-height: calc(100vh - 60px);
   margin: 36px 24px 24px 0;
   overflow: hidden;
   animation: chapter-ai-slide-in 240ms ease-out both;
