@@ -776,6 +776,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 	tools := make([]tool.BaseTool, 0, len(supervisorTools)+len(cfg.children))
 	tools = append(tools, supervisorTools...)
 	returnDirectly := make(map[string]bool, len(cfg.children))
+	childAgentToolNames := make(map[string]struct{}, len(cfg.children))
 	for _, child := range cfg.children {
 		childTools, err := configuredAgentTools(req, child, cfg.tools, chapterReader, novelSummaryStore, novelOutlineStore, characterStore, relationshipGraphStore)
 		if err != nil {
@@ -785,7 +786,7 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 		if configuredModel, ok := childModels[child.name]; ok {
 			childModel = configuredModel
 		}
-		childHandlers, err := chatAgentHandlers(ctx, childModel, cfg.memory)
+		childHandlers, err := chatAgentHandlers(ctx, childModel, cfg.memory, nil)
 		if err != nil {
 			return nil, fmt.Errorf("创建子 Agent %s 上下文压缩中间件失败: %w", child.name, err)
 		}
@@ -808,9 +809,10 @@ func newChatSupervisorAgent(ctx context.Context, defaultModel einomodel.BaseChat
 			childAgentToolOptions(child)...,
 		))
 		returnDirectly[child.name] = true
+		childAgentToolNames[child.name] = struct{}{}
 	}
 
-	supervisorHandlers, err := chatAgentHandlers(ctx, supervisorModel, cfg.memory)
+	supervisorHandlers, err := chatAgentHandlers(ctx, supervisorModel, cfg.memory, childAgentToolNames)
 	if err != nil {
 		return nil, fmt.Errorf("创建顶层 Agent 上下文压缩中间件失败: %w", err)
 	}
@@ -851,17 +853,26 @@ type toolErrorResult struct {
 type safeToolErrorHandler[M adk.MessageType] struct {
 	// TypedBaseChatModelAgentMiddleware 表示 Eino ADK 默认空实现。
 	*adk.TypedBaseChatModelAgentMiddleware[M]
+	// propagatedToolNames 表示执行失败时必须继续向外传播错误的工具名称集合，通常用于子 Agent 工具。
+	propagatedToolNames map[string]struct{}
 }
 
 // safeToolErrorHandlers 创建 Agent 使用的工具错误处理器列表。
-func safeToolErrorHandlers[M adk.MessageType]() []adk.TypedChatModelAgentMiddleware[M] {
-	return []adk.TypedChatModelAgentMiddleware[M]{newSafeToolErrorHandler[M]()}
+// 参数 propagatedToolNames 表示执行失败时需要直接向外传播错误的工具名称集合。
+func safeToolErrorHandlers[M adk.MessageType](propagatedToolNames map[string]struct{}) []adk.TypedChatModelAgentMiddleware[M] {
+	return []adk.TypedChatModelAgentMiddleware[M]{newSafeToolErrorHandler[M](propagatedToolNames)}
 }
 
 // newSafeToolErrorHandler 创建单个工具错误处理器。
-func newSafeToolErrorHandler[M adk.MessageType]() adk.TypedChatModelAgentMiddleware[M] {
+// 参数 propagatedToolNames 表示执行失败时需要直接向外传播错误的工具名称集合。
+func newSafeToolErrorHandler[M adk.MessageType](propagatedToolNames map[string]struct{}) adk.TypedChatModelAgentMiddleware[M] {
+	copiedToolNames := make(map[string]struct{}, len(propagatedToolNames))
+	for name := range propagatedToolNames {
+		copiedToolNames[name] = struct{}{}
+	}
 	return &safeToolErrorHandler[M]{
 		TypedBaseChatModelAgentMiddleware: &adk.TypedBaseChatModelAgentMiddleware[M]{},
+		propagatedToolNames:               copiedToolNames,
 	}
 }
 
@@ -873,7 +884,7 @@ func (h *safeToolErrorHandler[M]) WrapInvokableToolCall(ctx context.Context, end
 		if err == nil {
 			return result, nil
 		}
-		if shouldPropagateToolError(err) {
+		if shouldPropagateToolContextError(toolCtx, err, h.propagatedToolNames) {
 			return result, err
 		}
 		return toolErrorResultJSON(toolCtx, err), nil
@@ -888,7 +899,7 @@ func (h *safeToolErrorHandler[M]) WrapStreamableToolCall(ctx context.Context, en
 		if err == nil {
 			return result, nil
 		}
-		if shouldPropagateToolError(err) {
+		if shouldPropagateToolContextError(toolCtx, err, h.propagatedToolNames) {
 			return nil, err
 		}
 		return schema.StreamReaderFromArray([]string{toolErrorResultJSON(toolCtx, err)}), nil
@@ -909,6 +920,19 @@ func shouldPropagateToolError(err error) bool {
 	}
 	var cancelErr *adk.CancelError
 	return errors.As(err, &cancelErr)
+}
+
+// shouldPropagateToolContextError 判断本次工具错误是否必须继续向外传播。
+// 参数 toolCtx 表示工具调用元信息；参数 err 表示工具调用返回的错误；参数 propagatedToolNames 表示执行失败时需要直接向外传播错误的工具名称集合。
+func shouldPropagateToolContextError(toolCtx *adk.ToolContext, err error, propagatedToolNames map[string]struct{}) bool {
+	if shouldPropagateToolError(err) {
+		return true
+	}
+	if err == nil || toolCtx == nil || len(propagatedToolNames) == 0 {
+		return false
+	}
+	_, ok := propagatedToolNames[toolCtx.Name]
+	return ok
 }
 
 // toolErrorResultJSON 将工具错误序列化为模型可读的 JSON 字符串。
@@ -950,8 +974,8 @@ func childAgentToolOptions(child runtimeAgentDefinition) []adk.AgentToolOption {
 }
 
 // chatAgentHandlers 创建 schema.Message 路径 Agent 使用的中间件列表。
-// 参数 ctx 表示创建中间件的上下文；参数 model 表示摘要生成使用的模型；参数 memory 表示上下文压缩配置。
-func chatAgentHandlers(ctx context.Context, model einomodel.BaseChatModel, memory RuntimeMemoryConfig) ([]adk.TypedChatModelAgentMiddleware[*schema.Message], error) {
+// 参数 ctx 表示创建中间件的上下文；参数 model 表示摘要生成使用的模型；参数 memory 表示上下文压缩配置；参数 propagatedToolNames 表示执行失败时需要直接向外传播错误的工具名称集合。
+func chatAgentHandlers(ctx context.Context, model einomodel.BaseChatModel, memory RuntimeMemoryConfig, propagatedToolNames map[string]struct{}) ([]adk.TypedChatModelAgentMiddleware[*schema.Message], error) {
 	mw, err := summarization.New(ctx, &summarization.Config{
 		Model: model,
 		Trigger: &summarization.TriggerCondition{
@@ -963,7 +987,7 @@ func chatAgentHandlers(ctx context.Context, model einomodel.BaseChatModel, memor
 		return nil, err
 	}
 	handlers := []adk.TypedChatModelAgentMiddleware[*schema.Message]{mw}
-	handlers = append(handlers, safeToolErrorHandlers[*schema.Message]()...)
+	handlers = append(handlers, safeToolErrorHandlers[*schema.Message](propagatedToolNames)...)
 	return handlers, nil
 }
 
