@@ -267,6 +267,18 @@ export function splitEditorTextLines(value: string): string[] {
   return normalizeEditorPlainText(value).split("\n");
 }
 
+// removeEmptyChapterContentLines 删除章节正文中只包含空白或不可见字符的空行。
+// 参数 value 表示需要格式化的章节正文纯文本。
+export function removeEmptyChapterContentLines(value: string): string {
+  return splitEditorTextLines(value)
+    .filter(function keepVisibleContentLine(line) {
+      return Boolean(
+        normalizeText(line.replace(/[\u200B-\u200D\u2060\uFEFF]/gu, "")),
+      );
+    })
+    .join("\n");
+}
+
 // trimTrailingEmptyEditorLines 移除编辑器尾部由空白占位段落产生的空行。
 // 参数 lines 表示从正文编辑器 DOM 中读取到的段落行。
 export function trimTrailingEmptyEditorLines(lines: string[]): string[] {
