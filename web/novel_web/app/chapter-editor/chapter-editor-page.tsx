@@ -8,7 +8,7 @@ import { ChapterAiAssistantPanel } from "./chapter-ai-panel";
 import { ChapterEditorContext } from "./editor-context";
 import { ChapterEditorError, ChapterEditorSkeleton } from "./editor-frame";
 import type { ChapterAiPrefillMessage, ChapterAiRequestContext, ChapterEditorPageProps, ChapterEditorState, ChapterFormValues, ChapterSaveOptions, ChapterSaveSnapshot, ChapterSelectionAIAction } from "./types";
-import { countNonWhitespaceCharacters, ensureContentEditorHasParagraph, formatChapterNumber, getChapterSelectionAIAction, getContentEditorTailNode, getErrorMessage, insertPlainTextAtSelection, isChapterNumberConflictError, moveCaretToEnd, normalizeChapterContentText, normalizeChapterCreateValues, normalizeChapterFormValues, readContentEditorText, renderContentEditorText, splitEditorTextLines, chapterToFormValues } from "./content-editor-utils";
+import { countNonWhitespaceCharacters, ensureContentEditorHasParagraph, formatChapterNumber, getChapterSelectionAIAction, getContentEditorTailNode, getErrorMessage, insertPlainTextAtSelection, isChapterNumberConflictError, moveCaretToEnd, normalizeChapterContentText, normalizeChapterCreateValues, normalizeChapterFormValues, readContentEditorText, removeEmptyChapterContentLines, renderContentEditorText, splitEditorTextLines, chapterToFormValues } from "./content-editor-utils";
 
 // ChapterEditorPage 渲染章节创建和编辑共用页面。
 // 参数 props 表示章节编辑页需要的外部参数和回调。
@@ -606,6 +606,23 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
     setContentValue(nextContent);
   }
 
+  // handleContentFormat 删除章节正文中的所有空白行。
+  function handleContentFormat() {
+    hideSelectionAIAction();
+    const currentContent = contentEditorRef.current
+      ? readContentEditorText(contentEditorRef.current)
+      : contentValueRef.current;
+    const formattedContent = removeEmptyChapterContentLines(currentContent);
+
+    if (formattedContent === currentContent) {
+      Toast.info("未发现多余空行");
+      return;
+    }
+
+    replaceEditorContent(formattedContent);
+    Toast.success("正文格式化完成");
+  }
+
   // handleContentFocus 在空正文获得焦点时创建可输入段落。
   // 参数 event 表示正文段落编辑器聚焦事件。
   function handleContentFocus(event: FocusEvent<HTMLDivElement>) {
@@ -858,6 +875,19 @@ export function ChapterEditorPage(props: ChapterEditorPageProps) {
                   </p>
                 ) : null}
               </header>
+
+              <div className="chapter-editor-content-tools">
+                <Button
+                  className="chapter-editor-format"
+                  htmlType="button"
+                  onClick={handleContentFormat}
+                  size="small"
+                  theme="light"
+                  type="secondary"
+                >
+                  格式化正文
+                </Button>
+              </div>
 
               <div className="chapter-editor-writing-area">
                 <div className="chapter-editor-binding" aria-hidden="true">
